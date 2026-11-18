@@ -3570,15 +3570,16 @@ const SEO = (() => {
       ],
     },
     officepdf: {
-      slug: 'word-excel-in-pdf', title: 'Word ed Excel in PDF, gratis e senza caricare i file',
-      desc: 'Converti documenti Word (.docx), fogli Excel (.xlsx), testi, CSV e pagine HTML in PDF direttamente nel browser: titoli, tabelle, immagini e numeri di pagina al loro posto.',
-      h1: 'Word, Excel e testi in PDF', h2: 'Come trasformare un documento Word o un foglio Excel in PDF', rel: ["unisci", "pdfa", "comprimi"],
+      slug: 'word-excel-in-pdf', title: 'Word, Excel e PowerPoint in PDF, gratis e senza upload',
+      desc: 'Converti documenti Word (.docx), fogli Excel (.xlsx), presentazioni PowerPoint (.pptx), testi e pagine HTML in PDF nel browser: titoli, tabelle, immagini e numeri di pagina al loro posto.',
+      h1: 'Word, Excel e PowerPoint in PDF', h2: 'Come trasformare un documento Word, un foglio Excel o una presentazione in PDF', rel: ["unisci", "pdfa", "comprimi"],
       steps: ['Trascina uno o più file Word, Excel, testo o HTML.', 'Scegli il formato della pagina e, per Excel, l’orientamento.', 'Converti e scarica il PDF (o un PDF per file).'],
       faq: [
         ['Come trasformo un documento Word in PDF senza Word?', 'Trascina il file .docx nel riquadro e premi «Converti in PDF»: la conversione avviene nel browser, con caratteri dalle stesse misure di Arial, Times New Roman e Courier, così il testo occupa lo stesso spazio che nell’originale.'],
         ['Un foglio Excel largo esce tagliato?', 'No: ogni foglio si adatta alla larghezza della pagina e, se serve, gira in orizzontale. Se le colonne sono davvero troppe, vengono divise in gruppi uno dopo l’altro, senza perdere dati.'],
         ['Cosa viene mantenuto del documento Word?', 'Titoli, paragrafi con allineamento e rientri, grassetti e colori, elenchi puntati e numerati, tabelle con celle unite e sfondi, immagini, salti di pagina, intestazioni e piè di pagina con il numero di pagina.'],
-        ['Posso convertire i vecchi .doc e .xls?', 'Il browser non sa leggere quei formati: aprili con il programma che li ha creati e salvali come .docx o .xlsx (oppure direttamente in PDF).'],
+        ['Posso convertire una presentazione PowerPoint?', 'Sì: ogni diapositiva diventa una pagina, con caselle di testo, elenchi, colori del tema, immagini e tabelle al loro posto. Grafici e SmartArt non sono ancora inclusi: il PDF lo segnala.'],
+        ['Posso convertire i vecchi .doc, .xls e .ppt?', 'Il browser non sa leggere quei formati: aprili con il programma che li ha creati e salvali come .docx, .xlsx o .pptx (oppure direttamente in PDF).'],
         ['I miei documenti vengono caricati su un server?', 'No: la conversione avviene sul tuo dispositivo e le pagine web convertite non scaricano nulla da internet.'],
       ],
     },
@@ -3691,9 +3692,9 @@ const TOOLS = {
               desc: 'Una foto o una scansione di un timbro, di un logo o di una firma diventa un disegno vettoriale pulito: colori, spessore e macchie si correggono. Scarica in SVG o in PNG senza sfondo, o salvalo tra i tuoi timbri.', start: (...a) => startVettoriale(...a) },
   filigrana: { title: 'Filigrana', short: 'Filigrana', icon: 'type', hue: '#9F1239', accept: '.pdf,application/pdf', multiple: false,
               desc: 'Aggiungi una scritta («COPIA», «BOZZA», «RISERVATO»…) o un logo su tutte le pagine o solo su alcune: in diagonale, al centro, in basso o ripetuta, con l’intensità che vuoi. Anteprima dal vivo.', start: (...a) => startFiligrana(...a) },
-  officepdf: { title: 'Word, Excel e testi in PDF', short: 'Office in PDF', icon: 'pdf', hue: '#B42318', accept: '.docx,.xlsx,.xlsm,.txt,.md,.markdown,.csv,.html,.htm,.doc,.xls,.odt,.ods,.rtf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/markdown,text/csv,text/html', multiple: true, anyFile: true, pdfIn: false, chain: false,
-              dzText: 'Word (.docx), Excel (.xlsx), testo, Markdown, CSV o pagine HTML — anche più file insieme',
-              desc: 'Documenti Word, fogli Excel, testi e pagine web diventano PDF sul tuo dispositivo: titoli, elenchi, tabelle, immagini, intestazioni e numeri di pagina al loro posto. I fogli si adattano alla larghezza della pagina.', start: (...a) => startOffice(...a) },
+  officepdf: { title: 'Word, Excel, PowerPoint in PDF', short: 'Office in PDF', icon: 'pdf', hue: '#B42318', accept: '.docx,.xlsx,.xlsm,.pptx,.ppt,.txt,.md,.markdown,.csv,.html,.htm,.doc,.xls,.odt,.ods,.rtf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/markdown,text/csv,text/html', multiple: true, anyFile: true, pdfIn: false, chain: false,
+              dzText: 'Word (.docx), Excel (.xlsx), PowerPoint (.pptx), testo, Markdown, CSV o pagine HTML — anche più file insieme',
+              desc: 'Documenti Word, fogli Excel, presentazioni PowerPoint, testi e pagine web diventano PDF sul tuo dispositivo: titoli, elenchi, tabelle, immagini, intestazioni e numeri di pagina al loro posto. I fogli si adattano alla larghezza della pagina.', start: (...a) => startOffice(...a) },
   // scorciatoie per mestiere: aprono uno strumento già impostato
   tavola:   { title: 'Stampa una tavola grande', short: 'Stampa tavola', icon: 'poster', hue: '#0E9F6E', accept: '.pdf,application/pdf', multiple: false, alias: 'impagina',
               desc: 'Una tavola A0, A1 o A2 stampata in scala reale su fogli A4 o A3, con le parti che si sovrappongono per incollarle, i crocini e il numero di ogni foglio. Oppure ridotta su un solo foglio.', start: (s, f, t) => startImpagina(s, f, t, { mode: 'poster' }) },
@@ -3703,7 +3704,7 @@ const TOOLS = {
 const SHORT_DESC = {
   estrattoconto: 'Movimenti del conto in Excel, con verifica dei saldi', f24: 'F24, CU, 730, Redditi, IRAP, IVA in Excel', visure: 'Visure camerali e catastali in dati', laboratorio: 'Referti in tabella, valori fuori intervallo evidenziati',
   qrsepa: 'Il QR per pagare con bonifico', conforme: 'Dicitura di conformità, poi la firma', misure: 'Distanze e superfici in scala', conta: 'Parole, caratteri, cartelle', tesi: 'Modello Word e controllo del PDF', vettoriale: 'Timbri e loghi in SVG e PNG trasparente',
-  tavola: 'A0/A1 su fogli A4 o A3', officepdf: 'Documenti Word, fogli Excel e testi in PDF', filigrana: 'Scritta o logo su tutte le pagine',
+  tavola: 'A0/A1 su fogli A4 o A3', officepdf: 'Word, Excel, PowerPoint e testi in PDF', filigrana: 'Scritta o logo su tutte le pagine',
   unisci: 'Più PDF e immagini in un solo documento', immagini: 'Foto e scansioni in un PDF ordinato', dividi: 'Separa pagine o intervalli in più file',
   comprimi: 'Riduci il peso mantenendo la qualità', modifica: 'Riscrivi il testo, aggiungi immagini e firme', ruota: 'Raddrizza pagine singole o tutte',
   ordina: 'Riordina, aggiungi pagine bianche, elimina', numeri: 'Numerazione, intestazione e piè di pagina', ocr: 'Rendi ricercabili scansioni e foto',
@@ -4587,7 +4588,7 @@ const Recents = (() => {
 /* sinonimi e parole che un utente italiano digita davvero */
 const CMD_SYNONYMS = {
   filigrana: ['filigrana', 'watermark', 'scritta copia', 'bozza', 'riservato', 'timbro su tutte le pagine', 'logo su tutte le pagine', 'marchio', 'copia conforme scritta', 'scritta in diagonale', 'proteggere da copia scritta'],
-  officepdf: ['word in pdf', 'docx in pdf', 'excel in pdf', 'xlsx in pdf', 'foglio excel in pdf', 'documento in pdf', 'testo in pdf', 'html in pdf', 'pagina web in pdf', 'markdown in pdf', 'csv in pdf', 'stampare in pdf', 'office in pdf', 'docx', 'xlsx'],
+  officepdf: ['powerpoint in pdf', 'pptx in pdf', 'presentazione in pdf', 'slide in pdf', 'diapositive in pdf', 'word in pdf', 'docx in pdf', 'excel in pdf', 'xlsx in pdf', 'foglio excel in pdf', 'documento in pdf', 'testo in pdf', 'html in pdf', 'pagina web in pdf', 'markdown in pdf', 'csv in pdf', 'stampare in pdf', 'office in pdf', 'docx', 'xlsx'],
   estrattoconto: ['estratto conto', 'movimenti bancari', 'conto corrente in excel', 'riconciliazione', 'movimenti banca excel', 'lista movimenti', 'banca', 'conto corrente', 'movimenti', 'home banking', 'saldo'],
   f24: ['f24', 'modello f24', 'codici tributo', 'cu', 'certificazione unica', '730', 'redditi pf', 'unico', 'irap', 'dichiarazione iva', 'quadri dichiarazione', 'righi dichiarazione', 'dichiarazione dei redditi', 'modello 730', 'tributi', 'versamenti', 'imposte'],
   visure: ['visura camerale', 'visura catastale', 'catasto', 'rendita catastale', 'registro imprese', 'camera di commercio', 'valore imu', 'foglio particella', 'visura', 'catastale', 'camerale', 'immobile', 'rendita'],
@@ -10328,6 +10329,10 @@ async function ocrDocumentOn(doc, st, { wordMode = false, word = false, pages = 
   const pdf = await loadLib(doc.bytes);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   let words = 0, fixed = 0, next = 0;
+  // PDF accessibile (taggato): quando tutte le pagine sono scansioni rilette e il file non aveva una sua struttura,
+  // il testo riconosciuto diventa paragrafi taggati e l'immagine della pagina una decorazione
+  let tagIt = todo.length === N && (!reread.size || st.clean) && !pdf.catalog.get(PDFLib.PDFName.of('StructTreeRoot'));
+  const tagPages = [];
   const slot = async k => {
     for (;;) {
       Busy.check();
@@ -10406,7 +10411,13 @@ async function ocrDocumentOn(doc, st, { wordMode = false, word = false, pages = 
       }
       const key = page.node.newFontDictionary(font.name, font.ref);
       const ops = [pushGraphicsState(), beginText(), setTextRenderingMode(TextRenderingMode.Invisible)];
-      for (const line of data.lines || []) {
+      // le parole si raccolgono per paragrafo (come li ha trovati la lettura): un paragrafo, un elemento P
+      const paraOf = new Map(); (data.paragraphs || []).forEach((pa, k) => (pa.lines || []).forEach(l => paraOf.set(l, k)));
+      const groups = []; let gKey = null, gOps = ops;
+      if (had.length) tagIt = false;
+      for (const [li, line] of (data.lines || []).entries()) {
+        const pk = paraOf.has(line) ? 'p' + paraOf.get(line) : 'l' + li;
+        if (pk !== gKey) { gKey = pk; gOps = []; groups.push(gOps); }
         const rh = line.rowAttributes?.row_height;
         const size = clamp((rh && rh > 3 ? rh / 0.92 : (line.bbox.y1 - line.bbox.y0) / 1.18) / r.scale, 2, 200);
         const bl = line.baseline;
@@ -10427,13 +10438,14 @@ async function ocrDocumentOn(doc, st, { wordMode = false, word = false, pages = 
           const natural = font.widthOfTextAtSize(txt, size);
           if (natural <= 0 || len <= 0) continue;
           const ang = Math.atan2(u1.y - u0.y, u1.x - u0.x) * 180 / Math.PI;
-          ops.push(setFontAndSize(key, size), setCharacterSqueeze(clamp(100 * len / natural, 10, 500)), rotateAndSkewTextDegreesAndTranslate(ang, 0, 0, u0.x, u0.y), showText(font.encodeText(txt + ' ')));
+          gOps.push(setFontAndSize(key, size), setCharacterSqueeze(clamp(100 * len / natural, 10, 500)), rotateAndSkewTextDegreesAndTranslate(ang, 0, 0, u0.x, u0.y), showText(font.encodeText(txt + ' ')));
           nWords++;
         }
       }
       // testo dei riquadri ruotati: ruotato, al suo posto (riletto nel verso giusto); se la lettura non è sicura non si scrive
       for (const g of data.regions || []) {
         if (g.type !== 'rotated' || !g.lines || !g.words) continue;
+        const rOps = []; groups.push(rOps);
         for (const w of g.words) {
           const txt = pdfSafe(font, (w.text || '').trim());
           if (!txt) continue;
@@ -10441,12 +10453,12 @@ async function ocrDocumentOn(doc, st, { wordMode = false, word = false, pages = 
           const len = Math.hypot(u1.x - u0.x, u1.y - u0.y), size = clamp(w.size / r.scale, 2, 200), natural = font.widthOfTextAtSize(txt, size);
           if (natural <= 0 || len <= 0) continue;
           const ang = Math.atan2(u1.y - u0.y, u1.x - u0.x) * 180 / Math.PI;
-          ops.push(setFontAndSize(key, size), setCharacterSqueeze(clamp(100 * len / natural, 10, 500)), rotateAndSkewTextDegreesAndTranslate(ang, 0, 0, u0.x, u0.y), showText(font.encodeText(txt + ' ')));
+          rOps.push(setFontAndSize(key, size), setCharacterSqueeze(clamp(100 * len / natural, 10, 500)), rotateAndSkewTextDegreesAndTranslate(ang, 0, 0, u0.x, u0.y), showText(font.encodeText(txt + ' ')));
           nWords++;
         }
       }
-      ops.push(endText(), popGraphicsState());
-      if (!reread.has(p) || st.clean) page.pushOperators(...ops); // le pagine che avevano già il testo non ne ricevono un secondo strato
+      // con i tag lo strato si scrive alla fine (quando si sa che tutte le pagine si possono taggare)
+      if (!reread.has(p) || st.clean) tagPages.push({ p, page, head: ops, groups, tail: [endText(), popGraphicsState()] }); // le pagine che avevano già il testo non ne ricevono un secondo strato
       if (r.canvas) r.canvas.width = r.canvas.height = 0; prep.release?.();
       words += nWords;
       if (worker) (await worker)._box.log = null;
@@ -10456,6 +10468,24 @@ async function ocrDocumentOn(doc, st, { wordMode = false, word = false, pages = 
     }
   };
   await Promise.all(Array.from({ length: P }, (_, k) => slot(k)));
+  tagPages.sort((a, b) => a.p - b.p);
+  if (tagIt && tagPages.length) {
+    try {
+      if (typeof TagPdf === 'undefined') await Later.all();
+      const root = TagPdf.node('Document'), tstate = TagPdf.state(), C = pdf.context, PO = PDFLib.PDFOperator, PN = PDFLib.PDFName;
+      for (const tp of tagPages) {
+        // il contenuto originale (la scansione) è una decorazione: il testo vero è quello riconosciuto
+        tp.page.node.wrapContentStreams(C.register(C.contentStream([PO.of('BMC', [PN.of('Artifact')])])), C.register(C.contentStream([PO.of('EMC')])));
+        const ops = [...tp.head];
+        for (const g of tp.groups) { if (!g.length) continue; const n = TagPdf.node('P', root); ops.push(TagPdf.begin(pdf, tp.page, tstate, n), ...g, TagPdf.end()); }
+        ops.push(...tp.tail);
+        tp.page.node.addContentStream(C.register(C.contentStream(ops))); tp.done = true;
+      }
+      const LANG = { ita: 'it-IT', eng: 'en', fra: 'fr', deu: 'de', spa: 'es' };
+      TagPdf.finish(pdf, root, tstate, { lang: LANG[[...(st.langs || ['ita'])][0]] || 'it-IT', title: doc.base });
+    } catch (e) { console.warn('tag OCR', e); tagIt = false; }
+  }
+  if (!tagIt) for (const tp of tagPages) if (!tp.done) tp.page.pushOperators(...tp.head, ...tp.groups.flat(), ...tp.tail);
   const fullText = todo.map((p, i) => `\n\n===== Pagina ${p} =====\n\n` + texts[i]).join('');
   if (P > 1) fixLog.sort((a, b) => (a.page || 0) - (b.page || 0));
   let docx = null;
@@ -36121,7 +36151,7 @@ const Flow = (() => {
     if (/\.(p7m|tsd|m7m)$/.test(n)) return 'p7m';
     if (isImage(f)) return 'img';
     if (/\.zip$/.test(n)) return 'zip';
-    if (/\.(docx|xlsx|xlsm|md|markdown|csv|html?|txt)$/.test(n)) return 'office';
+    if (/\.(docx|xlsx|xlsm|pptx|md|markdown|csv|html?|txt)$/.test(n)) return 'office';
     return 'other';
   };
   /* fatture elettroniche: si riconoscono dal contenuto (XML, P7M, ZIP del cassetto fiscale) */

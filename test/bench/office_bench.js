@@ -53,6 +53,11 @@ const step = (name, cond, det) => { out.push(`${cond ? '✓' : '✗'} ${name}${d
   step('Excel · nessun testo fuori dalla pagina (colonne adattate)', x.out === 0, `${x.out} pezzi fuori · ${x.n} pagine · ${x.ms} ms`);
   step('Excel · ogni foglio con il suo nome e il numero di pagina', E['bilancio.xlsx'].sheets.every(s => x.pages.some(t => norm(t).includes(norm(s + ' · pagina')))), '');
 
+  // PowerPoint
+  const pp = await conv('presentazione.pptx'); const po = inOrder(norm(pp.pages.join(' ')), E['presentazione.pptx'].words);
+  const alts = await p.evaluate(async b64 => { const u = Uint8Array.from(atob(b64), c => c.charCodeAt(0)); const r = await OfficePdf.convert(new File([u], 'p.pptx'), {}); const d = await PDFLib.PDFDocument.load(r.bytes); const out = []; for (const [, o] of d.context.enumerateIndirectObjects()) { if (o instanceof PDFLib.PDFDict && o.get(PDFLib.PDFName.of('S'))?.toString() === '/Figure') { const a = o.get(PDFLib.PDFName.of('Alt')); if (a) out.push(a.decodeText()); } } return out; }, fs.readFileSync(T('presentazione.pptx')).toString('base64'));
+  step('PowerPoint · grafici disegnati dai dati, con testo alternativo che riporta i valori', E['presentazione.pptx'].charts.every(c => alts.some(a => a.includes(c))), alts.filter(a => /Grafico/.test(a)).map(a => a.slice(0, 70)).join(' | '));
+  step('PowerPoint · una pagina per diapositiva, testo di caselle, elenchi e tabella nell’ordine, immagine', pp.n === E['presentazione.pptx'].slides && po.ok === E['presentazione.pptx'].words.length && pp.imgs >= 1 && pp.out === 0, `${pp.n} pagine · ${po.ok}/${E['presentazione.pptx'].words.length}${po.miss.length ? ' · mancano: ' + po.miss.join(' | ') : ''} · ${pp.imgs} immagini · ${pp.ms} ms`);
   // Markdown e HTML
   const m = await conv('note.md'); const mo = inOrder(norm(m.pages.join(' ')), E['note.md'].words);
   step('Markdown · titoli, elenchi, tabella e codice, nell’ordine', mo.ok === E['note.md'].words.length, `${mo.ok}/${E['note.md'].words.length}${mo.miss.length ? ' · mancano: ' + mo.miss.join(' | ') : ''}`);
@@ -67,6 +72,20 @@ const step = (name, cond, det) => { out.push(`${cond ? '✓' : '✗'} ${name}${d
     for (let k = 1; k <= d.numPages; k++) { const t = (await (await d.getPage(k)).getTextContent()).items.map(i => i.str).join(' '), t0 = (await (await o.getPage(k)).getTextContent()).items.map(i => i.str).join(' '); out.push({ has: /RISERVATO/.test(t), kept: t.includes(t0.slice(0, 60)) }); }
     return out; }, fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'contratto.pdf')).toString('base64'));
   step('Filigrana · solo sulle pagine dispari, testo del documento intatto e selezionabile', fl.every((x, k) => x.has === (k % 2 === 0) && x.kept), fl.map((x, k) => `p.${k + 1}: ${x.has ? 'sì' : 'no'}`).join(' '));
+  // accessibilità: ogni PDF prodotto (anche l'unione di più file) conforme a PDF/UA-1 secondo veraPDF
+  const VERA = process.env.VERAPDF || '/tmp/claude-0/-home-user/d8050b4f-331e-5402-b1a5-64fe8b9c6072/scratchpad/vera/app/verapdf';
+  if (fs.existsSync(VERA)) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ua-')); const files = [];
+    for (const f of ['relazione.docx', 'bilancio.xlsx', 'presentazione.pptx', 'note.md', 'pagina.html']) {
+      const b64 = await p.evaluate(async ([n, b]) => { const u = Uint8Array.from(atob(b), c => c.charCodeAt(0)); const r = await OfficePdf.convert(new File([u], n), {}); let s = ''; for (const x of r.bytes) s += String.fromCharCode(x); return btoa(s); }, [f, fs.readFileSync(T(f)).toString('base64')]);
+      const o = path.join(dir, f + '.pdf'); fs.writeFileSync(o, Buffer.from(b64, 'base64')); files.push(o);
+    }
+    const all = await p.evaluate(async list => { const outs = []; for (const [n, b] of list) { const u = Uint8Array.from(atob(b), c => c.charCodeAt(0)); outs.push((await OfficePdf.convert(new File([u], n), {})).bytes); } const m = await OfficePdf.merge(outs, 'Documenti'); let s = ''; for (const x of m) s += String.fromCharCode(x); return btoa(s); }, ['relazione.docx', 'note.md'].map(f => [f, fs.readFileSync(T(f)).toString('base64')]));
+    const om = path.join(dir, 'unione.pdf'); fs.writeFileSync(om, Buffer.from(all, 'base64')); files.push(om);
+    let res = ''; try { res = execFileSync(VERA, ['--flavour', 'ua1', '--format', 'text', ...files], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 300000 }); } catch (e) { res = String(e.stdout || ''); }
+    const pass = (res.match(/^PASS /gm) || []).length;
+    step('accessibilità · PDF/UA-1 (veraPDF) per Word, Excel, PowerPoint, Markdown, HTML e per l’unione di più file', pass === files.length, `${pass}/${files.length} conformi${pass < files.length ? ' · ' + res.split('\n').filter(l => /^FAIL/.test(l)).map(l => path.basename(l.split(' ')[1])).join(', ') : ''}`);
+  } else out.push('· accessibilità: veraPDF non disponibile, controllo saltato');
   step('nessun errore nella pagina', !errs.length, errs.slice(0, 2).join(' | '));
   await b.close();
   console.log(out.join('\n')); console.log(fail ? `\n${fail} FALLITI` : '\ntutti verdi'); process.exit(fail ? 1 : 0);

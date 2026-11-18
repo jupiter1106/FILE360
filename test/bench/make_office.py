@@ -109,3 +109,33 @@ expect['note.md'] = {'words': ['Note della riunione', 'Presenti', 'Anna', 'Luca'
 expect['pagina.html'] = {'words': ['Avviso ai clienti', 'Dal', '1° luglio', 'cambiano gli orari', 'Lunedì', 'Martedì', 'Giorno', 'Orario', 'Sabato', 'chiuso'], 'absent': ['alert']}
 (D / 'office-attese.json').write_text(json.dumps(expect, ensure_ascii=False, indent=1), encoding='utf-8')
 print('ok', [p.name for p in D.glob('*') if p.suffix in ('.docx', '.xlsx', '.md', '.html')])
+
+# ---------- PowerPoint ----------
+from pptx import Presentation
+from pptx.util import Inches, Pt as PPt
+from pptx.dml.color import RGBColor as PRGB
+pr = Presentation()
+s1 = pr.slides.add_slide(pr.slide_layouts[0]); s1.shapes.title.text = 'Piano commerciale 2027'; s1.placeholders[1].text = 'Studio Rossi Bianchi · riunione di avvio'
+s2 = pr.slides.add_slide(pr.slide_layouts[1]); s2.shapes.title.text = 'Obiettivi dell’anno'
+tf = s2.placeholders[1].text_frame; tf.text = 'Aumentare le vendite del 12%'
+for t, lv in [('Nuovi clienti nel Nord Est', 1), ('Rinnovo dei contratti in scadenza', 1), ('Ridurre i tempi di consegna', 0), ('Formare la rete commerciale', 0)]:
+    pp = tf.add_paragraph(); pp.text = t; pp.level = lv
+s3 = pr.slides.add_slide(pr.slide_layouts[5]); s3.shapes.title.text = 'Risultati per trimestre'
+tb = s3.shapes.add_table(4, 3, Inches(1), Inches(1.8), Inches(8), Inches(2.4)).table
+for r, row in enumerate([['Trimestre', 'Ricavi', 'Margine'], ['Primo', '1.240.000 €', '18%'], ['Secondo', '1.385.000 €', '21%'], ['Terzo', '1.410.000 €', '22%']]):
+    for c, v in enumerate(row): tb.cell(r, c).text = v
+s4 = pr.slides.add_slide(pr.slide_layouts[6])
+box = s4.shapes.add_textbox(Inches(.8), Inches(.6), Inches(8.4), Inches(1)); box.text_frame.text = 'Grazie per l’attenzione'; box.text_frame.paragraphs[0].runs[0].font.size = PPt(40); box.text_frame.paragraphs[0].runs[0].font.color.rgb = PRGB(0x1D, 0x4E, 0xD8)
+buf = io.BytesIO(); im.save(buf, 'PNG'); buf.seek(0); s4.shapes.add_picture(buf, Inches(2.5), Inches(2), width=Inches(5))
+from pptx.chart.data import CategoryChartData
+from pptx.enum.chart import XL_CHART_TYPE
+s5 = pr.slides.add_slide(pr.slide_layouts[5]); s5.shapes.title.text = 'Vendite per area'
+cd = CategoryChartData(); cd.categories = ['Nord', 'Centro', 'Sud']; cd.add_series('2026', (420, 310, 260)); cd.add_series('2027', (480, 330, 300))
+gc = s5.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, Inches(1), Inches(1.6), Inches(8), Inches(4.5), cd).chart; gc.has_legend = True
+s6 = pr.slides.add_slide(pr.slide_layouts[5]); s6.shapes.title.text = 'Ripartizione dei costi'
+cd2 = CategoryChartData(); cd2.categories = ['Personale', 'Affitti', 'Altro']; cd2.add_series('Costi', (55, 30, 15))
+s6.shapes.add_chart(XL_CHART_TYPE.PIE, Inches(2), Inches(1.6), Inches(6), Inches(4.5), cd2)
+pr.save(D / 'presentazione.pptx')
+expect['presentazione.pptx'] = {'words': ['Piano commerciale 2027', 'Studio Rossi Bianchi', 'riunione di avvio', 'Obiettivi dell’anno', 'Aumentare le vendite del 12%', 'Nuovi clienti nel Nord Est', 'Rinnovo dei contratti in scadenza', 'Ridurre i tempi di consegna', 'Formare la rete commerciale', 'Risultati per trimestre', 'Trimestre', 'Ricavi', 'Margine', 'Primo', '1.240.000 €', '18%', 'Secondo', '1.385.000 €', '21%', 'Terzo', '1.410.000 €', '22%', 'Grazie per l’attenzione', 'Vendite per area', 'Nord', 'Centro', 'Sud', 'Ripartizione dei costi', '55%', '30%', '15%'], 'slides': 6, 'images': 1, 'charts': ['Nord 420', 'Sud 300', 'Personale 55']}
+(D / 'office-attese.json').write_text(json.dumps(expect, ensure_ascii=False, indent=1), encoding='utf-8')
+print('pptx ok')

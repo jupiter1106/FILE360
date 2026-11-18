@@ -310,6 +310,19 @@ test('Filigrana: anteprima dal vivo, poi il PDF con la scritta', async b => {
   await page.locator('.tool .btn-run').click(); await page.waitForSelector('.scrim:not(.busy) .modal.res', { timeout: 60000 });
   ok(/BOZZA/.test(await page.locator('.modal.res').innerText()), 'manca la conferma della scritta');
 });
+test('zoom al 400% (320×256): nessuno scorrimento orizzontale della pagina, in home e negli strumenti con il documento aperto', async b => {
+  const ctx = await b.newContext({ viewport: { width: 320, height: 256 } }); const page = await ctx.newPage(); const bad = [];
+  await page.goto(require('../lib').APP); await page.waitForSelector('.intent, .hm-tool');
+  const sw = () => page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  if (await sw() > 1) bad.push('home');
+  for (const t of ['unisci', 'comprimi', 'modifica', 'oscura', 'pdfa', 'filigrana', 'officepdf']) {
+    await page.evaluate(() => { try { Flow.close(); } catch { } location.hash = ''; }); await page.waitForTimeout(150);
+    await page.evaluate(i => { location.hash = i; }, t); await page.waitForSelector('.tool .dz-input', { state: 'attached' });
+    if (t !== 'officepdf') { await page.locator('.tool .dz-input').first().setInputFiles([require('../lib').fx('contratto.pdf')]); await page.waitForTimeout(2000); }
+    if (await sw() > 1) bad.push(t);
+  }
+  await ctx.close(); ok(!bad.length, 'scorre: ' + bad.join(', '));
+});
 test('errore d’apertura scritto anche nel riquadro del file, con le azioni', async b => {
   const { page } = await open(b, 'desk1280'); await openTool(page, 'comprimi', ['rotto.pdf']); await page.waitForSelector('.dropzone .dz-err', { timeout: 15000 });
   ok(await page.locator('.dropzone .dz-err .btn').count() >= 1, 'nessuna azione nel riquadro');
