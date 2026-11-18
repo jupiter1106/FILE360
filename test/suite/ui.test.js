@@ -252,6 +252,24 @@ test('Fatture a 320 px: la tabella che scorre lo mostra con un’ombra visibile 
   const r = await page.evaluate(() => { const w = document.querySelector('.ft-tw'), i = w.querySelector('.ft-sh i.r'); return { scrolls: w.scrollWidth > w.clientWidth, visible: +getComputedStyle(i).opacity, h: i.getBoundingClientRect().height, z: getComputedStyle(w.querySelector('.ft-sh')).zIndex }; });
   ok(!r.scrolls || (r.visible > 0.9 && r.h > 40), JSON.stringify(r));
 });
+test('errori: lo stesso file non valido ha la stessa diagnosi in ogni strumento, con la riparazione come prima azione', async b => {
+  const { page } = await open(b, 'desk1280'); const seen = {};
+  for (const tool of ['comprimi', 'word', 'ocr', 'dividi', 'ruota', 'modifica']) {
+    await openTool(page, tool, ['finto.pdf']); await page.waitForSelector('.dropzone .dz-err', { timeout: 15000 });
+    seen[tool] = await page.evaluate(() => ({ t: document.querySelector('.dz-err b').textContent, a: document.querySelector('.dz-err .btn')?.textContent, x: document.querySelector('.dz-err-b span').textContent }));
+    await page.evaluate(() => { location.hash = ''; }); await page.waitForTimeout(200);
+  }
+  const bad = Object.entries(seen).filter(([, v]) => v.t !== 'File non valido' || v.a !== 'Prova a ripararlo' || !/«finto\.pdf»/.test(v.x) || /"/.test(v.x));
+  ok(!bad.length, JSON.stringify(bad).slice(0, 300));
+});
+test('PDF/A: esito pagina per pagina (originale o ricostruita) e aggiornato cambiando standard', async b => {
+  const { page } = await open(b, 'desk1280'); await openTool(page, 'pdfa', ['firmato-pades.pdf']);
+  await page.waitForSelector('.pa-pages .pa-pg', { timeout: 60000 });
+  const one = await page.evaluate(() => [...document.querySelectorAll('.pa-pg')].map(f => f.classList.contains('warn') ? 'R' : 'O').join(''));
+  ok(one === 'OOR', 'PDF/A-1b: atteso OOR, ottenuto ' + one);
+  await page.locator('.tool .seg button', { hasText: 'PDF/A-2b' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.pa-pg').length === 3 && !document.querySelector('.pa-pg.warn'), null, { timeout: 60000 });
+});
 test('errore d’apertura scritto anche nel riquadro del file, con le azioni', async b => {
   const { page } = await open(b, 'desk1280'); await openTool(page, 'comprimi', ['rotto.pdf']); await page.waitForSelector('.dropzone .dz-err', { timeout: 15000 });
   ok(await page.locator('.dropzone .dz-err .btn').count() >= 1, 'nessuna azione nel riquadro');

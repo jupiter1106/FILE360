@@ -1039,8 +1039,10 @@ async function withBusy(title, fn, opts = {}) {
   const outer = !Busy.el;
   Busy.show(title, opts);
   if (outer && !Jobs.running) BgWork.start();
+  withBusy.last = null;
   try { return await fn(); }
-  catch (e) { Errors.show(e, { retry: opts.retry || null }); return null; }
+  // l'errore resta disponibile: chi riceve null può rilanciarlo (così il riquadro dice il motivo vero, non «impossibile aprire»)
+  catch (e) { withBusy.last = e; Errors.show(e, { retry: opts.retry || null }); return null; }
   finally { if (!Busy.job) { Busy._dom(); if (!Jobs.running) BgWork.stop(); } }
 }
 
@@ -1411,13 +1413,13 @@ function editableName(o, el, onChange) {
 let DOC_SEQ = 0;
 async function openPdf(file) {
   let bytes = file instanceof Uint8Array ? file : new Uint8Array(await file.arrayBuffer());
-  if (!bytes.length) throw codedError(`"${file.name}" è vuoto (0 byte): prova a salvarlo di nuovo sul computer.`, 'INVALID');
+  if (!bytes.length) throw codedError(`«${file.name}» è vuoto (0 byte): prova a salvarlo di nuovo sul computer.`, 'INVALID');
   // file firmato digitalmente (.p7m, .tsd, .m7m): si usa il PDF contenuto
   if (typeof FirmaKit !== 'undefined' && !FirmaKit.isPdf(bytes)) {
     try {
       const r = await FirmaKit.open(bytes, file.name || '');
       if (r.signed && r.type.ext === 'pdf') { bytes = r.content; file = new File([bytes], r.name, { type: 'application/pdf' }); toast('PDF estratto dal file firmato digitalmente: la firma non resta nel file modificato'); }
-      else if (r.signed) throw new Error(`"${file.name}" è un file firmato che contiene un ${r.type.label}, non un PDF: aprilo con «Firme digitali e P7M».`);
+      else if (r.signed) throw new Error(`«${file.name}» è un file firmato che contiene un ${r.type.label}, non un PDF: aprilo con «Firme digitali e P7M».`);
     } catch (e) { if (/contiene un/.test(e.message)) throw e; }
   }
   // PDF protetto: si apre chiedendo la password (o senza, se ha solo dei limiti) e si lavora sulla copia in chiaro
@@ -1435,15 +1437,15 @@ async function openPdf(file) {
     pdfjs = await pdfDocument({ data: bytes.slice(), isEvalSupported: false }).promise;
   } catch (e) {
     const n = e && e.name;
-    if (n === 'PasswordException') throw codedError(`"${file.name}" è protetto da password: rimuovi prima la protezione.`, 'PASSWORD');
+    if (n === 'PasswordException') throw codedError(`«${file.name}» è protetto da password: rimuovi prima la protezione.`, 'PASSWORD');
     if (n === 'InvalidPDFException' || n === 'MissingPDFException') {
       const head = new TextDecoder('latin1').decode(bytes.subarray(0, 2048));
-      if (/\.p7m$/i.test(file.name) || /^0\x80|^\x30/.test(head)) throw new Error(`"${file.name}" sembra un file con firma digitale ma non è stato possibile leggerlo: prova con lo strumento «Firme digitali e P7M».`);
-      if (/<html|<!doctype/i.test(head)) throw codedError(`"${file.name}" in realtà è una pagina web salvata con estensione .pdf, non un PDF.`, 'FORMAT');
-      throw codedError(`"${file.name}" non sembra un PDF valido (file danneggiato o di un altro formato).`, n === 'MissingPDFException' && !bytes.length ? 'MISSING' : 'INVALID');
+      if (/\.p7m$/i.test(file.name) || /^0\x80|^\x30/.test(head)) throw new Error(`«${file.name}» sembra un file con firma digitale ma non è stato possibile leggerlo: prova con lo strumento «Firme digitali e P7M».`);
+      if (/<html|<!doctype/i.test(head)) throw codedError(`«${file.name}» in realtà è una pagina web salvata con estensione .pdf, non un PDF.`, 'FORMAT');
+      throw codedError(`«${file.name}» non sembra un PDF valido (file danneggiato o di un altro formato).`, n === 'MissingPDFException' && !bytes.length ? 'MISSING' : 'INVALID');
     }
     console.error(e);
-    throw new Error(`Impossibile leggere "${file.name}": ${(e && e.message) || e}. Prova ad aprire file360 direttamente in Chrome, Edge o Firefox.`);
+    throw new Error(`Impossibile leggere «${file.name}»: ${(e && e.message) || e}. Prova ad aprire file360 direttamente in Chrome, Edge o Firefox.`);
   }
   return { id: ++DOC_SEQ, file, name: file.name, base: stripExt(file.name), size: bytes.length, bytes, pdfjs, numPages: pdfjs.numPages };
 }
@@ -4371,7 +4373,15 @@ function openTool(id, preload, { fresh = false } = {}) {
       const dzEl = stage.querySelector('.dropzone');
       // gli avvisi d'errore usciti durante l'apertura (file per file) dicono la stessa cosa del riquadro: via
       if (dzEl && info && info.kind !== 'abort') document.querySelectorAll('#toasts .toast.error').forEach(x => x.remove());
-      if (dzEl && info && info.kind !== 'abort') dzEl.prepend(h('div', { class: 'dz-err', role: 'alert', onclick: e => e.stopPropagation() }, ic('alert', 16, 2.2), h('div', {}, h('b', {}, `${files.length === 1 || e?.file ? '«' + ((e?.file || files[0])?.name || 'Il file') + '»' : 'I file'}: ${info.title.toLowerCase()}`), h('span', {}, info.text + ' Scegli un altro file o prova le azioni qui accanto.')), ...info.actions.slice(0, 2).map(([l, fn]) => h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); fn(); } }, l))));
+      if (dzEl && info && info.kind !== 'abort') {
+        // riquadro d'errore: cosa è successo (titolo), perché (testo, con il nome del file se non c'è già), cosa fare (pulsanti)
+        const fname = files.length === 1 || e?.file ? (e?.file || files[0])?.name : '';
+        const text = fname && !info.text.includes(fname) ? `«${fname}»: ${info.text}` : info.text;
+        const acts = info.actions.slice(0, 2);
+        dzEl.prepend(h('div', { class: 'dz-err', role: 'alert', onclick: ev => ev.stopPropagation() }, ic('alert', 18, 2.2),
+          h('div', { class: 'dz-err-b' }, h('b', {}, files.length > 1 && !e?.file ? 'I file non si sono potuti aprire' : info.title), h('span', {}, text + (acts.length ? '' : ' Scegli un altro file.')),
+            acts.length ? h('div', { class: 'dz-err-a' }, acts.map(([l, fn], i) => h('button', { class: 'btn sm' + (i ? '' : ' primary'), onclick: ev => { ev.stopPropagation(); fn(); } }, l))) : null)));
+      }
     }
   };
   if (preload) {
@@ -4429,7 +4439,7 @@ function dropzone(t, onFiles) {
     ondragleave: () => dz.classList.remove('over'),
     ondrop: async e => { e.preventDefault(); dz.classList.remove('over'); const f = acceptFiles(t, t.folder && typeof filesFromDrop === 'function' ? await filesFromDrop(e.dataTransfer) : e.dataTransfer.files); if (f.length) onFiles(f); } },
     h('div', { class: 'dz-ic' }, ic('upload', 34)),
-    h('h3', {}, h('span', { class: 'dz-mouse' }, t.pdfIn === false ? 'Trascina qui le tue foto' : t.multiple ? 'Trascina qui i tuoi file' : 'Trascina qui il tuo file'),
+    h('h2', { class: 'dz-t' }, h('span', { class: 'dz-mouse' }, t.pdfIn === false ? 'Trascina qui le tue foto' : t.multiple ? 'Trascina qui i tuoi file' : 'Trascina qui il tuo file'),
       h('span', { class: 'dz-touch' }, t.pdfIn === false ? 'Scegli o scatta le foto' : t.multiple ? 'Scegli i file dal telefono' : 'Scegli il file dal telefono')),
     h('p', {}, t.dzText ? t.dzText : t.anyFile ? 'File firmato (.p7m, .tsd, .m7m) o PDF con firma digitale' : t.pdfIn === false ? 'JPG, PNG, HEIC, TIFF, WebP, GIF, BMP' : /image/.test(t.accept) ? 'PDF o immagini (JPG, PNG, HEIC…)' : 'Documento PDF'),
     t.folder && CAN_PICK_DIR ? h('div', { class: 'row dz-btns' }, h('button', { type: 'button', class: 'btn primary dz-pick' }, ic('file', 18), 'Scegli i file'),
@@ -5016,9 +5026,9 @@ async function frameFromBlob(blob, type, exif = 1) {
 /* returns an array of frames (multi-page TIFF / HEIC sequences give more than one) */
 async function decodeImageFile(file) {
   const bytes = new Uint8Array(await file.arrayBuffer());
-  if (!bytes.length) throw new Error(`"${file.name}" è vuoto.`);
+  if (!bytes.length) throw new Error(`«${file.name}» è vuoto.`);
   const kind = sniffImage(bytes);
-  const fail = what => new Error(`"${file.name}": ${what}`);
+  const fail = what => new Error(`«${file.name}»: ${what}`);
   if (kind === 'heic') {
     try { return [await frameFromBlob(new Blob([bytes], { type: 'image/heic' }), 'other')]; } catch { /* browser senza HEIC nativo */ }
     try { await need('heic'); } catch (e) { throw fail(e.message); }
@@ -5689,7 +5699,7 @@ const PageLook = {
 /* ----------------------------- DIVIDI ------------------------------ */
 async function startSplit(stage, files, tool, opt = {}) {
   const doc = await withBusy('Apertura del documento…', () => openPdf(files[0]));
-  if (!doc) throw new Error('Impossibile aprire il file');
+  if (!doc) throw (withBusy.last || new Error('Impossibile aprire il file'));
   const N = doc.numPages;
   const st = { mode: opt.auto && N > 1 ? 'auto' : 'ranges', every: 1, ranges: N > 1 ? [[1, Math.ceil(N / 2)], [Math.ceil(N / 2) + 1, N]].map(([a, b]) => a === b ? String(a) : `${a}-${b}`).join(', ') : '1', sel: new Set(), selMode: 'one',
     by: 'auto', byText: '', dropBlank: true, files: 2, counts: null };
@@ -5986,7 +5996,7 @@ async function startCompress(stage, files) {
 /* ----------------------------- RUOTA ------------------------------- */
 async function startRotate(stage, files) {
   const doc = await withBusy('Apertura del documento…', () => openPdf(files[0]));
-  if (!doc) throw new Error('Impossibile aprire il file');
+  if (!doc) throw (withBusy.last || new Error('Impossibile aprire il file'));
   const N = doc.numPages;
   const rot = new Array(N).fill(0), sel = new Set();
   const cards = [];
@@ -6113,7 +6123,7 @@ async function startRotate(stage, files) {
 /* ----------------------------- ORDINA ------------------------------ */
 async function startOrder(stage, files) {
   const doc = await withBusy('Apertura del documento…', () => openPdf(files[0]));
-  if (!doc) throw new Error('Impossibile aprire il file');
+  if (!doc) throw (withBusy.last || new Error('Impossibile aprire il file'));
   const N = doc.numPages;
   let seq = 0;
   const initial = () => Array.from({ length: N }, (_, i) => ({ key: 'p' + (++seq), src: i }));
@@ -6312,7 +6322,7 @@ async function startOrder(stage, files) {
 /* ----------------------------- NUMERAZIONE ------------------------- */
 async function startNumbers(stage, files) {
   const doc = await withBusy('Apertura del documento…', () => openPdf(files[0]));
-  if (!doc) throw new Error('Impossibile aprire il file');
+  if (!doc) throw (withBusy.last || new Error('Impossibile aprire il file'));
   const N = doc.numPages;
   const today = new Date().toLocaleDateString('it-IT');
   const st = {
@@ -10382,7 +10392,7 @@ async function startOcr(stage, files, { wordMode = false } = {}) {
   if (isImage(file)) file = await withBusy('Preparazione dell’immagine…', () => imagesToPdfFile([file], stripExt(file.name) + '.pdf'));
   if (!file) throw new Error('Immagine non leggibile');
   const doc = await withBusy('Apertura del documento…', () => openPdf(file));
-  if (!doc) throw new Error('Impossibile aprire il file');
+  if (!doc) throw (withBusy.last || new Error('Impossibile aprire il file'));
   const N = doc.numPages, LANGS = OCR_LANGS;
   const st = { langs: new Set(['ita']), quality: 'acc', range: 'all', rangeText: `1-${N}`, skipText: true, auto: true, clean: false, word: true, wordImages: true, wordFont: 'auto', fix: true, overlap: 'behind', improve: true };
   const QUALITY = OCR_QUALITY;
@@ -12759,7 +12769,7 @@ const Impose = (() => {
 
 async function startImpagina(stage, files, tool, opt = {}) {
   const doc = await withBusy('Apertura del documento…', () => openPdf(files[0]));
-  if (!doc) throw new Error('Impossibile aprire il file');
+  if (!doc) throw (withBusy.last || new Error('Impossibile aprire il file'));
   const N = doc.numPages;
   // formati delle pagine come si vedono (rotazione e ritaglio compresi)
   const sizes = await withBusy('Lettura delle pagine…', async () => {
@@ -14007,7 +14017,7 @@ async function startRedact(stage, files, _tool, auto = null) {
   // auto: il motore lavora senza interfaccia (per «più file») e restituisce il risultato invece di mostrarlo
   const busy = (t, fn, o) => auto ? fn() : withBusy(t, fn, o);
   const doc = await busy('Apertura del documento…', () => openPdf(files[0]));
-  if (!doc) throw new Error('Impossibile aprire il file');
+  if (!doc) throw (withBusy.last || new Error('Impossibile aprire il file'));
   const N = doc.numPages;
   const origBytes = doc.bytes;   // (l'impronta del rapporto è quella del file ricevuto)
   const boxes = Array.from({ length: N }, () => []); let bid = 0;
@@ -17983,7 +17993,7 @@ const DocxOut = (() => {
    ===================================================================== */
 async function startEdit(stage, files) {
   const doc = await withBusy('Apertura del documento…', () => openPdf(files[0]));
-  if (!doc) throw new Error('Impossibile aprire il file');
+  if (!doc) throw (withBusy.last || new Error('Impossibile aprire il file'));
   const N = doc.numPages;
   const items = Array.from({ length: N }, () => []);
   const imgStore = new Map();
@@ -23525,8 +23535,26 @@ async function startPdfa(stage, files, tool, { verify = false } = {}) {
       if (c && own && !own.valid) parts.push(pdfaVerdict(own));
       status = h('div', {}, ...parts);
     }
-    return h('div', { class: 'filerow' }, thumb(d),
-      h('div', { class: 'fr-info' }, h('div', { class: 'fr-name' }, d.name), h('div', { class: 'muted small' }, `${plural(d.numPages, 'pagina', 'pagine')} · ${fmtSize(d.size)}`), status));
+    return h('div', { class: 'pa-doc' }, h('div', { class: 'filerow' }, thumb(d),
+      h('div', { class: 'fr-info' }, h('div', { class: 'fr-name' }, d.name), h('div', { class: 'muted small' }, `${plural(d.numPages, 'pagina', 'pagine')} · ${fmtSize(d.size)}`), status)),
+      pageGrid(d, a));
+  }
+  // pagina per pagina: cosa succede a ciascuna (resta con testo e grafica originali o diventa un'immagine con testo ricercabile) e perché
+  function pageGrid(d, a) {
+    if (!a || docs.length > 3) return null;
+    const keep = !(target => target?.valid && st.keepValid && st.mode !== 'rebuild')(resOf(d, st.part, 'B'));
+    if (!keep) return null;
+    const MAX = 60, n = Math.min(d.numPages, MAX);
+    const cells = [];
+    for (let i = 1; i <= n; i++) {
+      const r = st.mode === 'rebuild' || !a.pages ? ['ricostruzione richiesta'] : a.pages[i - 1]?.reasons || [];
+      const ok = !r.length;
+      cells.push(h('figure', { class: 'pa-pg ' + (ok ? 'ok' : 'warn'), title: ok ? `Pagina ${i}: testo e grafica originali` : `Pagina ${i}: ricostruita come immagine con testo ricercabile — ${r.join('; ')}` },
+        h('div', { class: 'pa-pg-im' }, lazyThumb(d.pdfjs, i, h('canvas'), 96, 124)),
+        h('figcaption', {}, h('b', {}, String(i)), h('span', {}, ok ? 'originale' : 'ricostruita'))));
+    }
+    return h('div', { class: 'pa-pages', role: 'list', 'aria-label': `Pagine di ${d.name}` }, ...cells.map(c => (c.setAttribute('role', 'listitem'), c)),
+      d.numPages > MAX ? h('div', { class: 'pa-more muted small' }, `e altre ${d.numPages - MAX} pagine`) : null);
   }
 
   if (verify) {
@@ -23560,7 +23588,7 @@ async function startPdfa(stage, files, tool, { verify = false } = {}) {
     sec('Standard', partSeg,
       h('div', { class: 'muted small' }, 'PDF/A-1b è il formato più accettato dai portali della PA (Agenzia delle Entrate, ComUnica, PCT). PDF/A-2b è più recente e ammesso per la conservazione.')),
     sec('Modalità', seg([['auto', 'Automatica'], ['rebuild', 'Ricostruisci tutto']], st.mode, v => { st.mode = v; draw(); }),
-      h('div', { class: 'muted small' }, 'Automatica conserva testo e grafica originali delle pagine conformi e ricostruisce solo le altre. “Ricostruisci tutto” trasforma ogni pagina in immagine con testo ricercabile: massima compatibilità, file più pesanti.')),
+      h('div', { class: 'muted small' }, 'Automatica conserva testo e grafica originali delle pagine conformi e ricostruisce solo le altre. «Ricostruisci tutto» trasforma ogni pagina in immagine con testo ricercabile: massima compatibilità, file più pesanti.')),
     sec('Qualità delle pagine ricostruite', seg([[150, '150 dpi'], [200, '200 dpi'], [300, '300 dpi']], st.dpi, v => st.dpi = v)),
     sec('File già PDF/A', checkbox('Lascia com’è chi è già conforme', st.keepValid, v => { st.keepValid = v; draw(); }, 'Un file che rispetta già lo standard scelto non viene toccato: resta identico all’originale.')),
     h('div', { class: 'hint' }, 'Ogni file prodotto viene verificato con le regole della norma ISO 19005: se qualcosa non torna, le pagine coinvolte vengono ricostruite e il file si verifica di nuovo.'),
@@ -24916,7 +24944,7 @@ function ocrPhrases(data, k) {
 async function startForms(stage, files) {
   if (typeof Privacy !== 'undefined' && Privacy.isLocked()) setTimeout(() => toastActions('Il tuo profilo e i valori ricordati sono protetti: sbloccali per compilare più in fretta', [['Sblocca', () => Privacy.open()]], 9000), 600);
   const doc = await withBusy('Apertura del documento…', () => openPdf(files[0]));
-  if (!doc) throw new Error('Impossibile aprire il file');
+  if (!doc) throw (withBusy.last || new Error('Impossibile aprire il file'));
   await FillKit.ready();
   const N = doc.numPages;
   const st = { mode: 'fill', tool: null, flatChosen: false, newType: 'text', sel: null, osel: null, pan: false, flatten: false, highlight: false, color: 'black', opt: { ...FormDetect.DEFAULTS } };
@@ -26876,7 +26904,7 @@ const FirmeUI = (() => {
   // apre e verifica un file (PDF firmato o busta .p7m/.tsd/.m7m)
   async function openSigned(file, onStep = () => {}) {
     const bytes = new Uint8Array(await file.arrayBuffer());
-    if (!bytes.length) throw new Error(`"${file.name}" è vuoto.`);
+    if (!bytes.length) throw new Error(`«${file.name}» è vuoto.`);
     let res;
     if (FirmaKit.isPdf(bytes)) {
       const pdfSigs = await FirmaKit.pdfSignatures(bytes);
@@ -26965,7 +26993,7 @@ const FirmeUI = (() => {
     if (files.length > 1) return startMany(stage, files);
     const file = files[0];
     const bytes = new Uint8Array(await file.arrayBuffer());
-    if (!bytes.length) throw new Error(`"${file.name}" è vuoto.`);
+    if (!bytes.length) throw new Error(`«${file.name}» è vuoto.`);
     const res = await withBusy('Verifica delle firme…', async () => {
       if (FirmaKit.isPdf(bytes)) {
         const pdfSigs = await FirmaKit.pdfSignatures(bytes);
@@ -26978,7 +27006,7 @@ const FirmeUI = (() => {
         return r;
       }
       const r = await FirmaKit.open(bytes, file.name);
-      if (!r.signed) throw new Error(`"${file.name}" non è un file firmato digitalmente riconosciuto (.p7m, .tsd, .m7m) né un PDF.`);
+      if (!r.signed) throw new Error(`«${file.name}» non è un file firmato digitalmente riconosciuto (.p7m, .tsd, .m7m) né un PDF.`);
       return r;
     });
     const items = flatten(res);
@@ -28237,7 +28265,7 @@ async function xbrlPrepare(file) {
     }
     if (!/^\s*</.test(new TextDecoder('latin1').decode(bytes.subarray(0, 64)))) {
       const r = await FirmaKit.open(bytes, name);
-      if (!r.signed) throw new Error(`"${file.name}" non è un file XBRL.`);
+      if (!r.signed) throw new Error(`«${file.name}» non è un file XBRL.`);
       signed = r; bytes = r.content; name = r.name;
     }
   }
@@ -29127,7 +29155,7 @@ async function startExcel(stage, files) {
   let file = files[0];
   if (isImage(file)) file = await withBusy('Preparazione dell’immagine…', () => imagesToPdfFile([file], stripExt(file.name) + '.pdf'));
   const doc = await withBusy('Apertura del documento…', () => openPdf(file));
-  if (!doc) throw new Error('Impossibile aprire il file');
+  if (!doc) throw (withBusy.last || new Error('Impossibile aprire il file'));
   const N = doc.numPages;
   const st = { sheets: 'page', content: 'all', merge: true, types: true, geo: true, oneLine: false, bilancio: true, range: 'all', rangeText: `1-${N}` };
   let locale = null;
@@ -36428,7 +36456,7 @@ const Flow = (() => {
       }
       const dz = h('div', { class: 'wb-drop', onclick: () => input.click() },
         h('div', { class: 'dz-ic' }, ic('upload', 30)),
-        h('div', {}, h('h3', {}, h('span', { class: 'dz-mouse' }, 'Trascina qui il tuo file'), h('span', { class: 'dz-touch' }, 'Apri un documento')),
+        h('div', {}, h('h2', { class: 'dz-t' }, h('span', { class: 'dz-mouse' }, 'Trascina qui il tuo file'), h('span', { class: 'dz-touch' }, 'Apri un documento')),
           h('p', {}, 'PDF, foto, bilanci XBRL, file firmati .p7m. Poi scegli cosa farci, uno strumento alla volta.', IS_TOUCH ? null : h('span', { class: 'dz-kbd' }, ' Premi ', h('kbd', {}, /Mac|iPhone|iPad/.test(navigator.platform || '') ? '⌘ K' : 'Ctrl K'), ' per cercare uno strumento.'))),
         h('button', { type: 'button', class: 'btn primary dz-pick' }, ic('file', 18), 'Scegli il file'),
         cameraButton(f => addFiles(f), { label: 'Fotografa un documento' }),
