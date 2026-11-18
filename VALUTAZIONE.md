@@ -1,0 +1,303 @@
+# file360 — Griglia di valutazione e piano per il livello successivo
+
+*18 novembre 2026. Valutazione fatta sul prodotto vero (build attuale), con misure automatiche, schermate su computer e telefono in chiaro e in scuro, e i risultati di suite, banchi e stress test. I punteggi si ricalcolano con `python3 tools/griglia.py`.*
+
+## In sintesi
+
+**Indice complessivo: 3,68 su 5 (74%)**, con il sito pubblicato come oggi, cioè caricando il solo HTML (vedi §5). L'obiettivo realistico, con il piano qui sotto, è 4,5 o più.
+
+**Il cuore del prodotto è forte:**
+- qualità dei risultati 4,2;
+- privacy 4,4;
+- robustezza 5;
+- funzioni per l'Italia che i concorrenti non hanno (fatture XML, F24, visure, p7m, PDF/A verificato).
+
+**Il prodotto perde punti attorno al cuore:**
+- **Ingegneria (2,25)**: il codice **non è sotto controllo di versione**. Esiste solo in questo ambiente cloud, che è temporaneo. È il rischio più grave di tutti, e il più facile da togliere.
+- **Trovabilità (2,0)**: le pagine per strumento, con titoli, testi e domande frequenti già scritti nel codice, non vengono pubblicate. Il sito è una pagina sola, che i motori di ricerca vedono come una.
+- **Estetica e sistema visivo (3,0)**: l'identità c'è, ma il sistema non è disciplinato. Nel CSS ci sono 167 colori, 40 dimensioni di carattere, 45 raggi e 141 ombre diversi.
+- **Usabilità (3,4)**:
+  - sul telefono, in Modifica, le barre in alto occupano quasi metà dello schermo;
+  - i pannelli laterali hanno paragrafi d'aiuto lunghi;
+  - i layout non sono uniformi tra gli strumenti.
+- **Funzioni**: manca la conversione **verso** PDF da Word, Excel, PowerPoint e HTML, cioè la funzione più cercata dopo «unisci» e «comprimi».
+
+**Le cinque cose da fare per prime:**
+
+| # | Cosa | Perché |
+|---|---|---|
+| 1 | Codice sotto git, su un repository privato | Elimina il rischio di perdere tutto |
+| 2 | Sistema visivo con pochi valori fissi | Aspetto più pulito, coerenza misurabile |
+| 3 | Telefono e pannelli più leggeri | Dove l'uso quotidiano soffre di più |
+| 4 | Pagine per strumento, sitemap, caricamento a pezzi | Farsi trovare; primo caricamento da 5 a circa 1,5 MB |
+| 5 | Word ed Excel verso PDF, filigrana come strumento | La lacuna funzionale più visibile |
+
+---
+
+## 1. Il metodo (a passi, ripetibile)
+
+| Passo | Che cosa | Prodotto |
+|---|---|---|
+| 0 | **Perimetro e utenti**: cittadino; professionista (studio, commercialista, avvocato, tecnico); ufficio pubblico. Uso su computer e telefono. | Gli scenari da coprire |
+| 1 | **Inventario**: strumenti, schermate, stati (vuoto, lavoro, risultato, errore), temi, dispositivi | Elenco completo |
+| 2 | **Misure**: strumenti automatici (axe, veraPDF, pikepdf, LibreOffice, banchi, stress test, prestazioni, conteggio dei valori del CSS) e prove sulle schermate | Le prove, con numeri |
+| 3 | **Punteggio** di ogni criterio sulla scala qui sotto, sempre con la sua prova | La griglia |
+| 4 | **Indice** per area (media pesata dei criteri) e complessivo (media pesata delle aree) | `tools/griglia.py` |
+| 5 | **Lacune → interventi**, ognuno con impatto, sforzo, criterio di accettazione misurabile e criteri della griglia che sposta | Il piano |
+| 6 | **Si rifà la griglia dopo ogni giro**: un intervento è chiuso solo quando la sua misura lo conferma | Avanzamento tracciato |
+
+**Scala 0–5 (ogni livello ha una definizione, non è un'impressione):**
+
+| Voto | Significato |
+|---|---|
+| 0 | Assente, o un rischio aperto |
+| 1 | C'è, ma non serve davvero (inaffidabile, incompleto, invisibile) |
+| 2 | Funziona nei casi semplici; lacune evidenti per chi lo usa ogni giorno |
+| 3 | Solido nell'uso comune; limiti noti e dichiarati |
+| 4 | Eccellente: alla pari dei migliori prodotti del settore, misurato |
+| 5 | Riferimento: meglio dei migliori, misurato e verificato con strumenti indipendenti |
+
+**Regole di onestà della griglia:**
+- un voto 4 o 5 richiede una misura;
+- i criteri che si possono verificare **solo** con persone (oggi: D3, il lettore di schermo vero) non superano 3 senza quella prova;
+- l'usabilità si misura con indicatori oggettivi e automatici: parole visibili nei pannelli, spazio del documento sul telefono, ricerche che portano allo strumento giusto, passi per un compito, struttura uguale tra gli strumenti. Sono indicatori, non sostituiscono le prove con le persone (5.3);
+- i pesi dei criteri vanno da 1 a 3 secondo quanto contano per chi usa il prodotto;
+- i pesi delle aree sommano a 100.
+
+---
+
+## 2. La griglia
+
+### A — Copertura funzionale (peso 18%) · **3,87**
+
+| Criterio | Peso | Voto | Prova | Cosa manca |
+|---|---|---|---|---|
+| A1 Operazioni sulle pagine | 2 | 5 | Unisci, Dividi (anche «In N file»), Ruota, Organizza (selezione veloce), Numeri, Impagina; banchi 100% | — |
+| A2 Conversioni da PDF | 2 | 4 | Word (elenchi, titoli, colonne), Excel (foglio «Tabelle»), immagini, PDF/A; banchi 100% | PDF in PowerPoint; PDF in testo/HTML come strumento |
+| A3 Conversioni verso PDF | 3 | **2** | Immagini e foto sì | **Word, Excel, PowerPoint, HTML verso PDF: assenti**. È tra le ricerche più frequenti del settore |
+| A4 Modifica e annotazione | 2 | 4 | Modifica fedele (13/13, 7/7), scansioni, firme grafiche, moduli | Commenti/note come strumento chiaro; filigrana solo dentro le Ricette |
+| A5 Sicurezza documentale | 2 | 5 | Oscura (anche più file), Proteggi, PDF/A verificato, p7m, copia conforme | — |
+| A6 Funzioni per l'Italia | 2 | 5 | Fatture XML, F24, visure, estratti conto, XBRL, QR SEPA, laboratorio | — (vantaggio unico) |
+| A7 Automazione e più file | 1 | 4 | Ricette, «Fai tutto tu», più file in molti strumenti | Filigrana non è uno strumento a sé |
+| A8 Lavoro condiviso | 1 | 2 | Progetti locali; Google Drive facoltativo | Per scelta di privacy non c'è condivisione; va bene così, ma va spiegato |
+
+### B — Qualità dei risultati (peso 18%) · **4,21**
+
+| Criterio | Peso | Voto | Prova | Cosa manca |
+|---|---|---|---|---|
+| B1 Fedeltà | 3 | 5 | veraPDF 90/90; 1504/1504 file validi; tag, segnalibri e allegati conservati | — |
+| B2 Word ed Excel | 2 | 4 | Banchi 100%; scansioni difficili 100% | Misura su documenti reali complessi (oggi solo corpus inventato) |
+| B3 OCR | 2 | 4 | Errore medio < 0,5% su fogli non piatti | Lingue oltre l'italiano poco provate |
+| B4 Oscura | 3 | 4 | 17/17 digitale e scansione; foto con targa e didascalia; verifica per rilettura | Nessuna misura su documenti veri (il corpus è inventato) |
+| B5 Modifica fedele | 2 | 4 | Identico al pixel 13/13 e 7/7 | Scansioni molto rovinate |
+| B6 Verifica firme | 2 | 4 | Falsa, manomessa, revocata riconosciute; revoca dal file | Revoca online impossibile da browser (limite esterno) |
+
+### C — Privacy e sicurezza (peso 12%) · **4,14**
+
+| Criterio | Peso | Voto | Prova | Cosa manca |
+|---|---|---|---|---|
+| C1 Nessun dato fuori dal dispositivo | 3 | 5 | CSP: connessioni solo verso il sito stesso e verso il motore OCR; test «privacy» e stress verdi | — |
+| C2 Dipendenze esterne | 1 | 3 | Il motore OCR e i dizionari si scaricano da cdn.jsdelivr.net al primo uso | **Ospitarli sul proprio sito** (né terzi né rete esterna) |
+| C3 Sicurezza dell'app | 2 | 3 | Prove XSS, niente eval; la CSP stretta e le altre intestazioni esistono, ma **stanno in `_headers`, che non viene pubblicato** caricando il solo HTML | Pubblicare la cartella (0.2); poi togliere `'unsafe-inline'` dagli script nella versione sito |
+| C4 Trasparenza | 1 | 5 | Centro privacy, rapporti, «elaborato sul dispositivo» ovunque | — |
+
+### D — Accessibilità (peso 10%) · **3,82**
+
+| Criterio | Peso | Voto | Prova | Cosa manca |
+|---|---|---|---|---|
+| D1 WCAG 2.1 AA automatico | 3 | 5 | axe: 76/76 pagine pulite, chiaro e scuro | — |
+| D2 Tastiera | 2 | 4 | Organizza e Modifica da tastiera; focus visibile nei primi 25 Tab | Il campo di ricerca della home non mostra il contorno del focus |
+| D3 Lettore di schermo | 2 | 3 | Aree principali, «Vai al contenuto», 125 etichette, 7 annunci per gli aggiornamenti | **Mai provato con NVDA o VoiceOver**; l'editor sulla pagina è per natura difficile |
+| D4 Contrasto rafforzato, testi piccoli | 1 | 3 | AAA non raggiunto (10–17 punti per pagina); etichette di sezione a 11 px | Etichette a 12 px o più; grigi un po' più scuri |
+| D5 Movimento ridotto, zoom, 320 px | 1 | 4 | Movimento ridotto rispettato; prove a 320 px | — |
+| D6 File prodotti accessibili | 2 | 3 | Tag conservati; Word con titoli ed elenchi | Pagine rifatte come immagine e PDF da OCR senza tag; titoli dai livelli del testo non aggiunti |
+
+Dettagli trovati in questo giro:
+- nella home c'è un salto di livello tra i titoli (h1 → h3);
+- in Modifica, i campi «carattere» e «dimensione» hanno solo il suggerimento, non un'etichetta visibile.
+
+### E — Usabilità (peso 14%) · **3,38**
+
+| Criterio | Peso | Voto | Prova | Cosa manca |
+|---|---|---|---|---|
+| E1 Orientamento al primo uso | 2 | 4 | Riquadro grande, «guidami», ricerca, compiti di tutti i giorni | La home ha molte scelte allo stesso livello visivo |
+| E2 Passi per un compito | 2 | 4 | Comprimi: trascina → avvia → scarica; «cosa fare dopo» | — |
+| E3 Carico cognitivo | 3 | **3** | Modifica: sei righe di aiuto in cima al pannello, cinque sezioni; Oscura: otto sezioni; PDF/A: spiegazioni lunghe sotto ogni scelta | Aiuti a richiesta («?») e opzioni avanzate raccolte |
+| E4 Telefono | 3 | **3** | 24/24 senza nulla che esce dallo schermo, ma in Modifica cinque barre (app, strumento, file, schede, comandi) prendono circa il 45% dell'altezza; la barra dei comandi è tagliata | Barre compatte e a scomparsa; documento ≥ 65% dello schermo |
+| E5 Messaggi ed errori | 1 | 4 | 0 «errore imprevisto» su 518 prove; azioni proposte | Il riquadro d'errore è stretto e va a capo male; virgolette miste («» e "") |
+| E6 Coerenza tra strumenti | 2 | **3** | Intestazioni con o senza sottotitolo; alcune aree di lavoro mezze vuote (PDF/A), altre affollate (Modifica) | Una sola struttura di pagina per tutti gli strumenti |
+
+### F — Estetica e sistema visivo (peso 10%) · **3,00**
+
+| Criterio | Peso | Voto | Prova | Cosa manca |
+|---|---|---|---|---|
+| F1 Identità | 1 | 4 | Logo, viola e magenta riconoscibili, titoli con un carattere di forte personalità | — |
+| F2 Disciplina del sistema | 3 | **2** | Valori distinti nel CSS: **167 colori, 133 trasparenze, 40 dimensioni di carattere (da 6,5 a 32 px), 45 raggi, 141 ombre, 9 pesi, 3 famiglie** più quelle dei documenti | Una scala fissa, misurata da un test (qui sotto) |
+| F3 Gerarchia e respiro | 2 | 3 | La home ha la colonna destra fitta di schede colorate; PDF/A ha l'area centrale quasi vuota | Più spazio e meno colori in home; area centrale riempita |
+| F4 Rumore decorativo | 1 | 3 | Icone di file che fluttuano dietro testi e schede (si vedono dietro «Cosa devi fare?»); anello e pallino attorno al pulsante di caricamento | Sfondo più quieto, mai dietro il testo |
+| F5 Tema scuro | 1 | 4 | Completo e leggibile (AA) | — |
+| F6 Animazioni e dettagli | 1 | 4 | Anteprime «come funziona», risultato con il risparmio in grande | — |
+
+### G — Prestazioni (peso 6%) · **3,86**
+
+| Criterio | Peso | Voto | Prova | Cosa manca |
+|---|---|---|---|---|
+| G1 Avvio | 2 | 5 | Telefono lento pronto a 865 ms; computer a 237 ms | — |
+| G2 Peso del primo caricamento | 2 | **2** | 8,2 MB; **5,1 MB trasferiti** (gran parte è già compressa in base64: il server non la riduce) | Sito a pezzi: solo il necessario all'apertura (stima: circa 1,5 MB) |
+| G3 Lavori lunghi | 2 | 5 | 1000 pagine: Word 11 s, Excel 6 s, PDF/A 5,6 s, Comprimi 3,4 s | — |
+| G4 OCR e foto | 1 | 3 | Scansioni 1,8 s a pagina (4 processori); foto 1,5 s | Limite del motore; possibile solo con un motore diverso |
+
+### H — Robustezza (peso 4%) · **5,00**
+
+518 prove sui file ostili, 0 errori sfuggiti, memoria stabile (38 MB su 12 giri), annullamento in 0,3–2,6 s.
+
+### I — Trovabilità e distribuzione (peso 4%) · **1,33**
+
+| Criterio | Peso | Voto | Prova | Cosa manca |
+|---|---|---|---|---|
+| I1 Pagine per strumento indicizzabili | 3 | **1** | Titoli, descrizioni, passi e domande frequenti di ogni strumento sono **nel codice**, ma il pacchetto Netlify pubblica una pagina sola, senza sitemap, robots, reindirizzamenti | Una pagina vera per strumento (es. `/unire-pdf/`) con quei testi, sitemap e reindirizzamenti |
+| I2 Installabile e offline | 1 | 1 | Pronto nella cartella Netlify (manifest, service worker, icone), ma **non pubblicato** caricando il solo HTML | Pubblicare la cartella (0.2) |
+| I3 Lingue | 1 | 1 | Solo italiano | Inglese (decisione strategica tua) |
+| I4 Fiducia | 1 | 3 | Contatti presenti; privacy chiara | Pagina «Informazioni»: chi lo fa, licenze delle librerie aperte, come segnalare un problema |
+
+### J — Ingegneria (peso 4%) · **2,25**
+
+| Criterio | Peso | Voto | Prova | Cosa manca |
+|---|---|---|---|---|
+| J1 Test e misura | 2 | 5 | Suite di 18 gruppi, banchi con soglie, stress test con verificatori indipendenti | — |
+| J2 Struttura del codice | 2 | **2** | `app.js` di 37.400 righe; circa 7.000 righe di CSS dentro il JavaScript | Sorgenti in moduli (la build li unisce già); CSS fuori dal JS |
+| J3 Controllo di versione e backup | 3 | **0** | **Nessun repository git**: il codice esiste solo in questo ambiente cloud temporaneo | Repository privato (es. GitHub) con la storia; il resto del piano ne dipende |
+| J4 Riproducibilità | 1 | 4 | Build in un comando; generatori dei file di prova | Corpus pesanti (2,1 GB in `test/`) da escludere dal repository |
+
+### Riepilogo
+
+| Area | Peso | Oggi | Obiettivo |
+|---|---|---|---|
+| A Copertura funzionale | 18% | 3,87 | 4,67 |
+| B Qualità dei risultati | 18% | 4,21 | 5,00 |
+| C Privacy e sicurezza | 12% | 4,14 | 5,00 |
+| D Accessibilità | 10% | 3,82 | 4,91 |
+| E Usabilità | 14% | 3,38 | 5,00 |
+| F Estetica e sistema visivo | 10% | 3,00 | 5,00 |
+| G Prestazioni | 6% | 3,86 | 4,57 |
+| H Robustezza | 4% | 5,00 | 5,00 |
+| I Trovabilità e distribuzione | 4% | 1,33 | 4,67 |
+| J Ingegneria | 4% | 2,25 | 4,75 |
+| **Indice** | | **3,68** | **4,88** |
+
+---
+
+## 3. Il piano, a ondate
+
+Ogni intervento ha:
+- un criterio di accettazione misurabile;
+- i criteri della griglia che sposta.
+
+L'ordine viene da impatto ÷ sforzo, con prima i rischi.
+
+### Ondata 0 — Rischio (subito)
+
+| Intervento | Impatto | Sforzo | Accettazione | Sposta |
+|---|---|---|---|---|
+| **0.1 Repository git privato** con sorgenti, test, generatori e documenti. Esclusi i corpus pesanti, che si rigenerano; `.gitignore` | Altissimo | Piccolo | Da un clone pulito: `python3 build.py` produce lo stesso file e la suite passa | J3 0→5 |
+| **0.2 Pubblicare la cartella, non il solo HTML**: su Netlify, nella pagina del sito, sezione «Deploys», trascinare la cartella `netlify` (estratta dallo zip) invece del file. È lo stesso gesto | Alto | Nullo | Sul sito pubblicato: intestazioni di sicurezza presenti, app installabile, funziona senza rete (prova automatica sul sito) | C3 3→4, I2 1→5; rende possibili 4.1 e 4.2 |
+
+### Ondata 1 — Sistema visivo (aspetto e coerenza)
+
+| Intervento | Impatto | Sforzo | Accettazione | Sposta |
+|---|---|---|---|---|
+| 1.1 **Token**: circa 24 colori con un significato (testo, superfici, bordi, accento, stati) + varianti scure; scala tipografica di 8 passi (12–36 px); 4 raggi; 3 ombre; 4 pesi; 2 famiglie (titoli e testo; il monospaziato solo per i codici) | Alto | Medio | Un test conta i valori distinti nel CSS (colori ≤ 40 comprese le illustrazioni, dimensioni ≤ 10, raggi ≤ 5, ombre ≤ 6) e fallisce sopra soglia; axe 76/76 invariato | F2 2→5, F3, E6 |
+| 1.2 **Home**: sfondo animato più quieto e mai dietro il testo; etichette di sezione nel carattere del testo (non monospaziato spaziato); meno colori nelle schede delle categorie; titoli in ordine (h1 → h2) | Medio | Piccolo | Schermate prima/dopo; nessuna icona decorativa sotto un testo; heading-order pulito | F3, F4, D |
+| 1.3 **Struttura unica delle pagine strumento**: stessa intestazione, stessa barra del file, area centrale sempre utile (PDF/A: riepilogo e anteprima, non una riga sola) | Medio | Medio | Le 37 schermate rispettano lo stesso schema (prova automatica sulle classi) | E6 3→5, F3 |
+| 1.4 **Riquadro d'errore** a tutta larghezza, azioni sotto il testo; virgolette uniformi («») | Piccolo | Piccolo | Schermata; test su un file rotto | E5 4→5 |
+
+### Ondata 2 — Usabilità (telefono e pannelli)
+
+| Intervento | Impatto | Sforzo | Accettazione | Sposta |
+|---|---|---|---|---|
+| 2.1 **Telefono**: in Modifica, Oscura e Firme le barre si compattano e si nascondono scorrendo; comandi in un menu «Altro» | Alto | Medio | Il documento occupa almeno il 65% dell'altezza su iPhone SE e 13 (misura automatica); nessun comando tagliato | E4 3→5 |
+| 2.2 **Pannelli leggeri**: aiuti a richiesta («?»), al massimo una riga visibile per sezione, opzioni avanzate in «Altre opzioni» | Alto | Medio | Parole visibili nel pannello ≤ 60 per strumento (misura automatica); compiti dei test d'interfaccia invariati | E3 3→5 |
+| 2.3 Etichette visibili per carattere e dimensione in Modifica; contorno del focus nella ricerca della home; etichette di sezione a 12 px o più | Piccolo | Piccolo | axe con le regole «buone pratiche»: 0 problemi gravi | D2, D4 |
+
+### Ondata 3 — Funzioni mancanti
+
+| Intervento | Impatto | Sforzo | Accettazione | Sposta |
+|---|---|---|---|---|
+| 3.1 **Filigrana** come strumento (il motore c'è già nelle Ricette): testo o immagine, posizione, trasparenza, pagine | Medio | Piccolo | Banco: testo presente su ogni pagina scelta, testo originale intatto | A4, A7 |
+| 3.2 **Word verso PDF** (.docx) sul dispositivo: paragrafi, stili, elenchi, tabelle, immagini, intestazioni; caratteri incorporati, PDF/A facoltativo | Molto alto | Grande | Banco su 10 documenti di prova: tutto il testo presente e nell'ordine; impaginazione confrontata con LibreOffice (differenza misurata); limiti dichiarati | A3 2→4 |
+| 3.3 **Excel verso PDF** (.xlsx): fogli come tabelle, adattati alla pagina | Alto | Medio | Banco: ogni cella presente; nessuna colonna tagliata | A3 |
+| 3.4 PowerPoint verso PDF, PDF in PowerPoint | Medio | Grande | Da decidere dopo 3.2 | A2, A3 |
+
+### Ondata 4 — Farsi trovare, alleggerire, fiducia
+
+| Intervento | Impatto | Sforzo | Accettazione | Sposta |
+|---|---|---|---|---|
+| 4.1 **Pagine per strumento** nel pacchetto Netlify: titolo, descrizione, passi e domande già scritti, in HTML vero; `sitemap.xml`, `robots.txt`, reindirizzamenti; dati strutturati (FAQ, SoftwareApplication) | Alto | Medio | 37 pagine con titolo e testo propri, senza eseguire JavaScript; sitemap valida | I1 1→5 |
+| 4.2 **Caricamento a pezzi** nella versione sito: all'apertura solo il necessario, il resto quando serve (anche senza rete dopo la prima volta). Il file unico resta com'è | Alto | Medio | Trasferiti all'apertura ≤ 1,6 MB; prove PWA e CSP verdi | G2 2→4 |
+| 4.3 **Motore OCR sul proprio sito** (non più da cdn.jsdelivr.net); nella versione sito via `'unsafe-inline'` dalla CSP degli script | Medio | Piccolo | Nessuna richiesta a domini esterni in nessuno strumento (test di rete) | C2 3→5, C3 4→5 |
+| 4.4 **Pagina «Informazioni»**: chi lo fa, licenze delle librerie, come segnalare un problema | Piccolo | Piccolo | Raggiungibile dal menu e da ogni pagina | I4 3→5 |
+| 4.5 **Inglese** | Alto se si punta all'estero | Grande | Ogni testo dell'interfaccia tradotto; test d'interfaccia anche in inglese | I3 1→3 |
+
+### Ondata 5 — Ingegneria e prove con le persone
+
+| Intervento | Impatto | Sforzo | Accettazione | Sposta |
+|---|---|---|---|---|
+| 5.1 **Sorgenti in moduli** (la build li unisce come oggi); CSS fuori dal JS | Medio (per il futuro) | Medio | Stesso file prodotto (stessa suite verde); nessun file sorgente oltre 3.000 righe | J2 2→4 |
+| 5.2 **Prova con un lettore di schermo vero** (NVDA su Windows, VoiceOver su Mac e iPhone) sui cinque compiti principali | Medio | Piccolo (ma serve una persona) | Compiti riusciti; problemi trovati corretti | D3 3→5 |
+| 5.3 **Prova con 5 persone reali** (cittadino, studio professionale, ufficio): cinque compiti a testa, tempo e riuscita | Alto | Piccolo (ma servono persone) | Riuscita ≥ 90%; ogni difficoltà osservata diventa un intervento | E1–E6 |
+| 5.4 **Corpus reale** (documenti veri anonimizzati, con consenso) per misurare Oscura, Word ed Excel fuori dai casi inventati | Alto | Medio | Misure pubblicate in STRESS-TEST.md | B2, B4 |
+
+**Indice atteso:**
+- dopo le ondate 0–2: circa 4,2;
+- dopo la 4: circa 4,5;
+- con 3.2 e le prove con persone e lettore di schermo: oltre 4,7.
+
+---
+
+## 4. Che cosa serve da te
+
+1. **Repository (0.1)**: un repository privato su GitHub, o dove preferisci, da collegare a questa sessione. Senza, il lavoro resta solo qui.
+2. **Lingua inglese (4.5)**: sì o no. È una scelta di mercato, non tecnica.
+3. **Word verso PDF (3.2)**: è il lavoro più grande del piano. Va bene partire da Word ed Excel e decidere PowerPoint dopo?
+4. **Prove con persone e con un lettore di schermo (5.2, 5.3)**: io posso preparare compiti e schede di osservazione, ma le prove le devono fare persone vere.
+5. **Corpus reale (5.4)**: solo se puoi raccogliere documenti con il consenso di chi li ha prodotti. Il testo non finirà mai in report o commit.
+
+---
+
+## 5. Come viene pubblicato oggi
+
+Su Netlify viene caricato **solo l'HTML**. Il file unico va benissimo per aprirlo dal computer, ma sul sito così si perde ciò che vive nei file accanto:
+
+- **intestazioni di sicurezza** (`_headers`): CSP, blocco dell'incorporamento in altri siti, isolamento delle finestre;
+- **app installabile e senza rete**: manifest, service worker, icone;
+- in futuro: **una pagina per strumento**, sitemap, **caricamento a pezzi** (ondata 4). Sono per natura più file.
+
+La soluzione è l'intervento 0.2: trascinare su Netlify la cartella invece del file. L'HTML singolo resta com'è, per chi lo vuole aprire dal computer.
+
+Se si vuole restare per forza a un solo file, si può recuperare solo una parte: una CSP scritta dentro l'HTML (senza il blocco dell'incorporamento, che una pagina non può dichiarare da sola). App installabile, funzionamento senza rete, pagine per strumento e caricamento a pezzi restano impossibili.
+
+---
+
+## 6. Strategia per arrivare ad almeno 4,5
+
+Ogni passo ha:
+- i criteri della griglia che sposta, con il voto di arrivo;
+- la misura che lo chiude.
+
+Un passo è chiuso solo quando la misura passa **e** la suite completa resta verde (nessun peggioramento).
+
+| Passo | Contenuto | Criteri (oggi → arrivo) | Misura che lo chiude |
+|---|---|---|---|
+| **1. Fondamenta** | Repository git locale con la storia di ogni passo; archivio dei sorgenti consegnato a ogni giro (backup da te); build verificata da una copia pulita; la cartella per Netlify come forma di pubblicazione | J3 0 → 4 · J4 4 → 5 · C3 3 → 4 · I2 1 → 5 | `git log` con i passi; build da una copia pulita identica; prova PWA e intestazioni sulla cartella |
+| **2. Sito vero** | Una pagina HTML per strumento (titolo, testo, passi e domande già scritti), sitemap, robots, reindirizzamenti, dati strutturati; JavaScript in file separati caricati quando servono; CSP senza `'unsafe-inline'` per gli script; motore OCR ospitato sul sito; pagina «Informazioni» (licenze, contatti, segnalazioni); condivisione del risultato dal telefono (Web Share, senza server) | I1 1 → 5 · G2 2 → 4 · C2 3 → 5 · C3 4 → 5 · I4 3 → 5 · A8 2 → 3 | 37 pagine leggibili senza JavaScript; primo caricamento ≤ 1,6 MB; nessuna richiesta a domini esterni; CSP verificata nel browser |
+| **3. Sistema visivo** | Token: palette con significati, 8 dimensioni di carattere, 4 raggi, 3 ombre, 4 pesi, 2 famiglie (+ monospaziato per i codici); un test che conta i valori nel CSS e fallisce sopra soglia; home più quieta; titoli in ordine; riquadro d'errore; struttura uguale per tutte le pagine strumento; area centrale di PDF/A utile | F2 2 → 5 · F3 3 → 4 · F4 3 → 5 · F5 4 → 5 · E5 4 → 5 · E6 3 → 5 | Test dei token verde; axe 76/76 e «buone pratiche» senza problemi gravi; schermate prima/dopo |
+| **4. Usabilità** | Telefono: barre compatte, documento ≥ 65% dell'altezza, nessun comando tagliato; pannelli: aiuti a richiesta, ≤ 60 parole visibili; etichette visibili in Modifica; focus nella ricerca; etichette ≥ 12 px; ricerca che trova lo strumento giusto (60 domande tipiche) | E3 3 → 5 · E4 3 → 5 · E1 4 → 5 · E2 4 → 5 · D2 4 → 5 · D4 3 → 4 | Misure automatiche su tutti gli strumenti; ≥ 95% delle 60 domande portano allo strumento giusto |
+| **5. Funzioni** | Filigrana come strumento; **Word (.docx) verso PDF** ed **Excel (.xlsx) verso PDF** sul dispositivo; testo e HTML verso PDF | A3 2 → 4 · A4 4 → 5 · A7 4 → 5 | Banchi nuovi: tutto il testo presente e nell'ordine; confronto dell'impaginazione con LibreOffice; celle presenti, nessuna colonna tagliata |
+| **6. File accessibili** | I PDF prodotti dall'OCR e le pagine rifatte come immagine escono con i tag (paragrafi nell'ordine di lettura) e la lingua; zoom al 400% senza scorrimento orizzontale | D6 3 → 4 · D5 4 → 5 | veraPDF (profilo PDF/UA) senza errori sui tag; prova automatica di riflusso |
+| **7. Codice** | Sorgenti in moduli (la build li unisce: file prodotto identico byte per byte) | J2 2 → 4 | Nessun file sorgente oltre 3.000 righe; file prodotto identico |
+| **8. Verifica** | Suite completa, stress test, griglia ricalcolata, documenti aggiornati, consegna | — | Indice ≥ 4,5 |
+
+**Indice atteso a fine strategia: circa 4,55.** Restano fuori, per onestà:
+- D3 (serve una prova con un lettore di schermo vero);
+- I3 (l'inglese è una scelta di mercato);
+- i criteri B, che per salire chiedono documenti reali.

@@ -1,0 +1,67 @@
+{
+ "privacy-nascosti.pdf": {
+  "segreti": [
+   "RSSMRA80A01H501U",
+   "BNCLRA85M41F205Z",
+   "IT60X0542811101000000123456",
+   "+393331234567",
+   "mario.rossi@esempio.it",
+   "Mario Rossi",
+   "CA12345AB"
+  ],
+  "pagine": 2
+ },
+ "testo-nascosto.pdf": {
+  "segreti": [
+   "IT60X0542811101000000123456",
+   "RSSMRA80A01H501U",
+   "+393331234567",
+   "BNCLRA85M41F205Z"
+  ],
+  "pagine": 1
+ },
+ "struttura.pdf": {
+  "pagine": 6,
+  "segnalibri": 9,
+  "link_esterni": 6,
+  "link_interni": 5,
+  "campi": 1,
+  "commenti": 1,
+  "allegati": 1
+ },
+ "lingue.pdf": {
+  "testi": [
+   "Perché",
+   "àèéìòù",
+   "Καλημέρα",
+   "Добрый",
+   "日本語",
+   "€",
+   "√"
+  ]
+ },
+ "impaginato.pdf": {
+  "tabella_righe": 7,
+  "celle": [
+   [
+    "Gennaio",
+    "1200"
+   ],
+   [
+    "Giugno",
+    "1385"
+   ]
+  ],
+  "colonne_testo": 2
+ },
+ "scan-gt.txt": [
+  "Oggetto: comunicazione di variazione del contratto di fornitura",
+  "Spett.le Ditta Esempio Srl, con la presente si comunica che a",
+  "decorrere dal 1 marzo 2026 il canone mensile sarà di euro 1.234,56.",
+  "Codice cliente 00456789 - Pratica n. 2026/118",
+  "Distinti saluti, Ufficio Contratti"
+ ],
+ "aes256.pdf": {
+  "password": "utente-360"
+ }
+}

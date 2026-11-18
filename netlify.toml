@@ -1,0 +1,7 @@
+# Netlify: compila file360 e pubblica dist/netlify (index.html + _headers + cloud.json se presente).
+# Le chiavi del cloud si possono dare come variabili d'ambiente del sito (FILE360_GDRIVE_CLIENT_ID,
+# FILE360_GDRIVE_API_KEY, FILE360_GDRIVE_APP_ID, FILE360_DROPBOX_APP_KEY, FILE360_ONEDRIVE_CLIENT_ID)
+# oppure con un file cloud.json nella cartella principale del progetto (vedi cloud.example.json).
+[build]
+  command = "python3 build.py --netlify"
+  publish = "dist/netlify"

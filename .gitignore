@@ -1,0 +1,12 @@
+# prodotti della build (si rifanno con python3 build.py)
+dist/
+# risultati delle prove e corpus pesanti (si rifanno con test/stress/make_corpus.py e stress.js)
+test/stress/out/
+test/stress/out-prima/
+test/stress/corpus/foto-pesanti.pdf
+test/bench/RISULTATI-*.md
+# dipendenze (npm install in tools/node) e file temporanei
+tools/node/node_modules/
+__pycache__/
+*.pyc
+shots/

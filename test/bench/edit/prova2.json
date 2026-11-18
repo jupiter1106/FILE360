@@ -1,0 +1,159 @@
+[
+ {
+  "kind": "stessi glifi",
+  "font": "Serif",
+  "size": 12,
+  "color": [
+   0,
+   0,
+   0
+  ],
+  "y": 754,
+  "x0": 298.9140625,
+  "x1": 322.9140625,
+  "xEnd": 372.888671875,
+  "x": 64,
+  "target": "4580",
+  "repl": "8054",
+  "text": "alla fornitura dei servizi descritti per un totale di 4580 ore annue",
+  "cs": 0,
+  "hz": 100,
+  "note": "paragrafo: riga di mezzo",
+  "others": [
+   770,
+   738
+  ]
+ },
+ {
+  "kind": "stessi glifi",
+  "font": "Serif",
+  "size": 12,
+  "color": [
+   0,
+   0,
+   0
+  ],
+  "y": 690,
+  "x0": 256.923203125,
+  "x1": 280.923203125,
+  "xEnd": 338.239609375,
+  "x": 64,
+  "target": "7391",
+  "repl": "1937",
+  "text": "Avvocato Tommaso Valente, protocollo 7391 del registro",
+  "cs": 0,
+  "hz": 100,
+  "note": "crenatura (TJ)"
+ },
+ {
+  "kind": "stessi glifi",
+  "font": "Serif",
+  "size": 12,
+  "color": [
+   0,
+   0,
+   0
+  ],
+  "y": 640,
+  "x0": 133.64453125,
+  "x1": 139.64453125,
+  "xEnd": 446.0,
+  "x": 64,
+  "target": "3",
+  "repl": "2",
+  "text": "Voce di spesa 3",
+  "cs": 0,
+  "hz": 100,
+  "note": "tabella in un TJ: cella 1"
+ },
+ {
+  "kind": "larghezza diversa",
+  "font": "Serif",
+  "size": 12,
+  "color": [
+   0,
+   0,
+   0
+  ],
+  "y": 600,
+  "x0": 104.65234375,
+  "x1": 130.64453125,
+  "xEnd": 139.64453125,
+  "x": 64,
+  "target": "spesa",
+  "repl": "spesa straordinaria",
+  "text": "Voce di spesa 5",
+  "cs": 0,
+  "hz": 100,
+  "note": "tabella in un TJ: la cella si allunga, le altre restano",
+  "fixed": [
+   [
+    264,
+    446.0
+   ]
+  ]
+ },
+ {
+  "kind": "stessi glifi",
+  "font": "Sans",
+  "size": 11,
+  "color": [
+   0,
+   0,
+   0
+  ],
+  "y": 550,
+  "x0": 176.5029296875,
+  "x1": 231.556640625,
+  "xEnd": 307.98193359375,
+  "x": 64,
+  "target": "30/09/2026",
+  "repl": "09/03/2026",
+  "text": "Importo dovuto entro il 30/09/2026 senza interessi",
+  "cs": 0,
+  "hz": 100,
+  "note": "parole posizionate una per una"
+ },
+ {
+  "kind": "stessi glifi",
+  "font": "Serif",
+  "size": 14,
+  "color": [
+   0.1,
+   0.1,
+   0.5
+  ],
+  "y": 500,
+  "x0": 197.341796875,
+  "x1": 253.341796875,
+  "xEnd": 324.8798828125,
+  "x": 64,
+  "target": "15.250,84",
+  "repl": "51.520,48",
+  "text": "Totale documento euro 15.250,84 IVA inclusa",
+  "cs": 0,
+  "hz": 100,
+  "note": "corpo nella matrice del testo"
+ },
+ {
+  "kind": "stessi glifi",
+  "font": "Serif",
+  "size": 12,
+  "color": [
+   0,
+   0,
+   0
+  ],
+  "y": 450,
+  "x0": 286.40546875,
+  "x1": 310.40546875,
+  "xEnd": 393.152734375,
+  "x": 64,
+  "target": "2026",
+  "repl": "6202",
+  "text": "Le parti convengono quanto segue entro il 2026 senza eccezioni",
+  "cs": 0,
+  "hz": 100,
+  "note": "giustificata (Tw)"
+ }
+]

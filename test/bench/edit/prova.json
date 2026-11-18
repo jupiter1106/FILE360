@@ -1,0 +1,262 @@
+[
+ {
+  "kind": "stessi glifi",
+  "font": "Serif",
+  "size": 12,
+  "color": [
+   0.07,
+   0.07,
+   0.09
+  ],
+  "y": 770,
+  "x0": 181.64453125,
+  "x1": 226.978515625,
+  "xEnd": 292.62109375,
+  "x": 64,
+  "target": "145/2026",
+  "repl": "154/2062",
+  "text": "Contratto di fornitura n. 145/2026 del 12 marzo",
+  "cs": 0,
+  "hz": 100
+ },
+ {
+  "kind": "stessi glifi",
+  "font": "Sans-Bold",
+  "size": 15,
+  "color": [
+   0.1,
+   0.25,
+   0.62
+  ],
+  "y": 735,
+  "x0": 146.49267578125,
+  "x1": 163.17724609375,
+  "xEnd": 331.5244140625,
+  "x": 64,
+  "target": "12",
+  "repl": "21",
+  "text": "ARTICOLO 12 \u2013 DURATA E RINNOVO",
+  "cs": 0,
+  "hz": 100
+ },
+ {
+  "kind": "stessi glifi",
+  "font": "Serif-Italic",
+  "size": 11,
+  "color": [
+   0.35,
+   0.35,
+   0.38
+  ],
+  "y": 700,
+  "x0": 210.95849609375,
+  "x1": 249.45849609375,
+  "xEnd": 292.83544921875,
+  "x": 64,
+  "target": "1.250,00",
+  "repl": "2.150,00",
+  "text": "Importo complessivo pari a euro 1.250,00 oltre IVA",
+  "cs": 0,
+  "hz": 100
+ },
+ {
+  "kind": "stessi glifi",
+  "font": "DejaVu",
+  "size": 10,
+  "color": [
+   0.62,
+   0.1,
+   0.12
+  ],
+  "y": 665,
+  "x0": 197.4326171875,
+  "x1": 255.0693359375,
+  "xEnd": 327.7548828125,
+  "x": 64,
+  "target": "30/06/2026",
+  "repl": "06/03/2026",
+  "text": "Scadenza del pagamento: 30/06/2026 salvo proroga",
+  "cs": 0,
+  "hz": 100
+ },
+ {
+  "kind": "stessi glifi",
+  "font": "Carlito",
+  "size": 12.5,
+  "color": [
+   0.07,
+   0.07,
+   0.09
+  ],
+  "y": 630,
+  "x0": 209.4833984375,
+  "x1": 241.16064453125,
+  "xEnd": 301.823486328125,
+  "x": 64,
+  "target": "55943",
+  "repl": "34559",
+  "text": "Protocollo generale numero 55943 del registro",
+  "cs": 0,
+  "hz": 100
+ },
+ {
+  "kind": "stessi glifi",
+  "font": "Serif",
+  "size": 12,
+  "color": [
+   0.07,
+   0.07,
+   0.09
+  ],
+  "y": 595,
+  "x0": 303.300390625,
+  "x1": 332.100390625,
+  "xEnd": 332.100390625,
+  "x": 64,
+  "target": "2026",
+  "repl": "6202",
+  "text": "Testo con spaziatura larga tra le lettere 2026",
+  "cs": 1.2,
+  "hz": 100
+ },
+ {
+  "kind": "stessi glifi",
+  "font": "Sans",
+  "size": 12,
+  "color": [
+   0.05,
+   0.4,
+   0.3
+  ],
+  "y": 560,
+  "x0": 256.76904296875,
+  "x1": 279.46005859375,
+  "xEnd": 279.46005859375,
+  "x": 64,
+  "target": "2026",
+  "repl": "6022",
+  "text": "Testo stretto in orizzontale al 85 per cento 2026",
+  "cs": 0,
+  "hz": 85
+ },
+ {
+  "kind": "stessi glifi",
+  "font": "Mono",
+  "size": 10.5,
+  "color": [
+   0.07,
+   0.07,
+   0.09
+  ],
+  "y": 525,
+  "x0": 158.515380859375,
+  "x1": 259.331787109375,
+  "xEnd": 328.64306640625,
+  "x": 64,
+  "target": "RSSMRA80A01H501U",
+  "repl": "RSSMRA08A10H501U",
+  "text": "CODICE FISCALE RSSMRA80A01H501U VERIFICATO",
+  "cs": 0,
+  "hz": 100
+ },
+ {
+  "kind": "stessi glifi",
+  "font": "Helvetica",
+  "size": 11,
+  "color": [
+   0.07,
+   0.07,
+   0.09
+  ],
+  "y": 490,
+  "x0": 271.273,
+  "x1": 289.62100000000004,
+  "xEnd": 318.35299999999995,
+  "x": 64,
+  "target": "987",
+  "repl": "798",
+  "text": "Carattere standard non incorporato: totale 987 pezzi",
+  "cs": 0,
+  "hz": 100
+ },
+ {
+  "kind": "glifi mancanti",
+  "font": "Serif-Bold",
+  "size": 13,
+  "color": [
+   0.07,
+   0.07,
+   0.09
+  ],
+  "y": 440,
+  "x0": 286.06640625,
+  "x1": 315.6845703125,
+  "xEnd": 315.6845703125,
+  "x": 64,
+  "target": "Rossi",
+  "repl": "Kowalczyk",
+  "text": "Il responsabile del procedimento Mario Rossi",
+  "cs": 0,
+  "hz": 100
+ },
+ {
+  "kind": "glifi mancanti",
+  "font": "DejaVu",
+  "size": 10,
+  "color": [
+   0.62,
+   0.1,
+   0.12
+  ],
+  "y": 405,
+  "x0": 192.1982421875,
+  "x1": 234.2880859375,
+  "xEnd": 234.2880859375,
+  "x": 64,
+  "target": "Palermo",
+  "repl": "Quartu",
+  "text": "Sede legale in via Roma, Palermo",
+  "cs": 0,
+  "hz": 100
+ },
+ {
+  "kind": "glifi mancanti",
+  "font": "Caladea",
+  "size": 12,
+  "color": [
+   0.07,
+   0.07,
+   0.09
+  ],
+  "y": 370,
+  "x0": 207.364,
+  "x1": 245.068,
+  "xEnd": 245.06800000000004,
+  "x": 64,
+  "target": "odierna",
+  "repl": "Bxyzw",
+  "text": "Firmato digitalmente in data odierna",
+  "cs": 0,
+  "hz": 100
+ },
+ {
+  "kind": "larghezza diversa",
+  "font": "Serif",
+  "size": 12,
+  "color": [
+   0.07,
+   0.07,
+   0.09
+  ],
+  "y": 320,
+  "x0": 133.298828125,
+  "x1": 145.298828125,
+  "xEnd": 266.93359375,
+  "x": 64,
+  "target": "36",
+  "repl": "120",
+  "text": "La durata \u00e8 di 36 mesi dalla sottoscrizione",
+  "cs": 0,
+  "hz": 100
+ }
+]

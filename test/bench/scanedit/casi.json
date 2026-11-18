@@ -1,0 +1,400 @@
+[
+ {
+  "id": "helv300",
+  "font": "Helvetica",
+  "size": 10.5,
+  "dpi": 300,
+  "rot": 0.0,
+  "ink": 0.08,
+  "noise": 1500,
+  "lines": [
+   "Il presente contratto di locazione decorre dal 1 gennaio 2023",
+   "e ha durata di quattro anni, rinnovabile per uguale periodo.",
+   "Il canone annuo viene fissato in euro 9.600, pagabile in rate",
+   "mensili anticipate entro il giorno cinque di ogni mese.",
+   "La sede legale della società è stabilita a Roma, in via Verdi 12.",
+   "Perché la disdetta sia valida occorre un preavviso di sei mesi.",
+   "Le spese di registrazione sono ripartite in parti uguali.",
+   "Letto, confermato e sottoscritto dalle parti in data odierna."
+  ],
+  "edits": [
+   {
+    "line": 0,
+    "old": "2023",
+    "new": "2024",
+    "why": "una cifra",
+    "x0": 328.55199999999996,
+    "x1": 351.904,
+    "xFirst": 334.39,
+    "xEnd": 351.904,
+    "base": 120.0
+   },
+   {
+    "line": 1,
+    "old": "quattro",
+    "new": "quattordici",
+    "why": "parola più lunga, lettere presenti",
+    "x0": 137.1265,
+    "x1": 185.563,
+    "xFirst": 142.9645,
+    "xEnd": 358.3195,
+    "base": 136.8
+   },
+   {
+    "line": 4,
+    "old": "Roma",
+    "new": "Zagarolo",
+    "why": "lettere rare (Z maiuscola)",
+    "x0": 258.517,
+    "x1": 299.95,
+    "xFirst": 264.9325,
+    "xEnd": 375.235,
+    "base": 187.2
+   },
+   {
+    "line": 5,
+    "old": "Perché",
+    "new": "Poiché",
+    "why": "accenti",
+    "x0": 70.0,
+    "x1": 103.26400000000001,
+    "xFirst": 77.0035,
+    "xEnd": 356.524,
+    "base": 204.0
+   }
+  ]
+ },
+ {
+  "id": "times150",
+  "font": "Times-Roman",
+  "size": 11,
+  "dpi": 150,
+  "rot": 0.4,
+  "ink": 0.1,
+  "noise": 4000,
+  "lines": [
+   "Il presente contratto di locazione decorre dal 1 gennaio 2023",
+   "e ha durata di quattro anni, rinnovabile per uguale periodo.",
+   "Il canone annuo viene fissato in euro 9.600, pagabile in rate",
+   "mensili anticipate entro il giorno cinque di ogni mese.",
+   "La sede legale della società è stabilita a Roma, in via Verdi 12.",
+   "Perché la disdetta sia valida occorre un preavviso di sei mesi.",
+   "Le spese di registrazione sono ripartite in parti uguali.",
+   "Letto, confermato e sottoscritto dalle parti in data odierna."
+  ],
+  "edits": [
+   {
+    "line": 0,
+    "old": "2023",
+    "new": "2024",
+    "why": "una cifra",
+    "x0": 314.68399999999997,
+    "x1": 336.68399999999997,
+    "xFirst": 320.18399999999997,
+    "xEnd": 336.68399999999997,
+    "base": 120.0
+   },
+   {
+    "line": 1,
+    "old": "quattro",
+    "new": "quattordici",
+    "why": "parola più lunga, lettere presenti",
+    "x0": 132.315,
+    "x1": 179.978,
+    "xFirst": 137.815,
+    "xEnd": 345.253,
+    "base": 137.6
+   },
+   {
+    "line": 4,
+    "old": "Roma",
+    "new": "Zagarolo",
+    "why": "lettere rare (Z maiuscola)",
+    "x0": 245.95600000000002,
+    "x1": 285.666,
+    "xFirst": 252.67700000000002,
+    "xEnd": 360.21299999999997,
+    "base": 190.4
+   },
+   {
+    "line": 5,
+    "old": "Perché",
+    "new": "Poiché",
+    "why": "accenti",
+    "x0": 70.0,
+    "x1": 99.94200000000001,
+    "xFirst": 76.116,
+    "xEnd": 339.764,
+    "base": 208.0
+   }
+  ]
+ },
+ {
+  "id": "bold200",
+  "font": "Helvetica-Bold",
+  "size": 11,
+  "dpi": 200,
+  "rot": 0.15,
+  "ink": 0.38,
+  "noise": 2500,
+  "lines": [
+   "Il presente contratto di locazione decorre dal 1 gennaio 2023",
+   "e ha durata di quattro anni, rinnovabile per uguale periodo.",
+   "Il canone annuo viene fissato in euro 9.600, pagabile in rate",
+   "mensili anticipate entro il giorno cinque di ogni mese.",
+   "La sede legale della società è stabilita a Roma, in via Verdi 12.",
+   "Perché la disdetta sia valida occorre un preavviso di sei mesi.",
+   "Le spese di registrazione sono ripartite in parti uguali.",
+   "Letto, confermato e sottoscritto dalle parti in data odierna."
+  ],
+  "edits": [
+   {
+    "line": 0,
+    "old": "2023",
+    "new": "2024",
+    "why": "una cifra",
+    "x0": 361.58799999999997,
+    "x1": 386.05199999999996,
+    "xFirst": 367.70399999999995,
+    "xEnd": 386.052,
+    "base": 120.0
+   },
+   {
+    "line": 1,
+    "old": "quattro",
+    "new": "quattordici",
+    "why": "parola più lunga, lettere presenti",
+    "x0": 144.57999999999998,
+    "x1": 201.41699999999997,
+    "xFirst": 151.301,
+    "xEnd": 397.03000000000003,
+    "base": 137.6
+   },
+   {
+    "line": 4,
+    "old": "Roma",
+    "new": "Zagarolo",
+    "why": "lettere rare (Z maiuscola)",
+    "x0": 280.331,
+    "x1": 326.784,
+    "xFirst": 287.052,
+    "xEnd": 409.944,
+    "base": 190.4
+   },
+   {
+    "line": 5,
+    "old": "Perché",
+    "new": "Poiché",
+    "why": "accenti",
+    "x0": 70.0,
+    "x1": 106.685,
+    "xFirst": 77.337,
+    "xEnd": 393.43300000000005,
+    "base": 208.0
+   }
+  ]
+ },
+ {
+  "id": "times300skew",
+  "font": "Times-Roman",
+  "size": 10,
+  "dpi": 300,
+  "rot": 1.2,
+  "ink": 0.08,
+  "noise": 1500,
+  "lines": [
+   "Il presente contratto di locazione decorre dal 1 gennaio 2023",
+   "e ha durata di quattro anni, rinnovabile per uguale periodo.",
+   "Il canone annuo viene fissato in euro 9.600, pagabile in rate",
+   "mensili anticipate entro il giorno cinque di ogni mese.",
+   "La sede legale della società è stabilita a Roma, in via Verdi 12.",
+   "Perché la disdetta sia valida occorre un preavviso di sei mesi.",
+   "Le spese di registrazione sono ripartite in parti uguali.",
+   "Letto, confermato e sottoscritto dalle parti in data odierna."
+  ],
+  "edits": [
+   {
+    "line": 0,
+    "old": "2023",
+    "new": "2024",
+    "why": "una cifra",
+    "x0": 292.44,
+    "x1": 312.44,
+    "xFirst": 297.44,
+    "xEnd": 312.44,
+    "base": 120.0
+   },
+   {
+    "line": 1,
+    "old": "quattro",
+    "new": "quattordici",
+    "why": "parola più lunga, lettere presenti",
+    "x0": 126.65,
+    "x1": 169.98000000000002,
+    "xFirst": 131.65,
+    "xEnd": 320.23,
+    "base": 136.0
+   },
+   {
+    "line": 4,
+    "old": "Roma",
+    "new": "Zagarolo",
+    "why": "lettere rare (Z maiuscola)",
+    "x0": 229.96,
+    "x1": 266.06,
+    "xFirst": 236.07,
+    "xEnd": 333.83,
+    "base": 184.0
+   },
+   {
+    "line": 5,
+    "old": "Perché",
+    "new": "Poiché",
+    "why": "accenti",
+    "x0": 70.0,
+    "x1": 97.22,
+    "xFirst": 75.56,
+    "xEnd": 315.24,
+    "base": 200.0
+   }
+  ]
+ },
+ {
+  "id": "helv300-2p",
+  "font": "Helvetica",
+  "size": 10.5,
+  "dpi": 300,
+  "rot": 0.0,
+  "ink": 0.08,
+  "noise": 1500,
+  "page2": [
+   "Allegato B: Zona industriale di Zevio, lotto Zeta.",
+   "Il deposito Zanella resta escluso dalla locazione."
+  ],
+  "lines": [
+   "Il presente contratto di locazione decorre dal 1 gennaio 2023",
+   "e ha durata di quattro anni, rinnovabile per uguale periodo.",
+   "Il canone annuo viene fissato in euro 9.600, pagabile in rate",
+   "mensili anticipate entro il giorno cinque di ogni mese.",
+   "La sede legale della società è stabilita a Roma, in via Verdi 12.",
+   "Perché la disdetta sia valida occorre un preavviso di sei mesi.",
+   "Le spese di registrazione sono ripartite in parti uguali.",
+   "Letto, confermato e sottoscritto dalle parti in data odierna."
+  ],
+  "edits": [
+   {
+    "line": 0,
+    "old": "2023",
+    "new": "2024",
+    "why": "una cifra",
+    "x0": 328.55199999999996,
+    "x1": 351.904,
+    "xFirst": 334.39,
+    "xEnd": 351.904,
+    "base": 120.0
+   },
+   {
+    "line": 1,
+    "old": "quattro",
+    "new": "quattordici",
+    "why": "parola più lunga, lettere presenti",
+    "x0": 137.1265,
+    "x1": 185.563,
+    "xFirst": 142.9645,
+    "xEnd": 358.3195,
+    "base": 136.8
+   },
+   {
+    "line": 4,
+    "old": "Roma",
+    "new": "Zagarolo",
+    "why": "lettere rare (Z maiuscola)",
+    "x0": 258.517,
+    "x1": 299.95,
+    "xFirst": 264.9325,
+    "xEnd": 375.235,
+    "base": 187.2
+   },
+   {
+    "line": 5,
+    "old": "Perché",
+    "new": "Poiché",
+    "why": "accenti",
+    "x0": 70.0,
+    "x1": 103.26400000000001,
+    "xFirst": 77.0035,
+    "xEnd": 356.524,
+    "base": 204.0
+   }
+  ]
+ },
+ {
+  "id": "carlito300-2p",
+  "font": "Carlito",
+  "size": 11.5,
+  "dpi": 300,
+  "rot": 0.2,
+  "ink": 0.1,
+  "noise": 1500,
+  "page2": [
+   "Allegato B: Zona industriale di Zevio, lotto Zeta.",
+   "Il deposito Zanella resta escluso dalla locazione."
+  ],
+  "lines": [
+   "Il presente contratto di locazione decorre dal 1 gennaio 2023",
+   "e ha durata di quattro anni, rinnovabile per uguale periodo.",
+   "Il canone annuo viene fissato in euro 9.600, pagabile in rate",
+   "mensili anticipate entro il giorno cinque di ogni mese.",
+   "La sede legale della società è stabilita a Roma, in via Verdi 12.",
+   "Perché la disdetta sia valida occorre un preavviso di sei mesi.",
+   "Le spese di registrazione sono ripartite in parti uguali.",
+   "Letto, confermato e sottoscritto dalle parti in data odierna."
+  ],
+  "edits": [
+   {
+    "line": 0,
+    "old": "2023",
+    "new": "2024",
+    "why": "una cifra",
+    "x0": 331.29931640625,
+    "x1": 354.61376953125,
+    "xFirst": 337.1279296875,
+    "xEnd": 354.61376953125,
+    "base": 120.0
+   },
+   {
+    "line": 1,
+    "old": "quattro",
+    "new": "quattordici",
+    "why": "parola più lunga, lettere presenti",
+    "x0": 137.3154296875,
+    "x1": 188.868896484375,
+    "xFirst": 143.357421875,
+    "xEnd": 364.13720703125,
+    "base": 138.4
+   },
+   {
+    "line": 4,
+    "old": "Roma",
+    "new": "Zagarolo",
+    "why": "lettere rare (Z maiuscola)",
+    "x0": 254.8759765625,
+    "x1": 295.468505859375,
+    "xFirst": 260.260986328125,
+    "xEnd": 370.2578125,
+    "base": 193.60000000000002
+   },
+   {
+    "line": 5,
+    "old": "Perché",
+    "new": "Poiché",
+    "why": "accenti",
+    "x0": 70.0,
+    "x1": 102.298828125,
+    "xFirst": 75.94091796875,
+    "xEnd": 353.81640625,
+    "base": 212.0
+   }
+  ]
+ }
+]
