@@ -11,7 +11,7 @@ AREE = {  # area: (peso %, [(codice, criterio, peso, punteggio, obiettivo)])
  'G Prestazioni': (6, [('G1','Avvio',2,5,5),('G2','Peso del primo caricamento',2,4,4),('G3','Lavori lunghi',2,5,5),('G4','OCR e foto',1,3,4)]),
  'H Robustezza': (4, [('H1','File ostili, memoria, annullamento',1,5,5)]),
  'I Trovabilità e distribuzione': (4, [('I1','Pagine per strumento indicizzabili',3,4,5),('I2','Installabile e offline (sul sito pubblicato)',1,5,5),('I3','Lingue',1,1,3),('I4','Fiducia (informazioni, licenze, contatti)',1,4,5)]),
- 'J Ingegneria': (4, [('J1','Test e misura',2,5,5),('J2','Struttura del codice',2,2,4),('J3','Controllo di versione e backup',3,4,5),('J4','Riproducibilità (build, dati di prova)',1,5,5)]),
+ 'J Ingegneria': (4, [('J1','Test e misura',2,5,5),('J2','Struttura del codice',2,4,4),('J3','Controllo di versione e backup',3,4,5),('J4','Riproducibilità (build, dati di prova)',1,5,5)]),
 }
 def area(cr, key=3): return sum(c[2] * c[key] for c in cr) / sum(c[2] for c in cr)
 tot = tgt = 0

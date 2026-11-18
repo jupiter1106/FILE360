@@ -6,7 +6,8 @@ ROOT = pathlib.Path(__file__).resolve().parent
 S = ROOT / 'src'
 CSS_FILES = ['style.css']        # il CSS storico: entra nel livello «legacy»
 DS_FILES = ['ds-hue.css', 'ds.css']                     # il design system: fuori dai livelli, quindi vince sempre sullo storico
-APP_FILES = ['app.js', 'ux.js']
+# il codice dell'app sta in moduli (src/app/NN-nome.js, tools/moduli.py): riuniti nell'ordine dei nomi danno lo stesso file
+APP_FILES = ([f'app/{f.name}' for f in sorted((S / 'app').glob('*.js'))] if (S / 'app').is_dir() else ['app.js']) + ['ux.js']
 # moduli eseguiti dopo il primo disegno: da questo titolo di sezione (compreso) fino a quello finale (escluso)
 LAZY_PDFJS = True
 LATER_FROM, LATER_TO = '   Documento Word (.docx) dal testo', '   Anteprima di un risultato prima di scaricarlo'
