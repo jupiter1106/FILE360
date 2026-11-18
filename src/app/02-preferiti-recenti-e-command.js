@@ -39,6 +39,9 @@ const Recents = (() => {
 
 /* sinonimi e parole che un utente italiano digita davvero */
 const CMD_SYNONYMS = {
+  annota: ['commenti', 'commentare', 'annotare', 'annotazioni', 'note', 'evidenziare', 'evidenziatore', 'sottolineare', 'barrare', 'revisione', 'correzioni', 'osservazioni', 'post-it', 'nota adesiva'],
+  pdftesto: ['pdf in testo', 'pdf in txt', 'pdf in html', 'estrarre il testo', 'copiare il testo', 'solo testo', 'testo semplice', 'pagina web', 'txt', 'html'],
+  pdfppt: ['pdf in powerpoint', 'pdf in pptx', 'pdf in presentazione', 'pdf in diapositive', 'slide', 'presentazione dal pdf', 'pptx', 'proiettare'],
   filigrana: ['filigrana', 'watermark', 'scritta copia', 'bozza', 'riservato', 'timbro su tutte le pagine', 'logo su tutte le pagine', 'marchio', 'copia conforme scritta', 'scritta in diagonale', 'proteggere da copia scritta'],
   officepdf: ['powerpoint in pdf', 'pptx in pdf', 'presentazione in pdf', 'slide in pdf', 'diapositive in pdf', 'word in pdf', 'docx in pdf', 'excel in pdf', 'xlsx in pdf', 'foglio excel in pdf', 'documento in pdf', 'testo in pdf', 'html in pdf', 'pagina web in pdf', 'markdown in pdf', 'csv in pdf', 'stampare in pdf', 'office in pdf', 'docx', 'xlsx'],
   estrattoconto: ['estratto conto', 'movimenti bancari', 'conto corrente in excel', 'riconciliazione', 'movimenti banca excel', 'lista movimenti', 'banca', 'conto corrente', 'movimenti', 'home banking', 'saldo'],

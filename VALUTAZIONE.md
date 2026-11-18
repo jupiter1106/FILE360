@@ -4,7 +4,7 @@
 
 ## In sintesi
 
-**Indice complessivo: 3,68 su 5 (74%)**, con il sito pubblicato come oggi, cioè caricando il solo HTML (vedi §5). L'obiettivo realistico, con il piano qui sotto, è 4,5 o più.
+**Indice di partenza: 3,68 su 5 (74%)**, con il sito pubblicato come allora, cioè caricando il solo HTML (vedi §5). **Dopo gli otto passi del piano: 4,51 su 5 (90%)**, ricalcolato con `tools/griglia.py`; ogni voto alzato ha la sua misura nella tabella «Avanzamento». Le sezioni che seguono descrivono la situazione di partenza.
 
 **Il cuore del prodotto è forte:**
 - qualità dei risultati 4,2;
@@ -73,9 +73,9 @@
 | Criterio | Peso | Voto | Prova | Cosa manca |
 |---|---|---|---|---|
 | A1 Operazioni sulle pagine | 2 | 5 | Unisci, Dividi (anche «In N file»), Ruota, Organizza (selezione veloce), Numeri, Impagina; banchi 100% | — |
-| A2 Conversioni da PDF | 2 | 4 | Word (elenchi, titoli, colonne), Excel (foglio «Tabelle»), immagini, PDF/A; banchi 100% | PDF in PowerPoint; PDF in testo/HTML come strumento |
+| A2 Conversioni da PDF | 2 | 5 | Word (elenchi, titoli, colonne), Excel (foglio «Tabelle»), immagini, PDF/A; **PowerPoint con testo modificabile** (anche da scansione storta, OCR e cancellazione sulla carta uniforme), **testo e pagina web**; misurati con LibreOffice e python-pptx (`ppt_bench`) | — |
 | A3 Conversioni verso PDF | 3 | **2** | Immagini e foto sì | **Word, Excel, PowerPoint, HTML verso PDF: assenti**. È tra le ricerche più frequenti del settore |
-| A4 Modifica e annotazione | 2 | 4 | Modifica fedele (13/13, 7/7), scansioni, firme grafiche, moduli | Commenti/note come strumento chiaro; filigrana solo dentro le Ricette |
+| A4 Modifica e annotazione | 2 | 5 | Modifica fedele (13/13, 7/7), scansioni, firme grafiche, moduli, filigrana; **Commenti e note**: evidenzia/sottolinea/barra agganciati alle parole, note, riquadri di testo, con autore, data e aspetto (/AP), più il riepilogo; verificati con PyMuPDF e pikepdf (qpdf) | — |
 | A5 Sicurezza documentale | 2 | 5 | Oscura (anche più file), Proteggi, PDF/A verificato, p7m, copia conforme | — |
 | A6 Funzioni per l'Italia | 2 | 5 | Fatture XML, F24, visure, estratti conto, XBRL, QR SEPA, laboratorio | — (vantaggio unico) |
 | A7 Automazione e più file | 1 | 4 | Ricette, «Fai tutto tu», più file in molti strumenti | Filigrana non è uno strumento a sé |
@@ -313,6 +313,7 @@ Un passo è chiuso solo quando la misura passa **e** la suite completa resta ver
 | 5. Funzioni | chiuso (suite 21/21) | **Word, Excel e testi in PDF** sul dispositivo (.docx, .xlsx, .txt, Markdown, .csv, .html), con un impaginatore nuovo: Word 148/148 frasi nell'ordine, «Pagina X di Y» su ogni pagina, immagine inclusa, **3 pagine come LibreOffice**; Excel **680/680** celle, nessun testo fuori pagina (LibreOffice taglia il foglio largo e mostra «###»); HTML senza script né richieste a internet · **Filigrana** come strumento: testo o logo, quattro disposizioni, pagine scelte, anteprima dal vivo, testo del documento intatto | A3 2 → 4 · A7 4 → 5 | 4,27 → **4,35** |
 | 6. File accessibili | chiuso (suite 23/23) | Tag di accessibilità scritti da zero (`TagPdf`): PDF da Word, Excel, **PowerPoint**, Markdown, HTML e la loro unione **conformi a PDF/UA-1 per veraPDF (6/6)**; PDF dall'OCR con paragrafi taggati e scansione come decorazione, **2/2 conformi**, testo cercabile intatto · zoom al 400% senza scorrimento orizzontale (home e 7 strumenti) · **PowerPoint in PDF** (caselle, elenchi, tema, tabelle, immagini, **grafici disegnati dai dati** con testo alternativo che ne riporta i valori; 31/31 frasi, 6 diapositive) · **OCR in inglese, francese, tedesco, spagnolo**: errore medio 0,54% (peggiore 1,69%), lettere accentate 14/14 | D6 3 → 4 · D5 4 → 5 · B3 4 → 5 · A3 4 → 5 | 4,35 → **4,44** |
 | 7. Codice | chiuso | `src/app.js` (37.700 righe) diviso in **17 moduli** `src/app/NN-nome.js` (tools/moduli.py), tagliati solo all'inizio di una sezione; il file prodotto è **identico byte per byte** (SHA-256 uguale prima e dopo); nessun file sorgente oltre 3.000 righe (controllo nella suite) | J2 2 → 4 | 4,44 → **4,46** |
+| 8. Conversioni e commenti | chiuso | **PDF in PowerPoint** con testo modificabile: sfondo senza testo (il testo del PDF reso invisibile, immagini e grafica identiche), caselle a paragrafi con carattere, grassetto/corsivo, dimensione, colore, interlinea, rientro e allineamento; scansioni con l'OCR, righe inclinate come l'originale e cancellate solo su carta uniforme (grana ricostruita), caselle di spunta e cornici lasciate nell'immagine. Misura indipendente (LibreOffice disegna la presentazione, il testo si confronta col PDF): **96,6–100% delle parole al loro posto**, scarto mediano ≤ 0,5 pt su 7 documenti; scansione storta: **95% di parole esatte** (l'unico errore è una parola tronca del file di prova), 62/62 righe inclinate, titolo in grassetto; 300 pagine in 41 s; PDF protetto 700/700 parole. **PDF in testo e HTML** (paragrafi e titoli, anche da scansione). **Commenti e note**: 5 tipi di annotazione vera, letti da PyMuPDF e pikepdf, file senza errori | A2 4 → 5 · A4 4 → 5 | 4,46 → **4,51** |
 
 Note del passo 2, per onestà:
 - I1 arriva a 5 quando c'è l'indirizzo definitivo del sito (serve per la sitemap e per gli indirizzi canonici assoluti); I4 quando c'è un indirizzo per le segnalazioni. Entrambi si indicano in `site.json` (`{"url": "...", "contatto": "..."}`) e la build li usa.
@@ -330,7 +331,7 @@ Note del passo 4:
 
 Note del passo 5:
 - A3 resta 4 e non 5: PowerPoint (.pptx) non si converte; i vecchi .doc e .xls non sono leggibili nel browser (lo strumento lo spiega e dice come salvarli);
-- A4 resta 4: la filigrana c'è, manca ancora uno strumento chiaro per commenti e note;
+- A4 era rimasto 4 al passo 5 (mancavano commenti e note): chiuso al passo 8;
 - il confronto con LibreOffice ha fatto trovare tre differenze vere, corrette prima della consegna: righe di tabella alte il doppio (le celle ereditavano la spaziatura dei paragrafi normali), elenchi troppo spaziati (mancava la «spaziatura contestuale» di Word), carattere sbagliato (non si leggevano i caratteri del tema).
 
 Note del passo 6:

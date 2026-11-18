@@ -37,7 +37,7 @@ const Later = {
   next() { const b = this._blocks(); if (this.i >= b.length) return false; this._run(b[this.i++]); return true; },
   all() { while (this.next()); },
   // i blocchi fino a quello che definisce «name» (l'ordine conta: i blocchi dopo possono usare quelli prima); il resto a breve
-  need(name) { const b = this._blocks(); const k = name ? b.findIndex(el => (' ' + (el.dataset.defs || '') + ' ').includes(' ' + name + ' ')) : -1; if (k < 0) { if (name && !(name in globalThis)) this.all(); return; } /* non trovata nei blocchi né già definita: si esegue tutto */ while (this.i <= k && this.next()); const go = () => { if (this.next()) setTimeout(go, 0); }; setTimeout(go, 0); },
+  need(name) { const b = this._blocks(); const k = name ? b.findIndex(el => (' ' + (el.dataset.defs || '') + ' ').includes(' ' + name + ' ')) : -1; if (k < 0) { if (name && !(name in globalThis)) this.all(); else { const go = () => { if (this.next()) setTimeout(go, 0); }; setTimeout(go, 0); } return; } /* non trovata nei blocchi né già definita: si esegue tutto; già definita: il resto subito dopo */ while (this.i <= k && this.next()); const go = () => { if (this.next()) setTimeout(go, 0); }; setTimeout(go, 0); },
   // sito: scarica in sottofondo il codice dei blocchi (si esegue sempre e solo quando serve)
   prefetch() { this._pre = Promise.all([...document.querySelectorAll('script[type="text/x-officina-later"][data-src]')].filter(el => !el.textContent).map(el => fetch(el.dataset.src).then(r => r.ok ? r.text() : null).then(t => { if (t && !el.textContent) el.textContent = t; }).catch(() => { }))); return this._pre; },
   idle() { const step = () => { if (!this.next()) return; (window.requestIdleCallback || (f => setTimeout(f, 16)))(step, { timeout: 400 }); }; (this._pre || Promise.resolve()).then(() => setTimeout(step, 50)); },
@@ -277,6 +277,8 @@ const ICONS = {
   type:'<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
   textedit:'<path d="M4 6V4h12v2"/><path d="M10 4v14"/><path d="M7 18h6"/><path d="M17 11v10"/><path d="M15 11h4M15 21h4"/>',
   square:'<rect x="3" y="3" width="18" height="18" rx="2"/>',
+  comment:'<path d="M4 5.5h16v10H9.5L5 19.5v-4H4z"/><path d="M8 9.5h8M8 12.5h5"/>',
+  textbox:'<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M8 9h8M12 9v7"/>',
   highlight:'<path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>',
   eraser:'<path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/>',
   pen:'<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/>',
@@ -1034,6 +1036,8 @@ const Busy = {
 };
 async function withBusy(title, fn, opts = {}) {
   opts = opts || {};
+  // ogni operazione parte con tutto il codice pronto: i moduli eseguiti nei momenti liberi (Later) non devono mancare a metà lavoro
+  try { Later.all(); } catch (e) { console.warn('moduli', e); }
   if (opts.cancellable || opts.job) return Jobs.run(title, fn, opts);
   // attesa breve: niente coda
   if (typeof Activity !== 'undefined' && !Busy.el) Activity.mark();

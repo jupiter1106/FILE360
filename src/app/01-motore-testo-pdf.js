@@ -1550,6 +1550,46 @@ const SEO = (() => {
         ['Il PDF viene caricato su un server?', 'No: la filigrana si applica nel browser, sul tuo dispositivo.'],
       ],
     },
+    pdftesto: {
+      slug: 'pdf-in-testo', title: 'PDF in testo e HTML: estrai il testo, anche dalle scansioni',
+      desc: 'Estrai il testo di un PDF nell’ordine di lettura, anche dalle scansioni con l’OCR: file .txt e pagina web .html con titoli e paragrafi. Gratis e senza upload.',
+      h1: 'PDF in testo e HTML', h2: 'Come estrarre il testo da un PDF', rel: ["ocr", "word", "conta"],
+      steps: ['Apri il PDF.', 'Controlla il testo nell’anteprima (le scansioni si leggono da sole).', 'Scarica il .txt, la pagina .html o entrambi.'],
+      faq: [
+        ['Come copio tutto il testo di un PDF?', 'Apri il PDF: il testo compare nell’anteprima nell’ordine di lettura, con i paragrafi. Scarica il file .txt e copialo dove ti serve.'],
+        ['Funziona con un PDF scansionato?', 'Sì: le pagine senza testo vengono lette con l’OCR, nel browser. Controlla nomi e numeri, che la lettura può sbagliare.'],
+        ['A cosa serve la versione HTML?', 'È una pagina web con titoli e paragrafi: si legge bene sul telefono, si ingrandisce senza scorrere di lato ed è comoda per i lettori di schermo.'],
+        ['Le colonne restano nell’ordine giusto?', 'Il testo segue l’ordine di lettura della pagina, colonna per colonna.'],
+        ['Il PDF viene caricato su un server?', 'No: tutto avviene sul tuo dispositivo.'],
+      ],
+    },
+    pdfppt: {
+      slug: 'pdf-in-powerpoint', title: 'PDF in PowerPoint modificabile, anche da scansione, gratis',
+      desc: 'Trasforma un PDF in una presentazione PowerPoint (.pptx) con il testo modificabile: carattere, dimensione, colore e posizione dell’originale. Anche dalle scansioni. Senza upload.',
+      h1: 'PDF in PowerPoint', h2: 'Come trasformare un PDF in una presentazione modificabile', rel: ["officepdf", "immaginipdf", "word"],
+      steps: ['Apri il PDF.', 'Scegli «Testo modificabile» (oppure «Pagine identiche») e la qualità delle immagini.', 'Crea la presentazione e aprila con PowerPoint, Keynote o Google Presentazioni.'],
+      faq: [
+        ['Posso modificare il testo nelle diapositive?', 'Sì: il testo diventa caselle di testo vere, a paragrafi, con il carattere, la dimensione, il colore, l’interlinea e l’allineamento dell’originale. Immagini, linee e colori di fondo restano identici sotto il testo.'],
+        ['Funziona con un PDF scansionato?', 'Sì: le pagine scansionate vengono lette con l’OCR, sul tuo dispositivo; la scritta originale si toglie dall’immagine e al suo posto c’è il testo modificabile, inclinato come nella scansione. Dove la carta intorno non è uniforme (timbri, cornici) la scritta resta nell’immagine e il suo testo va nelle note. Controlla nomi e numeri.'],
+        ['Le diapositive sono uguali al PDF?', 'Sì, a meno di differenze minime dovute ai caratteri installati sul computer. Se ti serve la copia esatta, scegli «Pagine identiche»: ogni pagina diventa un’immagine fedele e il testo va nelle note del relatore.'],
+        ['Con quali programmi si apre?', 'Con PowerPoint, Keynote, Google Presentazioni e LibreOffice Impress.'],
+        ['C’è un limite di pagine?', 'No: il limite è la memoria del dispositivo. 300 pagine di testo si convertono in meno di un minuto.'],
+        ['Il PDF viene caricato su un server?', 'No: la presentazione si crea nel browser.'],
+      ],
+    },
+    annota: {
+      slug: 'commentare-pdf', title: 'Commentare un PDF: evidenzia, note e commenti, gratis',
+      desc: 'Evidenzia, sottolinea e barra il testo di un PDF, aggiungi note e commenti con il tuo nome: si leggono in Acrobat, Anteprima e nei browser. Senza upload.',
+      h1: 'Commenti e note sul PDF', h2: 'Come evidenziare e commentare un PDF', rel: ["modifica", "confronta", "unisci"],
+      steps: ['Apri il PDF.', 'Scegli Evidenzia, Sottolinea, Barra, Nota o Testo e lavora sulla pagina; scrivi i commenti nel pannello.', 'Salva il PDF con i commenti (e, se vuoi, il riepilogo).'],
+      faq: [
+        ['I commenti si vedono in Acrobat?', 'Sì: sono annotazioni PDF vere, con autore e data. Si vedono, si spostano e si rispondono in Acrobat Reader, Anteprima di macOS, Chrome, Edge e Firefox.'],
+        ['Posso evidenziare un PDF scansionato?', 'Sì: sulle scansioni l’evidenziatura segue il riquadro che trascini; sui PDF con testo segue le righe del testo.'],
+        ['Come raccolgo tutti i commenti?', 'Insieme al PDF puoi scaricare il riepilogo: per ogni commento la pagina, il tipo, il testo evidenziato e la nota.'],
+        ['Il testo del documento cambia?', 'No: i commenti stanno sopra la pagina e si possono togliere; il documento resta com’è.'],
+        ['Il PDF viene caricato su un server?', 'No: tutto avviene nel browser.'],
+      ],
+    },
   };
   const BY_SLUG = Object.fromEntries(Object.entries(P).map(([id, p]) => [p.slug, id]));
   const slug = id => (P[id] || {}).slug || id;
@@ -1646,6 +1686,12 @@ const TOOLS = {
               desc: 'Una foto o una scansione di un timbro, di un logo o di una firma diventa un disegno vettoriale pulito: colori, spessore e macchie si correggono. Scarica in SVG o in PNG senza sfondo, o salvalo tra i tuoi timbri.', start: (...a) => startVettoriale(...a) },
   filigrana: { title: 'Filigrana', short: 'Filigrana', icon: 'type', hue: '#9F1239', accept: '.pdf,application/pdf', multiple: false,
               desc: 'Aggiungi una scritta («COPIA», «BOZZA», «RISERVATO»…) o un logo su tutte le pagine o solo su alcune: in diagonale, al centro, in basso o ripetuta, con l’intensità che vuoi. Anteprima dal vivo.', start: (...a) => startFiligrana(...a) },
+  annota:   { title: 'Commenti e note', short: 'Commenti', icon: 'comment', hue: '#B54708', accept: '.pdf,application/pdf', multiple: false,
+              desc: 'Evidenzia, sottolinea e barra il testo, aggiungi note e commenti sulla pagina: annotazioni vere, con autore e data, che si leggono e si rispondono in Acrobat, Anteprima e nei browser. Più il riepilogo dei commenti.', start: (...a) => startAnnota(...a) },
+  pdftesto: { title: 'PDF in testo e HTML', short: 'Testo', icon: 'type', hue: '#475467', accept: '.pdf,application/pdf', multiple: false,
+              desc: 'Il testo del PDF nell’ordine di lettura, anche dalle scansioni (OCR): un file .txt da copiare ovunque e una pagina web .html con titoli e paragrafi, leggibile su ogni dispositivo.', start: (...a) => startPdfTesto(...a) },
+  pdfppt:   { title: 'PDF in PowerPoint', short: 'PowerPoint', icon: 'layout', hue: '#C43E1C', accept: '.pdf,application/pdf', multiple: false,
+              desc: 'Ogni pagina diventa una diapositiva con il testo modificabile: caselle di testo vere, con carattere, dimensione, colore e allineamento dell’originale, sopra immagini e grafica identiche. Anche dalle scansioni, con l’OCR. Si apre con PowerPoint, Keynote, Google Presentazioni e LibreOffice.', start: (...a) => startPdfPpt(...a) },
   officepdf: { title: 'Word, Excel, PowerPoint in PDF', short: 'Office in PDF', icon: 'pdf', hue: '#B42318', accept: '.docx,.xlsx,.xlsm,.pptx,.ppt,.txt,.md,.markdown,.csv,.html,.htm,.doc,.xls,.odt,.ods,.rtf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/markdown,text/csv,text/html', multiple: true, anyFile: true, pdfIn: false, chain: false,
               dzText: 'Word (.docx), Excel (.xlsx), PowerPoint (.pptx), testo, Markdown, CSV o pagine HTML — anche più file insieme',
               desc: 'Documenti Word, fogli Excel, presentazioni PowerPoint, testi e pagine web diventano PDF sul tuo dispositivo: titoli, elenchi, tabelle, immagini, intestazioni e numeri di pagina al loro posto. I fogli si adattano alla larghezza della pagina.', start: (...a) => startOffice(...a) },
@@ -1658,7 +1704,7 @@ const TOOLS = {
 const SHORT_DESC = {
   estrattoconto: 'Movimenti del conto in Excel, con verifica dei saldi', f24: 'F24, CU, 730, Redditi, IRAP, IVA in Excel', visure: 'Visure camerali e catastali in dati', laboratorio: 'Referti in tabella, valori fuori intervallo evidenziati',
   qrsepa: 'Il QR per pagare con bonifico', conforme: 'Dicitura di conformità, poi la firma', misure: 'Distanze e superfici in scala', conta: 'Parole, caratteri, cartelle', tesi: 'Modello Word e controllo del PDF', vettoriale: 'Timbri e loghi in SVG e PNG trasparente',
-  tavola: 'A0/A1 su fogli A4 o A3', officepdf: 'Word, Excel, PowerPoint e testi in PDF', filigrana: 'Scritta o logo su tutte le pagine',
+  tavola: 'A0/A1 su fogli A4 o A3', officepdf: 'Word, Excel, PowerPoint e testi in PDF', filigrana: 'Scritta o logo su tutte le pagine', pdftesto: 'Testo e pagina web dal PDF', annota: 'Evidenzia, note e commenti', pdfppt: 'Una diapositiva per pagina',
   unisci: 'Più PDF e immagini in un solo documento', immagini: 'Foto e scansioni in un PDF ordinato', dividi: 'Separa pagine o intervalli in più file',
   comprimi: 'Riduci il peso mantenendo la qualità', modifica: 'Riscrivi il testo, aggiungi immagini e firme', ruota: 'Raddrizza pagine singole o tutte',
   ordina: 'Riordina, aggiungi pagine bianche, elimina', numeri: 'Numerazione, intestazione e piè di pagina', ocr: 'Rendi ricercabili scansioni e foto',
@@ -1677,7 +1723,7 @@ const SHORT_DESC = {
 const FISCAL_GROUP = 'Fisco e firme digitali';
 const GROUPS = [
   ['Fai tutto tu', ['assistente']],
-  ['Modifica e proteggi', ['modifica', 'moduli', 'oscura', 'numeri', 'filigrana', 'proteggi']],
+  ['Modifica e proteggi', ['modifica', 'annota', 'moduli', 'oscura', 'numeri', 'filigrana', 'proteggi']],
   ['Pagine', ['ordina', 'ruota', 'unisci', 'dividi', 'impagina']],
   ['Converti e ottimizza', ['word', 'excel', 'officepdf', 'ocr', 'migliora', 'pdfa', 'verificapdfa', 'comprimi', 'immagini', 'immaginipdf', 'vettoriale']],
   ['Analizza e confronta', ['analisi', 'estrai', 'confronta', 'misure', 'conta']],
@@ -1688,7 +1734,7 @@ const GROUPS = [
    (il documento aperto passa da una all'altra). Indirizzi, ricerca, ricette e passaggi restano quelli di sempre. */
 const FAMILIES = [
   ['ordina', 'Pagine', ['ordina', 'ruota', 'dividi', 'impagina']],
-  ['word', 'Converti il PDF', ['word', 'excel', 'immaginipdf']],
+  ['word', 'Converti il PDF', ['word', 'excel', 'pdfppt', 'pdftesto', 'immaginipdf']],
   ['pdfa', 'PDF/A', ['pdfa', 'verificapdfa']],
   ['analisi', 'Bilancio', ['analisi', 'xbrl']],
   ['firme', 'File firmati', ['firme', 'conforme']],
@@ -1696,7 +1742,7 @@ const FAMILIES = [
   ['fatture', 'Fatture', ['fatture', 'qrsepa']],
   ['conta', 'Testi', ['conta', 'tesi']],
 ];
-const FAM_LABEL = { ordina: 'Organizza', ruota: 'Ruota', dividi: 'Dividi', impagina: 'Impagina', word: 'Word', excel: 'Excel', immaginipdf: 'Immagini',
+const FAM_LABEL = { pdfppt: 'PowerPoint', pdftesto: 'Testo', ordina: 'Organizza', ruota: 'Ruota', dividi: 'Dividi', impagina: 'Impagina', word: 'Word', excel: 'Excel', immaginipdf: 'Immagini',
   pdfa: 'Converti', verificapdfa: 'Verifica', analisi: 'Analisi', xbrl: 'XBRL in PDF ed Excel', firma: 'Firma', firme: 'Verifica e apri .p7m', conforme: 'Copia conforme',
   estrai: 'Dati', estrattoconto: 'Estratto conto', f24: 'F24 e dichiarazioni', visure: 'Visure', laboratorio: 'Esami', fatture: 'Fatture elettroniche', qrsepa: 'QR di pagamento', conta: 'Conta parole', tesi: 'Tesi' };
 const FAM_OF = {};

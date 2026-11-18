@@ -1631,3 +1631,28 @@ html:not([data-cloud="on"]) .cloud-btn{display:none !important}
 /* Filigrana: l'anteprima della pagina */
 .fl-page{display:inline-block;padding:var(--s-3);border-radius:var(--r);background:var(--surface);box-shadow:var(--shadow);max-width:100%}
 .fl-page canvas{display:block;max-width:100%;height:auto;background:#fff}
+/* PDF in testo: anteprima leggibile, come la pagina web che si scarica */
+.pt-prev{max-width:760px;margin:0 auto;padding:var(--s-6);border:1px solid var(--line);border-radius:var(--r);background:var(--surface);font:400 16px/1.6 var(--font);color:var(--ink);overflow-wrap:anywhere}
+.pt-prev h3{font:600 18px/1.35 var(--font);margin:var(--s-4) 0 var(--s-2)}
+.pt-prev p{margin:0 0 var(--s-3)}
+.pt-prev .pt-pg{margin:var(--s-6) 0 var(--s-2);padding-top:var(--s-3);border-top:1px solid var(--line)}
+.pt-prev .pt-pg:first-child{margin-top:0;padding-top:0;border-top:0}
+
+/* Commenti e note: i segni sulla pagina e l'elenco */
+.an-modes{flex-wrap:wrap}
+.an-mk{position:absolute;cursor:pointer}
+.an-mk.highlight{background:color-mix(in srgb,var(--c) 45%,transparent);mix-blend-mode:multiply}
+.an-mk.underline{border-bottom:2px solid var(--c)}
+.an-mk.strike{background:linear-gradient(transparent 44%,var(--c) 44%,var(--c) 56%,transparent 56%)}
+.an-mk.sel,.an-box.sel,.an-note.sel{outline:2px solid var(--focus);outline-offset:1px}
+.an-note{position:absolute;width:24px;height:24px;margin:-12px 0 0 -12px;display:grid;place-items:center;border:1px solid #6b4e00;border-radius:var(--r-xs);color:#3b2a00;cursor:pointer;box-shadow:var(--shadow-sm)}
+.an-box{position:absolute;padding:2px 4px;border:1px solid;background:#fff;color:#7a1d16;line-height:1.2;overflow:hidden;cursor:pointer;white-space:pre-wrap}
+.an-drag{position:absolute;border:1px dashed var(--focus);background:color-mix(in srgb,var(--focus) 10%,transparent);pointer-events:none}
+.an-list{display:flex;flex-direction:column;gap:var(--s-2)}
+.an-row{display:flex;flex-direction:column;gap:6px;padding:var(--s-2) var(--s-3);border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface)}
+.an-row.sel{border-color:var(--accent-line);background:var(--accent-soft)}
+.an-head{display:flex;align-items:center;gap:var(--s-2)}
+.an-head .icon-btn{margin-left:auto}
+.an-dot{width:10px;height:10px;border-radius:var(--r-full);flex:none}
+.an-quote{color:var(--ink-2);font-style:italic}
+.an-old summary{cursor:pointer;color:var(--muted)}

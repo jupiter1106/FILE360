@@ -323,6 +323,42 @@ test('zoom al 400% (320×256): nessuno scorrimento orizzontale della pagina, in 
   }
   await ctx.close(); ok(!bad.length, 'scorre: ' + bad.join(', '));
 });
+test('PDF in PowerPoint: una diapositiva per pagina, pacchetto valido, testo modificabile (e nelle note con «Pagine identiche»)', async b => {
+  const { page } = await open(b, 'desk1280'); await openTool(page, 'pdfppt', ['contratto.pdf']); await page.waitForSelector('.tool .btn-run');
+  const get = async () => {
+    await page.locator('.tool .btn-run').click(); await page.waitForSelector('.scrim:not(.busy) .modal.res', { timeout: 120000 });
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.locator('.modal.res .btn', { hasText: 'Scarica' }).first().click()]);
+    const buf = require('fs').readFileSync(await dl.path()); await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+    return page.evaluate(async b64 => { const z = await JSZip.loadAsync(Uint8Array.from(atob(b64), c => c.charCodeAt(0))); const slides = Object.keys(z.files).filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n)).length; const s1 = await z.file('ppt/slides/slide1.xml').async('string'); const note = await z.file('ppt/notesSlides/notesSlide1.xml')?.async('string'); return { slides, ct: !!z.file('[Content_Types].xml'), boxes: (s1.match(/txBox="1"/g) || []).length, title: /<a:t>Contratto di fornitura n\. 145\/2026<\/a:t>/.test(s1) && /b="1"/.test(s1), pic: /<p:pic>/.test(s1), note: /Contratto di fornitura/.test(note || '') }; }, buf.toString('base64'));
+  };
+  const r = await get(); ok(r.slides === 3 && r.ct && r.boxes >= 5 && r.title && r.pic, JSON.stringify(r));
+  await page.locator('.tool .seg button', { hasText: 'Pagine identiche' }).click();
+  const r2 = await get(); ok(r2.slides === 3 && r2.boxes === 0 && r2.note, JSON.stringify(r2));
+});
+test('PDF in testo e HTML: paragrafi e titoli nell’ordine, anche da una scansione', async b => {
+  const { page } = await open(b, 'desk1280');
+  for (const [f, want] of [['contratto.pdf', /Contratto di fornitura[\s\S]*Il presente contratto/], ['scansione-firma.pdf', /\w{4,}/]]) {
+    await page.evaluate(() => { try { Flow.close(); } catch { } location.hash = ''; }); await page.waitForTimeout(150);
+    await openTool(page, 'pdftesto', [f]); await page.waitForFunction(() => document.querySelectorAll('.pt-prev p, .pt-prev h3').length > 1, null, { timeout: 120000 });
+    const t = await page.locator('.pt-prev').innerText(); ok(want.test(t), f + ': ' + t.slice(0, 120));
+  }
+});
+test('Commenti e note: evidenziatura agganciata alle parole e nota, annotazioni vere con commento e riepilogo', async b => {
+  const { page } = await open(b, 'desk1280'); await openTool(page, 'annota', ['contratto.pdf']); await page.waitForSelector('.tool .v-canvas'); await page.waitForTimeout(1200);
+  const box = await page.locator('.tool .v-overlay').boundingBox(); const k = await page.evaluate(() => Viewer.current.cur);
+  await page.mouse.move(box.x + 60 * k, box.y + 50 * k); await page.mouse.down(); await page.mouse.move(box.x + 330 * k, box.y + 66 * k, { steps: 6 }); await page.mouse.up(); await page.waitForTimeout(400);
+  await page.locator('.an-list textarea').first().fill('Controllare il numero');
+  await page.locator('.an-modes button', { hasText: 'Nota' }).click(); await page.mouse.click(box.x + 400 * k, box.y + 130 * k); await page.waitForTimeout(300);
+  await page.locator('.an-list textarea').last().fill('Da rivedere');
+  await page.locator('.tool .btn-run').click(); await page.waitForSelector('.scrim:not(.busy) .modal.res', { timeout: 60000 });
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.locator('.modal.res .btn', { hasText: 'Scarica' }).first().click()]);
+  const zip = require('fs').readFileSync(await dl.path()).toString('base64');
+  const r = await page.evaluate(async z64 => { const z = await JSZip.loadAsync(Uint8Array.from(atob(z64), c => c.charCodeAt(0))); const pdfName = Object.keys(z.files).find(n => /\.pdf$/.test(n)), txtName = Object.keys(z.files).find(n => /\.txt$/.test(n));
+    const d = await pdfDocument({ data: await z.file(pdfName).async('uint8array') }).promise; const a = await (await d.getPage(1)).getAnnotations();
+    return { a: a.map(x => [x.subtype, x.contentsObj?.str]), sum: await z.file(txtName).async('string') }; }, zip);
+  ok(JSON.stringify(r.a) === JSON.stringify([['Highlight', 'Controllare il numero'], ['Text', 'Da rivedere']]), JSON.stringify(r.a));
+  ok(/«Contratto di fornitura n\. 145\/2026»/.test(r.sum), r.sum.slice(0, 200));
+});
 test('errore d’apertura scritto anche nel riquadro del file, con le azioni', async b => {
   const { page } = await open(b, 'desk1280'); await openTool(page, 'comprimi', ['rotto.pdf']); await page.waitForSelector('.dropzone .dz-err', { timeout: 15000 });
   ok(await page.locator('.dropzone .dz-err .btn').count() >= 1, 'nessuna azione nel riquadro');
