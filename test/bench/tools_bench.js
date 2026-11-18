@@ -59,12 +59,12 @@ bench('oscura · più file insieme (digitale, scansione, file senza dati)', 'osc
     const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     const zz = await JSZip.loadAsync(Uint8Array.from(atob(z), c => c.charCodeAt(0))), files = Object.keys(zz.files), left = [];
     for (const n of files.filter(n => /oscurato\.pdf$/.test(n))) {
-      const d = await pdfjsLib.getDocument({ data: await zz.file(n).async('uint8array') }).promise; let t = '';
+      const d = await pdfDocument({ data: await zz.file(n).async('uint8array') }).promise; let t = '';
       for (let p = 1; p <= d.numPages; p++) t += (await (await d.getPage(p)).getTextContent()).items.map(i => i.str).join('');
       for (const v of planted) if (norm(v).length >= 5 && norm(t).includes(norm(v))) left.push(n + ': ' + v.slice(0, 4) + '…');
     }
     const rep = files.find(n => /Rapporto/.test(n)); let repPages = 0, repTxt = '';
-    if (rep) { const d = await pdfjsLib.getDocument({ data: await zz.file(rep).async('uint8array') }).promise; repPages = d.numPages; for (let p = 1; p <= Math.min(2, d.numPages); p++) repTxt += (await (await d.getPage(p)).getTextContent()).items.map(i => i.str).join(' '); }
+    if (rep) { const d = await pdfDocument({ data: await zz.file(rep).async('uint8array') }).promise; repPages = d.numPages; for (let p = 1; p <= Math.min(2, d.numPages); p++) repTxt += (await (await d.getPage(p)).getTextContent()).items.map(i => i.str).join(' '); }
     return { files, left, repPages, repLeak: planted.filter(v => norm(v).length >= 5 && norm(repTxt).includes(norm(v))).length, rows: [...document.querySelectorAll('.rd-many .rd-row')].map(x => x.dataset.state) };
   }, [zip, planted]);
   const c = checks([['tre file nell’elenco', rows0 === 3],
@@ -102,7 +102,7 @@ bench('conta parole e caratteri', 'conta', 0.99, async page => {
 bench('confronta due versioni', 'confronta', 0.98, async page => {
   const a = b64(T('versione-a.pdf')), b = b64(T('versione-b.pdf'));
   const r = await page.evaluate(async ([a, b]) => { if (typeof DocDiff === 'undefined') await Later.all();
-    const U = s => Uint8Array.from(atob(s), c => c.charCodeAt(0)); const tok = async bytes => { const d = await pdfjsLib.getDocument({ data: U(bytes) }).promise, out = []; for (let p = 1; p <= d.numPages; p++) out.push(...await DocDiff.textTokens(await d.getPage(p), p)); return out; };
+    const U = s => Uint8Array.from(atob(s), c => c.charCodeAt(0)); const tok = async bytes => { const d = await pdfDocument({ data: U(bytes), isEvalSupported: false }).promise, out = []; for (let p = 1; p <= d.numPages; p++) out.push(...await DocDiff.textTokens(await d.getPage(p), p)); return out; };
     const c = await DocDiff.compare(await tok(a), await tok(b), {}); const ins = [], del = [];
     for (const o of c.ops) if (o.type !== 'eq') { for (let i = o.a0; i < o.a1; i++) del.push(c.ta[i].t); for (let j = o.b0; j < o.b1; j++) ins.push(c.tb[j].t); }
     return { ins, del }; }, [a, b]);
@@ -185,14 +185,14 @@ for (const f of ['testo.pdf', 'testo-scansione.pdf']) bench(`PDF in Word · ${f.
 bench('comprimi · peso e aspetto', 'comprimi', 0.85, async page => {
   const src = fs.readFileSync(fx('pesante.pdf')), srcB = src.toString('base64'); await toolWith(page, 'comprimi', [fx('pesante.pdf')]); await page.waitForSelector('.tool .btn-run'); await run(page, 300000);
   const out = await download(page);
-  const r = await page.evaluate(async ([a, b]) => { const U = s => Uint8Array.from(atob(s), c => c.charCodeAt(0)); const draw = async bytes => { const d = await pdfjsLib.getDocument({ data: U(bytes) }).promise, pg = await d.getPage(1), v = pg.getViewport({ scale: 1 }), c = document.createElement('canvas'); c.width = v.width; c.height = v.height; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); await pg.render({ canvasContext: x, viewport: v }).promise; return x.getImageData(0, 0, c.width, c.height).data; }; const A = await draw(a), B = await draw(b); let d = 0; for (let i = 0; i < A.length; i += 4) d += Math.abs(A[i] - B[i]); return d / (A.length / 4) / 255; }, [srcB, out]);
+  const r = await page.evaluate(async ([a, b]) => { const U = s => Uint8Array.from(atob(s), c => c.charCodeAt(0)); const draw = async bytes => { const d = await pdfDocument({ data: U(bytes), isEvalSupported: false }).promise, pg = await d.getPage(1), v = pg.getViewport({ scale: 1 }), c = document.createElement('canvas'); c.width = v.width; c.height = v.height; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); await pg.render({ canvasContext: x, viewport: v }).promise; return x.getImageData(0, 0, c.width, c.height).data; }; const A = await draw(a), B = await draw(b); let d = 0; for (let i = 0; i < A.length; i += 4) d += Math.abs(A[i] - B[i]); return d / (A.length / 4) / 255; }, [srcB, out]);
   const ratio = Buffer.from(out, 'base64').length / src.length, look = 1 - r * 8;
   return { score: Math.max(0, Math.min(1, (1 - ratio) * 0.6 + Math.max(0, look) * 0.4)), det: `peso ${(ratio * 100).toFixed(0)}% dell'originale, differenza media d'aspetto ${(r * 100).toFixed(2)}%` };
 });
 // ---------- Unisci, PDF/A, Proteggi: correttezza ----------
 bench('unisci · pagine e ordine', 'unisci', 1, async page => {
   await toolWith(page, 'unisci', [fx('contratto.pdf'), fx('appunti-2.pdf')]); await page.waitForSelector('.tool .btn-run'); await run(page); const out = await download(page);
-  const r = await page.evaluate(async ([o, a, b]) => { const U = s => Uint8Array.from(atob(s), c => c.charCodeAt(0)); const n = async x => (await pdfjsLib.getDocument({ data: U(x) }).promise).numPages; const t1 = async (x, p) => (await (await (await pdfjsLib.getDocument({ data: U(x) }).promise).getPage(p)).getTextContent()).items.map(i => i.str).join(' ').slice(0, 60); const na = await n(a); return { n: await n(o), exp: na + await n(b), first: (await t1(o, 1)) === (await t1(a, 1)), join: (await t1(o, na + 1)) === (await t1(b, 1)) }; }, [out, b64(fx('contratto.pdf')), b64(fx('appunti-2.pdf'))]);
+  const r = await page.evaluate(async ([o, a, b]) => { const U = s => Uint8Array.from(atob(s), c => c.charCodeAt(0)); const n = async x => (await pdfDocument({ data: U(x) }).promise).numPages; const t1 = async (x, p) => (await (await (await pdfDocument({ data: U(x) }).promise).getPage(p)).getTextContent()).items.map(i => i.str).join(' ').slice(0, 60); const na = await n(a); return { n: await n(o), exp: na + await n(b), first: (await t1(o, 1)) === (await t1(a, 1)), join: (await t1(o, na + 1)) === (await t1(b, 1)) }; }, [out, b64(fx('contratto.pdf')), b64(fx('appunti-2.pdf'))]);
   const ok = [r.n === r.exp, r.first, r.join].filter(Boolean).length; return { score: ok / 3, det: `pagine ${r.n}/${r.exp}, ordine ${r.first && r.join ? 'giusto' : 'sbagliato'}` };
 });
 bench('PDF/A · conforme alla norma', 'pdfa', 1, async page => {
@@ -204,7 +204,7 @@ bench('PDF/A · caratteri non incorporati: testo vero, segnalibri, peso', 'pdfa'
   const F = path.join(__dirname, '..', 'stress', 'corpus', 'struttura.pdf');
   await toolWith(page, 'pdfa', [F]); await page.waitForSelector('.tool .btn-run'); await run(page, 300000); const out = await download(page);
   const r = await page.evaluate(async o => { if (typeof PDFACheck === 'undefined') await Later.all(); const u = Uint8Array.from(atob(o), c => c.charCodeAt(0)); const res = await PDFACheck.check(u);
-    const d = await pdfjsLib.getDocument({ data: u }).promise; let txt = 0; for (let p = 1; p <= d.numPages; p++) { const ops = await (await d.getPage(p)).getOperatorList(); const t = (await (await d.getPage(p)).getTextContent()).items.map(i => i.str).join(''); if (/Capitolo/.test(t) && !ops.fnArray.includes(pdfjsLib.OPS.paintImageXObject)) txt++; }
+    const d = await pdfDocument({ data: u }).promise; let txt = 0; for (let p = 1; p <= d.numPages; p++) { const ops = await (await d.getPage(p)).getOperatorList(); const t = (await (await d.getPage(p)).getTextContent()).items.map(i => i.str).join(''); if (/Capitolo/.test(t) && !ops.fnArray.includes(pdfjsLib.OPS.paintImageXObject)) txt++; }
     const ol = await d.getOutline(); const cnt = l => (l || []).reduce((s, x) => s + 1 + cnt(x.items), 0);
     return { ok: !!res.valid, pages: d.numPages, txt, ol: cnt(ol), kb: Math.round(u.length / 1024) }; }, out);
   return checks([['conforme a PDF/A', r.ok], ['pagine di testo vero (non immagini) almeno 5 su 6', r.txt >= 5], ['segnalibri 9 su 9', r.ol === 9], [`peso sotto 400 KB (${r.kb} KB)`, r.kb < 400]]);
@@ -214,7 +214,7 @@ bench('PDF/A · trasparenze (2b) e campi con codifica propria (1b) restano testo
   const conv = async (file, part) => page.evaluate(async ([b64, part]) => {
     if (typeof PDFA === 'undefined') await Later.all();
     const u = Uint8Array.from(atob(b64), c => c.charCodeAt(0)), d = await pdfDocument({ data: u.slice(), isEvalSupported: false }).promise;
-    const r = await pdfaMake(u, d, { part }); const o = await pdfjsLib.getDocument({ data: r.bytes.slice() }).promise;
+    const r = await pdfaMake(u, d, { part }); const o = await pdfDocument({ data: r.bytes.slice() }).promise;
     let words = 0; for (let p = 1; p <= o.numPages; p++) words += (await (await o.getPage(p)).getTextContent()).items.map(i => i.str).join(' ').split(/\s+/).filter(Boolean).length;
     return { valid: !!r.check.valid, rebuilt: r.report.rebuilt.length, words };
   }, [fs.readFileSync(file).toString('base64'), part]);
@@ -243,14 +243,14 @@ bench('PDF/A · livelli e JPEG 2000 restano testo vero (1b e 2b); il livello nas
 bench('proteggi · cifrato e apribile con la password', 'proteggi', 1, async page => {
   await toolWith(page, 'proteggi', [fx('contratto.pdf')]); await page.waitForSelector('.tool input[type=password]'); await page.locator('.tool input[type=password]').first().fill('banco-360'); const p2 = page.locator('.tool input[type=password]').nth(1); if (await p2.count()) await p2.fill('banco-360');
   await run(page); const out = await download(page);
-  const r = await page.evaluate(async o => { let noPw = false, withPw = false; const U = s => Uint8Array.from(atob(s), c => c.charCodeAt(0)); try { await pdfjsLib.getDocument({ data: U(o) }).promise; noPw = true; } catch { } try { withPw = (await pdfjsLib.getDocument({ data: U(o), password: 'banco-360' }).promise).numPages > 0; } catch { } return { noPw, withPw }; }, out);
+  const r = await page.evaluate(async o => { let noPw = false, withPw = false; const U = s => Uint8Array.from(atob(s), c => c.charCodeAt(0)); try { await pdfDocument({ data: U(o) }).promise; noPw = true; } catch { } try { withPw = (await pdfDocument({ data: U(o), password: 'banco-360' }).promise).numPages > 0; } catch { } return { noPw, withPw }; }, out);
   return { score: (!r.noPw && r.withPw) ? 1 : 0, det: `senza password ${r.noPw ? 'si apre (MALE)' : 'non si apre'}, con la password ${r.withPw ? 'si apre' : 'NON si apre'}` };
 });
 
 // ---------- controlli (operazioni deterministiche e servizi): punteggio = controlli superati / totali ----------
 const checks = list => { const okN = list.filter(c => c[1]).length; return { score: okN / list.length, det: list.map(([n, v]) => (v ? '✓ ' : '✗ ') + n).join(' · ') }; };
-const pdfInfo = (page, b64s) => page.evaluate(async a => { const d = await pdfjsLib.getDocument({ data: Uint8Array.from(atob(a), c => c.charCodeAt(0)) }).promise, out = { n: d.numPages, pages: [] }; for (let p = 1; p <= d.numPages; p++) { const pg = await d.getPage(p), v = pg.getViewport({ scale: 1 }); out.pages.push({ w: Math.round(v.width), h: Math.round(v.height), rot: pg.rotate, text: (await pg.getTextContent()).items.map(i => i.str).join(' ') }); } return out; }, b64s);
-const zipPdfs = (page, b64s) => page.evaluate(async a => { const z = await JSZip.loadAsync(Uint8Array.from(atob(a), c => c.charCodeAt(0))); const out = []; for (const f of Object.keys(z.files).filter(n => /\.(pdf|jpe?g|png)$/i.test(n)).sort()) { const u = await z.file(f).async('uint8array'); if (/\.pdf$/i.test(f)) { const d = await pdfjsLib.getDocument({ data: u }).promise; out.push({ f, n: d.numPages }); } else { const im = await createImageBitmap(new Blob([u])); out.push({ f, w: im.width, h: im.height }); } } return out; }, b64s);
+const pdfInfo = (page, b64s) => page.evaluate(async a => { const d = await pdfDocument({ data: Uint8Array.from(atob(a), c => c.charCodeAt(0)) }).promise, out = { n: d.numPages, pages: [] }; for (let p = 1; p <= d.numPages; p++) { const pg = await d.getPage(p), v = pg.getViewport({ scale: 1 }); out.pages.push({ w: Math.round(v.width), h: Math.round(v.height), rot: pg.rotate, text: (await pg.getTextContent()).items.map(i => i.str).join(' ') }); } return out; }, b64s);
+const zipPdfs = (page, b64s) => page.evaluate(async a => { const z = await JSZip.loadAsync(Uint8Array.from(atob(a), c => c.charCodeAt(0))); const out = []; for (const f of Object.keys(z.files).filter(n => /\.(pdf|jpe?g|png)$/i.test(n)).sort()) { const u = await z.file(f).async('uint8array'); if (/\.pdf$/i.test(f)) { const d = await pdfDocument({ data: u }).promise; out.push({ f, n: d.numPages }); } else { const im = await createImageBitmap(new Blob([u])); out.push({ f, w: im.width, h: im.height }); } } return out; }, b64s);
 const srcText = f => fs.readFileSync(fx(f));
 bench('dividi · pagine divise senza perderne', 'dividi', 1, async page => {
   await toolWith(page, 'dividi', [fx('contratto.pdf')]); await page.waitForSelector('.tool .btn-run'); await run(page);
@@ -307,7 +307,7 @@ bench('PDF OCR · testo della scansione', 'ocr', 0.97, async page => {
 });
 bench('migliora · foto del documento', 'migliora', 1, async page => {
   await toolWith(page, 'migliora', [fx('foto-documento.jpg')]); await page.waitForSelector('.tool .btn-run'); await run(page, 300000); const b = await download(page);
-  const r = await page.evaluate(async a => { const d = await pdfjsLib.getDocument({ data: Uint8Array.from(atob(a), c => c.charCodeAt(0)) }).promise, pg = await d.getPage(1), v = pg.getViewport({ scale: 0.5 }), c = document.createElement('canvas'); c.width = v.width; c.height = v.height; const x = c.getContext('2d'); await pg.render({ canvasContext: x, viewport: v }).promise; const D = x.getImageData(0, 0, c.width, c.height).data; let s = 0; for (let i = 0; i < D.length; i += 4) s += D[i]; return { n: d.numPages, mean: s / (D.length / 4) }; }, b);
+  const r = await page.evaluate(async a => { const d = await pdfDocument({ data: Uint8Array.from(atob(a), c => c.charCodeAt(0)) }).promise, pg = await d.getPage(1), v = pg.getViewport({ scale: 0.5 }), c = document.createElement('canvas'); c.width = v.width; c.height = v.height; const x = c.getContext('2d'); await pg.render({ canvasContext: x, viewport: v }).promise; const D = x.getImageData(0, 0, c.width, c.height).data; let s = 0; for (let i = 0; i < D.length; i += 4) s += D[i]; return { n: d.numPages, mean: s / (D.length / 4) }; }, b);
   return checks([['1 pagina', r.n === 1], ['carta bianca (media > 200)', r.mean > 200]]);
 });
 bench('fai tutto tu · un obiettivo, un file pronto', 'assistente', 1, async page => {

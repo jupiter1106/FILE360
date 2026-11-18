@@ -270,6 +270,46 @@ test('PDF/A: esito pagina per pagina (originale o ricostruita) e aggiornato camb
   await page.locator('.tool .seg button', { hasText: 'PDF/A-2b' }).click();
   await page.waitForFunction(() => document.querySelectorAll('.pa-pg').length === 3 && !document.querySelector('.pa-pg.warn'), null, { timeout: 60000 });
 });
+test('telefono: con un documento aperto il documento occupa almeno il 65% dell’altezza in Modifica; il menu «⋯» dà nome, pagine e chiusura', async b => {
+  const { page } = await open(b, 'iphone13'); await openTool(page, 'modifica', ['contratto.pdf']); await page.waitForFunction(() => [...document.querySelectorAll('.tool canvas')].some(c => c.getBoundingClientRect().width > 100), null, { timeout: 30000 }); await page.waitForTimeout(1500);
+  const r = await page.evaluate(() => { const H = innerHeight; const pg = [...document.querySelectorAll('.tool canvas')].map(e => e.getBoundingClientRect()).filter(r => r.width > 100).sort((a, b) => a.top - b.top)[0];
+    const foot = document.querySelector('.side-foot').getBoundingClientRect(); return { pct: Math.round(100 * (foot.top - pg.top) / H), h1: document.querySelectorAll('h1').length, over: document.documentElement.scrollWidth > innerWidth }; });
+  ok(r.pct >= 65 && r.h1 === 1 && !r.over, JSON.stringify(r));
+  await page.locator('.docbar .db-more').click(); await page.waitForSelector('.modal .pm-list');
+  const m = await page.evaluate(() => ({ name: document.querySelector('.modal .db-m-name')?.textContent, n: document.querySelectorAll('.modal .pm-a').length }));
+  ok(m.name === 'contratto.pdf' && m.n >= 4, JSON.stringify(m));
+  await page.locator('.modal .pm-a', { hasText: 'Chiudi il documento' }).click(); await page.waitForFunction(() => !document.querySelector('.docbar'), null, { timeout: 10000 });
+});
+test('pannelli: al massimo 60 parole di spiegazione visibili; le altre si aprono con «?» (e si leggono)', async b => {
+  const { page } = await open(b, 'desk1280'); const bad = [];
+  for (const [tool, f] of [['oscura', 'contratto.pdf'], ['excel', 'contratto.pdf'], ['modifica', 'contratto.pdf'], ['pdfa', 'contratto.pdf'], ['ordina', 'contratto.pdf'], ['moduli', 'contratto.pdf'], ['ocr', 'contratto.pdf']]) {
+    await page.evaluate(() => { try { Flow.close(); } catch { } location.hash = ''; }); await page.waitForTimeout(150);
+    await openTool(page, tool, [f]); await page.waitForSelector('.tool .side'); await page.waitForTimeout(1200);
+    const n = await page.evaluate(() => { const vis = e => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden'; const seen = []; let w = 0;
+      for (const e of document.querySelectorAll('.tool .side .hint, .tool .side .muted, .tool .side .small, .tool .side p')) { if (!vis(e) || e.closest('button, .seg') || seen.some(s => s.contains(e))) continue; seen.push(e); w += e.innerText.trim().split(/\s+/).filter(Boolean).length; } return w; });
+    if (n > 60) bad.push(`${tool}: ${n}`);
+  }
+  ok(!bad.length, bad.join(', '));
+  const btn = page.locator('.tool .help-btn').first(); await btn.click();
+  ok(await btn.getAttribute('aria-expanded') === 'true' && await page.evaluate(() => [...document.querySelectorAll('.tool .sec.help-on .help-t')].some(e => e.getClientRects().length)), 'la spiegazione non si apre');
+});
+test('Word, Excel e testi in PDF: due file → due PDF; un .doc vecchio è spiegato, non un errore', async b => {
+  const { page } = await open(b, 'desk1280'); const T = f => require('path').join(__dirname, '..', 'bench', 'tools', f);
+  await page.evaluate(() => { location.hash = 'officepdf'; }); await page.waitForSelector('.tool .dz-input', { state: 'attached' });
+  await page.locator('.tool .dz-input').first().setInputFiles([['relazione.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'], ['bilancio.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']].map(([n, m]) => ({ name: n, mimeType: m, buffer: require('fs').readFileSync(T(n)) })).concat([{ name: 'vecchio.doc', mimeType: 'application/msword', buffer: Buffer.from('x') }]));
+  await page.waitForSelector('.tool .btn-run:not([disabled])');
+  ok(/formato vecchio/i.test(await page.locator('.tool .filelist').innerText()), 'il .doc non è spiegato');
+  await page.locator('.tool .btn-run').click(); await page.waitForSelector('.scrim:not(.busy) .modal.res', { timeout: 60000 });
+  const names = await page.$$eval('.modal.res .res-row, .modal.res .rf-name, .modal.res b', x => x.map(e => e.textContent).join(' '));
+  ok(/relazione\.pdf/.test(names) && /bilancio\.pdf/.test(names), names.slice(0, 200));
+});
+test('Filigrana: anteprima dal vivo, poi il PDF con la scritta', async b => {
+  const { page } = await open(b, 'desk1280'); await openTool(page, 'filigrana', ['contratto.pdf']);
+  await page.waitForFunction(() => { const c = document.querySelector('.fl-cv'); return c && c.width > 100; }, null, { timeout: 30000 });
+  await page.locator('.tool .sec input.input').first().fill('BOZZA'); await page.waitForTimeout(600);
+  await page.locator('.tool .btn-run').click(); await page.waitForSelector('.scrim:not(.busy) .modal.res', { timeout: 60000 });
+  ok(/BOZZA/.test(await page.locator('.modal.res').innerText()), 'manca la conferma della scritta');
+});
 test('errore d’apertura scritto anche nel riquadro del file, con le azioni', async b => {
   const { page } = await open(b, 'desk1280'); await openTool(page, 'comprimi', ['rotto.pdf']); await page.waitForSelector('.dropzone .dz-err', { timeout: 15000 });
   ok(await page.locator('.dropzone .dz-err .btn').count() >= 1, 'nessuna azione nel riquadro');

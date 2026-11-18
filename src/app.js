@@ -232,6 +232,7 @@ const ICONS = {
   star:'<path d="m12 2.5 2.6 5.3 5.9.9-4.3 4.2 1 5.9L12 15.9 6.8 18.8l1-5.9L3.5 8.7l5.9-.9z" fill="currentColor" stroke="none"/>',
   'star-o':'<path d="m12 2.5 2.6 5.3 5.9.9-4.3 4.2 1 5.9L12 15.9 6.8 18.8l1-5.9L3.5 8.7l5.9-.9z"/>',
   menu:'<path d="M4 7h16M4 12h16M4 17h10"/>',
+  more:'<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
   bulb:'<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/>',
   orbit:'<ellipse cx="12" cy="12.5" rx="10" ry="4" transform="rotate(-24 12 12.5)"/><path d="M9 6h4l3 3v7a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 8 16V7.5A1.5 1.5 0 0 1 9 6z"/>',
   disk:'<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
@@ -1810,8 +1811,41 @@ function checkbox(label, checked, onChange, sub) {
   const inp = h('input', { type: 'checkbox', checked: !!checked, onchange: () => onChange(inp.checked) });
   return h('label', { class: 'check' }, inp, h('span', {}, label, sub ? h('div', { class: 'muted small' }, sub) : null));
 }
+/* aiuti a richiesta: le spiegazioni sotto le opzioni (testo grigio) restano nella pagina ma si aprono con «?» accanto al
+   titolo della sezione; i messaggi di stato (.hint: cosa è stato trovato, cosa manca) restano sempre visibili.
+   Chi preferisce vederle sempre le lascia aperte: la scelta si ricorda su questo dispositivo. */
+const HelpOnDemand = (() => {
+  const KEY = 'file360.help.open';
+  let always = false; try { always = localStorage.getItem(KEY) === '1'; } catch { }
+  const nWords = e => (e.textContent || '').trim().split(/\s+/).filter(Boolean).length;
+  let seq = 0;
+  function enhance(root) {
+    for (const sec of root.querySelectorAll('.sec:not([data-help])')) {
+      const t = [...sec.querySelectorAll('.muted.small, .muted')].filter(e => !e.closest('button, .seg, .hint, .help-t') && !e.querySelector('input, select, button, textarea') && nWords(e) >= 6);
+      sec.dataset.help = t.length ? '1' : '0';
+      if (!t.length) continue;
+      t.forEach(e => { e.classList.add('help-t'); if (!e.id) e.id = 'help-' + (++seq); });
+      const title = sec.querySelector(':scope > .sec-t')?.textContent.trim();
+      const btn = h('button', { type: 'button', class: 'help-btn', 'aria-expanded': String(always), 'aria-controls': t.map(e => e.id).join(' '),
+        title: 'Spiegazione', 'aria-label': title ? `Spiegazione: ${title}` : 'Mostra la spiegazione' }, '?');
+      btn.onclick = () => { const on = !sec.classList.contains('help-on'); sec.classList.toggle('help-on', on); btn.setAttribute('aria-expanded', String(on));
+        // aperte tre volte di seguito: si vede che servono, restano aperte da qui in avanti (si richiudono con un clic)
+        if (on && ++opened >= 3 && !always) { always = true; try { localStorage.setItem(KEY, '1'); } catch { } } };
+      if (always) sec.classList.add('help-on');
+      const head = sec.querySelector(':scope > .sec-t');
+      if (head) head.append(btn); else sec.prepend(h('div', { class: 'sec-t sec-t-help' }, btn));
+    }
+  }
+  let opened = 0;
+  function watch(root) {
+    enhance(root); let raf = 0;
+    new MutationObserver(() => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (root.isConnected) enhance(root); }); }).observe(root, { childList: true, subtree: true });
+  }
+  return { enhance, watch };
+})();
 function workspace(stage, mainEl, sideKids, footKids) {
   const side = h('aside', { class: 'side' }, h('div', { class: 'side-scroll' }, sideKids), h('div', { class: 'side-foot' }, footKids));
+  HelpOnDemand.watch(side.firstChild);
   const ws = h('div', { class: 'ws' }, mainEl, side);
   stage.replaceChildren(ws);
   return ws;
@@ -3535,6 +3569,32 @@ const SEO = (() => {
         ['Serve un programma CAD?', 'No: basta il PDF della tavola e il browser.'],
       ],
     },
+    officepdf: {
+      slug: 'word-excel-in-pdf', title: 'Word ed Excel in PDF, gratis e senza caricare i file',
+      desc: 'Converti documenti Word (.docx), fogli Excel (.xlsx), testi, CSV e pagine HTML in PDF direttamente nel browser: titoli, tabelle, immagini e numeri di pagina al loro posto.',
+      h1: 'Word, Excel e testi in PDF', h2: 'Come trasformare un documento Word o un foglio Excel in PDF', rel: ["unisci", "pdfa", "comprimi"],
+      steps: ['Trascina uno o più file Word, Excel, testo o HTML.', 'Scegli il formato della pagina e, per Excel, l’orientamento.', 'Converti e scarica il PDF (o un PDF per file).'],
+      faq: [
+        ['Come trasformo un documento Word in PDF senza Word?', 'Trascina il file .docx nel riquadro e premi «Converti in PDF»: la conversione avviene nel browser, con caratteri dalle stesse misure di Arial, Times New Roman e Courier, così il testo occupa lo stesso spazio che nell’originale.'],
+        ['Un foglio Excel largo esce tagliato?', 'No: ogni foglio si adatta alla larghezza della pagina e, se serve, gira in orizzontale. Se le colonne sono davvero troppe, vengono divise in gruppi uno dopo l’altro, senza perdere dati.'],
+        ['Cosa viene mantenuto del documento Word?', 'Titoli, paragrafi con allineamento e rientri, grassetti e colori, elenchi puntati e numerati, tabelle con celle unite e sfondi, immagini, salti di pagina, intestazioni e piè di pagina con il numero di pagina.'],
+        ['Posso convertire i vecchi .doc e .xls?', 'Il browser non sa leggere quei formati: aprili con il programma che li ha creati e salvali come .docx o .xlsx (oppure direttamente in PDF).'],
+        ['I miei documenti vengono caricati su un server?', 'No: la conversione avviene sul tuo dispositivo e le pagine web convertite non scaricano nulla da internet.'],
+      ],
+    },
+    filigrana: {
+      slug: 'filigrana-pdf', title: 'Filigrana su PDF: scritta o logo su ogni pagina',
+      desc: 'Aggiungi una filigrana a un PDF: «COPIA», «BOZZA» o il tuo logo, in diagonale, al centro, in basso o ripetuta, su tutte le pagine o solo su alcune. Gratis e senza upload.',
+      h1: 'Filigrana PDF', h2: 'Come aggiungere una filigrana a un PDF', rel: ["numeri", "proteggi", "modifica"],
+      steps: ['Apri il PDF.', 'Scrivi il testo o scegli un’immagine, la disposizione e l’intensità: l’anteprima si aggiorna subito.', 'Applica e scarica il PDF con la filigrana.'],
+      faq: [
+        ['Come metto la scritta «COPIA» su tutte le pagine?', 'Apri il PDF, scrivi «COPIA» (o «BOZZA», «RISERVATO»…), scegli la disposizione in diagonale e premi «Applica la filigrana»: la scritta compare su ogni pagina, semitrasparente.'],
+        ['Posso usare il logo dello studio?', 'Sì: scegli «Immagine» e un file PNG (meglio con lo sfondo trasparente) o JPG; puoi metterlo al centro, in basso o ripeterlo su tutta la pagina.'],
+        ['Posso mettere la filigrana solo su alcune pagine?', 'Sì: tutte, solo le dispari, solo le pari oppure un intervallo come 1-3, 5.'],
+        ['Il testo del documento resta selezionabile?', 'Sì: la filigrana si aggiunge sopra la pagina senza trasformarla in immagine.'],
+        ['Il PDF viene caricato su un server?', 'No: la filigrana si applica nel browser, sul tuo dispositivo.'],
+      ],
+    },
   };
   const BY_SLUG = Object.fromEntries(Object.entries(P).map(([id, p]) => [p.slug, id]));
   const slug = id => (P[id] || {}).slug || id;
@@ -3629,6 +3689,11 @@ const TOOLS = {
   vettoriale: { title: 'Immagine in SVG (timbri e loghi)', short: 'In SVG', icon: 'vector', hue: '#C2410C', accept: IMG_ACCEPT + ',.pdf,application/pdf', multiple: false,
               dzText: 'Foto o scansione del timbro, del logo o della firma (JPG, PNG, HEIC…) o una pagina PDF',
               desc: 'Una foto o una scansione di un timbro, di un logo o di una firma diventa un disegno vettoriale pulito: colori, spessore e macchie si correggono. Scarica in SVG o in PNG senza sfondo, o salvalo tra i tuoi timbri.', start: (...a) => startVettoriale(...a) },
+  filigrana: { title: 'Filigrana', short: 'Filigrana', icon: 'type', hue: '#9F1239', accept: '.pdf,application/pdf', multiple: false,
+              desc: 'Aggiungi una scritta («COPIA», «BOZZA», «RISERVATO»…) o un logo su tutte le pagine o solo su alcune: in diagonale, al centro, in basso o ripetuta, con l’intensità che vuoi. Anteprima dal vivo.', start: (...a) => startFiligrana(...a) },
+  officepdf: { title: 'Word, Excel e testi in PDF', short: 'Office in PDF', icon: 'pdf', hue: '#B42318', accept: '.docx,.xlsx,.xlsm,.txt,.md,.markdown,.csv,.html,.htm,.doc,.xls,.odt,.ods,.rtf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/markdown,text/csv,text/html', multiple: true, anyFile: true, pdfIn: false, chain: false,
+              dzText: 'Word (.docx), Excel (.xlsx), testo, Markdown, CSV o pagine HTML — anche più file insieme',
+              desc: 'Documenti Word, fogli Excel, testi e pagine web diventano PDF sul tuo dispositivo: titoli, elenchi, tabelle, immagini, intestazioni e numeri di pagina al loro posto. I fogli si adattano alla larghezza della pagina.', start: (...a) => startOffice(...a) },
   // scorciatoie per mestiere: aprono uno strumento già impostato
   tavola:   { title: 'Stampa una tavola grande', short: 'Stampa tavola', icon: 'poster', hue: '#0E9F6E', accept: '.pdf,application/pdf', multiple: false, alias: 'impagina',
               desc: 'Una tavola A0, A1 o A2 stampata in scala reale su fogli A4 o A3, con le parti che si sovrappongono per incollarle, i crocini e il numero di ogni foglio. Oppure ridotta su un solo foglio.', start: (s, f, t) => startImpagina(s, f, t, { mode: 'poster' }) },
@@ -3638,7 +3703,7 @@ const TOOLS = {
 const SHORT_DESC = {
   estrattoconto: 'Movimenti del conto in Excel, con verifica dei saldi', f24: 'F24, CU, 730, Redditi, IRAP, IVA in Excel', visure: 'Visure camerali e catastali in dati', laboratorio: 'Referti in tabella, valori fuori intervallo evidenziati',
   qrsepa: 'Il QR per pagare con bonifico', conforme: 'Dicitura di conformità, poi la firma', misure: 'Distanze e superfici in scala', conta: 'Parole, caratteri, cartelle', tesi: 'Modello Word e controllo del PDF', vettoriale: 'Timbri e loghi in SVG e PNG trasparente',
-  tavola: 'A0/A1 su fogli A4 o A3',
+  tavola: 'A0/A1 su fogli A4 o A3', officepdf: 'Documenti Word, fogli Excel e testi in PDF', filigrana: 'Scritta o logo su tutte le pagine',
   unisci: 'Più PDF e immagini in un solo documento', immagini: 'Foto e scansioni in un PDF ordinato', dividi: 'Separa pagine o intervalli in più file',
   comprimi: 'Riduci il peso mantenendo la qualità', modifica: 'Riscrivi il testo, aggiungi immagini e firme', ruota: 'Raddrizza pagine singole o tutte',
   ordina: 'Riordina, aggiungi pagine bianche, elimina', numeri: 'Numerazione, intestazione e piè di pagina', ocr: 'Rendi ricercabili scansioni e foto',
@@ -3657,9 +3722,9 @@ const SHORT_DESC = {
 const FISCAL_GROUP = 'Fisco e firme digitali';
 const GROUPS = [
   ['Fai tutto tu', ['assistente']],
-  ['Modifica e proteggi', ['modifica', 'moduli', 'oscura', 'numeri', 'proteggi']],
+  ['Modifica e proteggi', ['modifica', 'moduli', 'oscura', 'numeri', 'filigrana', 'proteggi']],
   ['Pagine', ['ordina', 'ruota', 'unisci', 'dividi', 'impagina']],
-  ['Converti e ottimizza', ['word', 'excel', 'ocr', 'migliora', 'pdfa', 'verificapdfa', 'comprimi', 'immagini', 'immaginipdf', 'vettoriale']],
+  ['Converti e ottimizza', ['word', 'excel', 'officepdf', 'ocr', 'migliora', 'pdfa', 'verificapdfa', 'comprimi', 'immagini', 'immaginipdf', 'vettoriale']],
   ['Analizza e confronta', ['analisi', 'estrai', 'confronta', 'misure', 'conta']],
   [FISCAL_GROUP, ['fatture', 'firme', 'xbrl'], 'Fatture elettroniche, file firmati .p7m e bilanci XBRL'],
 ];
@@ -4414,7 +4479,7 @@ function acceptFiles(t, list) {
     // file giusto, strumento sbagliato: si propone quello adatto (un .p7m in OCR → Firme, una fattura XML → Fatture…)
     const other = [...list].filter(f => !files.includes(f));
     const kinds = other.map(f => typeof Flow !== 'undefined' ? Flow.kindOf(f) : 'other');
-    const dest = { fattura: 'fatture', xbrl: 'xbrl', p7m: 'firme', img: 'immagini', pdf: null, zip: 'fatture' }[kinds[0]];
+    const dest = { fattura: 'fatture', xbrl: 'xbrl', p7m: 'firme', img: 'immagini', pdf: null, zip: 'fatture', office: 'officepdf' }[kinds[0]];
     const same = kinds.every(k => k === kinds[0]);
     if (dest && same && TOOLS[dest] && dest !== CURRENT_TOOL && typeof toastActions === 'function')
       toastActions(`${plural(skipped, 'file non adatto', 'file non adatti')} a ${t.short}: ${kinds[0] === 'img' ? 'sono immagini' : 'si apr' + (skipped > 1 ? 'ono' : 'e') + ' con ' + TOOLS[dest].short}.`, [[`Apri in ${TOOLS[dest].short}`, () => handoff(dest, other)]], 9000);
@@ -4521,50 +4586,55 @@ const Recents = (() => {
 
 /* sinonimi e parole che un utente italiano digita davvero */
 const CMD_SYNONYMS = {
-  estrattoconto: ['estratto conto', 'movimenti bancari', 'conto corrente in excel', 'riconciliazione', 'movimenti banca excel', 'lista movimenti'],
-  f24: ['f24', 'modello f24', 'codici tributo', 'cu', 'certificazione unica', '730', 'redditi pf', 'unico', 'irap', 'dichiarazione iva', 'quadri dichiarazione', 'righi dichiarazione'],
-  visure: ['visura camerale', 'visura catastale', 'catasto', 'rendita catastale', 'registro imprese', 'camera di commercio', 'valore imu', 'foglio particella'],
-  laboratorio: ['analisi del sangue', 'esami del sangue', 'referto', 'valori di laboratorio', 'emocromo', 'colesterolo', 'glicemia'],
-  qrsepa: ['qr code pagamento', 'qr bonifico', 'codice qr iban', 'epc qr', 'pagamento con qr', 'qr fattura'],
-  conforme: ['copia conforme', 'attestazione di conformità', 'conforme all\'originale', 'dichiarazione di conformità', 'pct', 'copia autentica'],
-  misure: ['misurare', 'scala', 'quote', 'distanza', 'superficie', 'area', 'metri quadri', 'planimetria', 'tavola cad'],
-  conta: ['contare parole', 'numero di parole', 'caratteri', 'battute', 'cartelle editoriali', 'conteggio caratteri', 'word count'],
-  tesi: ['tesi di laurea', 'frontespizio', 'formato tesi', 'modello tesi', 'margini tesi', 'tesina', 'elaborato finale'],
-  vettoriale: ['svg', 'vettorializzare', 'vettoriale', 'timbro', 'logo', 'png trasparente', 'togliere sfondo', 'scontornare', 'firma scansionata'],
-  tavola: ['stampa tavola', 'poster', 'a0 su a4', 'a1 su a3', 'stampa in scala', 'affianca fogli'],
-  unisci: ['unire', 'merge', 'combina', 'unisci pdf', 'metti insieme', 'accorpa documenti', 'unisci file'],
-  dividi: ['dividere', 'split', 'separa', 'spezza', 'estrai pagine', 'separa le pagine', 'crea pdf separati'],
-  comprimi: ['comprimere', 'riduci', 'ridurre peso', 'riduci dimensioni', 'alleggerisci', 'file troppo grande', 'limite allegati', 'ottimizza peso', 'size'],
-  modifica: ['modificare', 'editare', 'testo', 'riscrivere', 'cambiare testo', 'aggiungere testo', 'scrivere sul pdf', 'inserire firma', 'aggiungere immagine'],
-  ocr: ['riconoscere', 'riconoscimento caratteri', 'scansione', 'scansioni', 'scanner', 'foto a testo', 'immagine in testo', 'ricercabile', 'ocr pdf'],
-  excel: ['tabella', 'tabelle', 'foglio', 'xlsx', 'estrai tabella', 'converti tabella', 'esporta excel'],
-  word: ['docx', 'documento word', 'modificabile', 'converti in word', 'modificare in word'],
-  oscura: ['oscurare', 'redact', 'cancellare dati', 'nascondere', 'blackout', 'privacy', 'iban', 'codice fiscale', 'dati personali', 'anonimizzare', 'rimuovi dati sensibili'],
-  fatture: ['fattura', 'xml', 'p7m', 'fe', 'fattura elettronica', 'cassetto', 'fatturazione elettronica', 'leggere fattura'],
-  xbrl: ['bilancio', 'xbrl', 'nota integrativa', 'bilancio depositato'],
-  firme: ['verifica firma', 'p7m', 'firmato', 'cades', 'pades', 'verificare certificato', 'busta crittografica', 'aprire p7m', 'estrarre'],
-  pdfa: ['pdf/a', 'conservazione', 'pec', 'archiviazione', 'formato archivio'],
-  verificapdfa: ['controlla pdf/a', 'validare pdf/a', 'verifica conformità', 'controllo conformità pdfa'],
-  ruota: ['ruotare', 'raddrizzare', 'orientamento', 'gira', 'pagina capovolta', 'metti dritto'],
-  ordina: ['riordinare', 'organizza', 'pagine', 'sposta pagine', 'elimina pagina', 'duplica pagina', 'riordina pagine'],
-  numeri: ['numerazione', 'intestazione', 'piè di pagina', 'header', 'footer', 'numero pagina'],
-  proteggi: ['password', 'blocca', 'sblocca', 'cripta', 'proteggi pdf', 'togli password', 'rimuovi password', 'metti password', 'impedisci copia'],
-  migliora: ['nitidezza', 'scansione storta', 'deskew', 'pulisci', 'togli ombre', 'raddrizza foto', 'bianco e nero'],
-  immagini: ['foto in pdf', 'jpg in pdf', 'png in pdf', 'scansioni in pdf', 'crea pdf da immagini'],
-  immaginipdf: ['pdf in jpg', 'esporta immagini', 'estrai immagini', 'salva pagina come immagine'],
-  confronta: ['differenze', 'confronto', 'versioni', 'confronta documenti', 'trova modifiche'],
-  estrai: ['estrazione', 'dati', 'importi', 'codici', 'iban', 'partita iva', 'codice fiscale', 'estrai informazioni'],
-  analisi: ['indici', 'bilancio', 'flussi', 'valutazione', 'analisi aziendale', 'situazione economica', 'stato patrimoniale'],
-  moduli: ['compila', 'form', 'campi', 'compilabile', 'modulo pdf', 'compilare modulo'],
-  assistente: ['aiuto', 'pec', 'portali', 'guida', 'fai tu', 'come faccio', 'procedura', 'prepara per invio'],
-  impagina: ['libretto', 'a4', 'n-up', 'più pagine', 'due pagine per foglio', 'stampa fronte retro', 'adatta formato'],
+  filigrana: ['filigrana', 'watermark', 'scritta copia', 'bozza', 'riservato', 'timbro su tutte le pagine', 'logo su tutte le pagine', 'marchio', 'copia conforme scritta', 'scritta in diagonale', 'proteggere da copia scritta'],
+  officepdf: ['word in pdf', 'docx in pdf', 'excel in pdf', 'xlsx in pdf', 'foglio excel in pdf', 'documento in pdf', 'testo in pdf', 'html in pdf', 'pagina web in pdf', 'markdown in pdf', 'csv in pdf', 'stampare in pdf', 'office in pdf', 'docx', 'xlsx'],
+  estrattoconto: ['estratto conto', 'movimenti bancari', 'conto corrente in excel', 'riconciliazione', 'movimenti banca excel', 'lista movimenti', 'banca', 'conto corrente', 'movimenti', 'home banking', 'saldo'],
+  f24: ['f24', 'modello f24', 'codici tributo', 'cu', 'certificazione unica', '730', 'redditi pf', 'unico', 'irap', 'dichiarazione iva', 'quadri dichiarazione', 'righi dichiarazione', 'dichiarazione dei redditi', 'modello 730', 'tributi', 'versamenti', 'imposte'],
+  visure: ['visura camerale', 'visura catastale', 'catasto', 'rendita catastale', 'registro imprese', 'camera di commercio', 'valore imu', 'foglio particella', 'visura', 'catastale', 'camerale', 'immobile', 'rendita'],
+  laboratorio: ['analisi del sangue', 'esami del sangue', 'referto', 'valori di laboratorio', 'emocromo', 'colesterolo', 'glicemia', 'analisi', 'referti', 'valori sangue', 'esami clinici', 'andamento esami'],
+  qrsepa: ['qr code pagamento', 'qr bonifico', 'codice qr iban', 'epc qr', 'pagamento con qr', 'qr fattura', 'qr code', 'codice qr', 'bonifico', 'iban qr', 'pagare con qr'],
+  conforme: ['copia conforme', 'attestazione di conformità', 'conforme all\'originale', 'dichiarazione di conformità', 'pct', 'copia autentica', 'conformità', 'autentica', 'attestare', 'attestazione', 'copia uso legale'],
+  misure: ['misurare', 'scala', 'quote', 'distanza', 'superficie', 'area', 'metri quadri', 'planimetria', 'tavola cad', 'misurazione', 'metri', 'calcolare area', 'distanze', 'scala grafica'],
+  conta: ['contare parole', 'numero di parole', 'caratteri', 'battute', 'cartelle editoriali', 'conteggio caratteri', 'word count', 'conteggio', 'quante parole', 'quanti caratteri', 'lunghezza testo', 'battute spazi inclusi'],
+  tesi: ['tesi di laurea', 'frontespizio', 'formato tesi', 'modello tesi', 'margini tesi', 'tesina', 'elaborato finale', 'laurea', 'università', 'relatore', 'impaginare tesi', 'controllo tesi'],
+  vettoriale: ['svg', 'vettorializzare', 'vettoriale', 'timbro', 'logo', 'png trasparente', 'togliere sfondo', 'scontornare', 'firma scansionata', 'sfondo trasparente', 'scontornare logo', 'vettorizzare', 'trasformare in vettoriale', 'timbro digitale'],
+  tavola: ['stampa tavola', 'poster', 'a0 su a4', 'a1 su a3', 'stampa in scala', 'affianca fogli', 'stampare grande', 'tavola grande', 'plotter', 'a0', 'a1', 'tassellare', 'stampa su più fogli', 'più fogli'],
+  unisci: ['unire', 'merge', 'combina', 'unisci pdf', 'metti insieme', 'accorpa documenti', 'unisci file', 'accorpare', 'unico file', 'combinare', 'fondere', 'fusione', 'raggruppare', 'assemblare', 'allegare insieme', 'tanti file in uno', 'più file in uno', 'concatenare', 'attaccare', 'un solo pdf'],
+  dividi: ['dividere', 'split', 'separa', 'spezza', 'estrai pagine', 'separa le pagine', 'crea pdf separati', 'separare', 'estrarre pagina', 'spezzare', 'suddividere', 'frazionare', 'capitoli', 'parti', 'singole pagine', 'alcune pagine', 'salvare pagine', 'tagliare il pdf', 'dividere per'],
+  comprimi: ['comprimere', 'riduci', 'ridurre peso', 'riduci dimensioni', 'alleggerisci', 'file troppo grande', 'limite allegati', 'ottimizza peso', 'size', 'pesante', 'pesa troppo', 'compressione', 'dimensione file', 'megabyte', 'mb', 'alleggerire', 'allegato troppo grande', 'ridurre dimensione', 'invio email'],
+  modifica: ['modificare', 'editare', 'testo', 'riscrivere', 'cambiare testo', 'aggiungere testo', 'scrivere sul pdf', 'inserire firma', 'aggiungere immagine', 'correggere', 'errore nel testo', 'cambiare parola', 'sostituire parola', 'trova e sostituisci', 'editor', 'firma', 'firmare', 'logo', 'immagine nel pdf', 'evidenziare', 'sottolineare', 'annotare', 'note', 'cancellare testo', 'timbro sul pdf', 'scrivere'],
+  ocr: ['riconoscere', 'riconoscimento caratteri', 'scansione', 'scansioni', 'scanner', 'foto a testo', 'immagine in testo', 'ricercabile', 'ocr pdf', 'copiare testo', 'scansionato', 'testo selezionabile', 'leggere testo', 'trascrivere', 'testo da immagine', 'testo da foto', 'cercare nel pdf', 'rendere ricercabile', 'digitalizzare', 'convertire scansione'],
+  excel: ['tabella', 'tabelle', 'foglio', 'xlsx', 'estrai tabella', 'converti tabella', 'esporta excel', 'estrarre tabella', 'xls', 'foglio di calcolo', 'fogli di calcolo', 'csv', 'colonne', 'righe e colonne', 'dati in tabella'],
+  word: ['docx', 'documento word', 'modificabile', 'converti in word', 'modificare in word', 'doc', 'in word', 'editabile', 'convertire in documento', 'testo modificabile', 'word'],
+  oscura: ['oscurare', 'redact', 'cancellare dati', 'nascondere', 'blackout', 'privacy', 'iban', 'codice fiscale', 'dati personali', 'anonimizzare', 'rimuovi dati sensibili', 'censurare', 'censura', 'coprire', 'annerire', 'nascondere nomi', 'togliere dati', 'gdpr', 'dati sensibili', 'pubblicare atto', 'omissis'],
+  fatture: ['fattura', 'xml', 'p7m', 'fe', 'fattura elettronica', 'cassetto', 'fatturazione elettronica', 'leggere fattura', 'fatturapa', 'fattura pa', 'sdi', 'sistema di interscambio', 'fatture xml', 'stampare fattura', 'fattura leggibile', 'zip fatture', 'ricevute'],
+  xbrl: ['bilancio', 'xbrl', 'nota integrativa', 'bilancio depositato', 'bilancio xbrl', 'bilancio europeo', 'camera di commercio bilancio', 'bilancio in excel'],
+  firme: ['verifica firma', 'p7m', 'firmato', 'cades', 'pades', 'verificare certificato', 'busta crittografica', 'aprire p7m', 'estrarre', 'firma digitale', 'file firmato', 'verificare firma', 'estrarre pdf da p7m', '.p7m', 'certificato firma', 'firma valida'],
+  pdfa: ['pdf/a', 'conservazione', 'pec', 'archiviazione', 'formato archivio', 'processo telematico', 'deposito telematico', 'conservazione sostitutiva', 'pubblica amministrazione', 'pa', 'agenzia delle entrate', 'comunica', 'pdf a', 'pdfa', 'archivio', 'tribunale', 'deposito', 'formato pec'],
+  verificapdfa: ['controlla pdf/a', 'validare pdf/a', 'verifica conformità', 'controllo conformità pdfa', 'controllare pdf/a', 'verificare pdf/a', 'validazione pdf/a', 'conforme pdf/a', 'è pdf/a', 'verificare conformità', 'validatore', 'controllo pdf/a'],
+  ruota: ['ruotare', 'raddrizzare', 'orientamento', 'gira', 'pagina capovolta', 'metti dritto', 'girare', 'capovolgere', 'capovolta', 'rotazione', 'al contrario', 'sottosopra', 'orizzontale', 'verticale', 'storta pagina', '90 gradi', 'girata'],
+  ordina: ['riordinare', 'organizza', 'pagine', 'sposta pagine', 'elimina pagina', 'duplica pagina', 'riordina pagine', 'eliminare pagina', 'togliere pagina', 'pagina bianca', 'aggiungere pagina', 'cambiare ordine', 'spostare pagina', 'riordino', 'ordine pagine', 'cancellare pagina', 'rimuovere pagina', 'pagina vuota', 'inserire pagina', 'duplicare'],
+  numeri: ['numerazione', 'intestazione', 'piè di pagina', 'header', 'footer', 'numero pagina', 'numerare', 'numeri pagina', 'paginazione', 'intestazione e piè di pagina', 'data in fondo', 'titolo in alto'],
+  proteggi: ['password', 'blocca', 'sblocca', 'cripta', 'proteggi pdf', 'togli password', 'rimuovi password', 'metti password', 'impedisci copia', 'togliere password', 'rimuovere password', 'proteggere', 'sicurezza', 'cifrare', 'crittografare', 'bloccare', 'sbloccare', 'aprire pdf protetto', 'permessi', 'impedire stampa'],
+  migliora: ['nitidezza', 'scansione storta', 'deskew', 'pulisci', 'togli ombre', 'raddrizza foto', 'bianco e nero', 'schiarire', 'contrasto', 'pulire scansione', 'ombre', 'foto storta', 'raddrizzare documento', 'migliorare leggibilità', 'sbiadita', 'macchie'],
+  immagini: ['foto in pdf', 'jpg in pdf', 'png in pdf', 'scansioni in pdf', 'crea pdf da immagini', 'immagine in pdf', 'immagini in pdf', 'fotografie', 'heic', 'scatti', 'galleria', 'da foto a pdf', 'png', 'jpeg'],
+  immaginipdf: ['pdf in jpg', 'esporta immagini', 'estrai immagini', 'salva pagina come immagine', 'in immagini', 'pdf in png', 'come immagine', 'come png', 'come jpg', 'esportare pagine', 'convertire in foto', 'jpg'],
+  confronta: ['differenze', 'confronto', 'versioni', 'confronta documenti', 'trova modifiche', 'confrontare', 'differenza', 'paragonare', 'cosa è cambiato', 'modifiche tra', 'due versioni', 'vecchia e nuova versione', 'revisione'],
+  estrai: ['estrazione', 'dati', 'importi', 'codici', 'iban', 'partita iva', 'codice fiscale', 'estrai informazioni', 'estrarre dati', 'leggere dati', 'informazioni dal documento', 'campi dal documento'],
+  analisi: ['indici', 'bilancio', 'flussi', 'valutazione', 'analisi aziendale', 'situazione economica', 'stato patrimoniale', 'analisi di bilancio', 'indici di bilancio', 'redditività', 'liquidità', 'rating'],
+  moduli: ['compila', 'form', 'campi', 'compilabile', 'modulo pdf', 'compilare modulo', 'riempire', 'modulo', 'modulistica', 'domanda', 'campi da compilare', 'compilare', 'spuntare caselle'],
+  assistente: ['aiuto', 'pec', 'portali', 'guida', 'fai tu', 'come faccio', 'procedura', 'prepara per invio', 'non so', 'aiutami', 'consiglio', 'cosa fare', 'automatico'],
+  impagina: ['libretto', 'a4', 'n-up', 'più pagine', 'due pagine per foglio', 'stampa fronte retro', 'adatta formato', 'opuscolo', 'booklet', 'stampa a libretto', 'più pagine per foglio', 'ridimensionare pagine', 'formato pagina', 'margini'],
 };
 
 const Cmd = (() => {
   let open = false, el = null, items = [], idx = 0, q = '';
   let inputEl = null, statusEl = null, clearEl = null, returnFocus = null;
-  const STOP = new Set('a ad al alla alle allo ai agli all agli con da dal dalla dalle dei degli del della delle di e ed il lo la i gli le un uno una per tra fra in su sul sulla sulle negli nelle nei degli delle che come cosa fare fai voglio vorrei devo mi mio mia miei tue tuoi tuo file files documento documenti pdf strumento strumenti'.split(' '));
-  const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('it-IT').replace(/[^a-z0-9]+/g, ' ').trim();
+  const STOP = new Set('a ad al alla alle allo ai agli all agli con da dal dalla dalle dei degli del della delle di e ed il lo la i gli le un uno una per tra fra in su sul sulla sulle negli nelle nei degli delle che come cosa nel nello se due tre piu ogni questo questa quello quella non ho posso puo dove quando fare fai voglio vorrei devo mi mio mia miei tue tuoi tuo file files documento documenti pdf strumento strumenti'.split(' '));
+  const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('it-IT')
+    .replace(/\bpdf\s*[\/-]\s*a\b|\bpdf\s*a(?=\s*(?:[123]\s*[abu]?\b|$))/g, 'pdfa').replace(/[^a-z0-9]+/g, ' ').trim();
+  // radice delle parole italiane (leggera): «eliminare», «elimina», «eliminazione» → «elimin»; «separare», «separa» → «separ»
+  const stem = w => { if (w.length < 5) return w; const r = w.replace(/(azioni|azione|amento|imento|mente|ando|endo|ato|ata|ati|ate|ito|ita|iti|ite|uto|are|ere|ire|isci|isce|iamo|ione|ioni)$/, ''); const t = (r.length >= 4 ? r : w).replace(/[aeiou]$/, ''); return t.length >= 4 ? t : w; };
   const words = value => normalize(value).split(/\s+/).filter(x => x && !STOP.has(x));
   const oneEditAway = (a, b) => {
     if (Math.abs(a.length - b.length) > 1 || a === b) return false;
@@ -4615,31 +4685,40 @@ const Cmd = (() => {
     let n = 0; for (const w of parts) if (hay.split(' ').some(h2 => h2.startsWith(w) || (w.length >= 4 && oneEditAway(w, h2)))) n++;
     return parts.length && n === parts.length ? 20 + n * 6 : n ? 4 * n - (parts.length - n) * 6 : 0;
   };
+  let DF = null;
+  const rarity = st => {
+    if (!DF) { DF = new Map(); for (const id of Object.keys(TOOLS)) { const t = TOOLS[id]; for (const w of new Set(words(t.title + ' ' + (t.short || '') + ' ' + (CMD_SYNONYMS[id] || []).join(' ')).map(stem))) DF.set(w, (DF.get(w) || 0) + 1); } }
+    const n = DF.get(st) || 1; return n <= 1 ? 1 : n === 2 ? .85 : n <= 4 ? .65 : .45;
+  };
   const score = (id, query) => {
     if (id.startsWith('page:') || id.startsWith('recipe:')) return scoreExtra(id, query);
     const t = TOOLS[id]; if (!t) return 0;
     const title = normalize(t.title || ''), short = normalize(t.short || ''),
       desc = normalize((SHORT_DESC[id] || t.desc || '') + ' ' + id),
-      aliases = (CMD_SYNONYMS[id] || []).map(normalize);
-    const phrase = normalize(query);
+      aliases = (CMD_SYNONYMS[id] || []).map(x => words(x).join(' '));
+    const phrase = words(query).join(' ');
     const parts = words(query);
     const titleWords = new Set(words((t.title || '') + ' ' + (t.short || '') + ' ' + id));
     const aliasWords = new Set(aliases.flatMap(words));
     const descWords = new Set(words((SHORT_DESC[id] || t.desc || '') + ' ' + id));
     const fuzzyWords = [...titleWords, ...aliasWords];
+    const titleStems = new Set([...titleWords].map(stem)), aliasStems = new Set([...aliasWords].map(stem));
     let total = 0, matched = 0;
 
     for (const p of parts) {
-      let best = 0;
+      let best = 0; const ps = stem(p);
       if (titleWords.has(p)) best = 46;
       else if ([...titleWords].some(w => w.startsWith(p))) best = 32;
-      else if ([...titleWords].some(w => w.includes(p))) best = 22;
+      else if (titleStems.has(ps)) best = 30;
       else if (aliasWords.has(p)) best = 29;
+      else if (aliasStems.has(ps)) best = 25;
+      else if ([...titleWords].some(w => w.includes(p))) best = 22;
       else if ([...aliasWords].some(w => w.startsWith(p))) best = 21;
       else if (descWords.has(p)) best = 13;
       else if ([...descWords].some(w => w.startsWith(p))) best = 9;
       else if (p.length >= 4 && fuzzyWords.some(w => oneEditAway(p, w))) best = 5;
-      if (best) { total += best; matched++; }
+      // una parola presente in molti strumenti («pagine», «testo», «dati») dice poco su quale serve
+      if (best) { total += best * rarity(ps); matched++; }
     }
 
     let phraseBoost = 0;
@@ -4648,6 +4727,11 @@ const Cmd = (() => {
     else if (phrase.length >= 3 && desc.includes(phrase)) phraseBoost = 10;
     if (!matched && !phraseBoost) return 0;
     total += phraseBoost;
+    // direzione della conversione: «pdf in jpg» cerca un «PDF in …», «jpg in pdf» un «… in PDF» (le parole sono le stesse)
+    const raw = normalize(query);
+    const fromPdf = /\bpdf (?:in|a|to|come) [a-z]/.test(raw), toPdf = /[a-z] (?:in|a|to) pdf\b/.test(raw);
+    if (fromPdf && !toPdf) total += /^pdf in /i.test(t.title) ? 18 : / in pdf$/i.test(t.title) ? -18 : 0;      // e la direzione contraria pesa contro
+    else if (toPdf && !fromPdf) total += / in pdf$/i.test(t.title) ? 18 : /^pdf in /i.test(t.title) ? -18 : 0;
     total -= Math.max(0, parts.length - matched) * 13; // le ricerche composte possono mostrare più azioni pertinenti
     if (Favs.has(id)) total += 6;
     const ri = Recents.get().indexOf(id);
@@ -4846,7 +4930,9 @@ const Cmd = (() => {
     }
   });
 
-  return { show, close, toggle: show };
+  // classifica degli strumenti per una ricerca (la stessa dell'elenco): serve anche alla prova di precisione della ricerca
+  const rank = query => [...Object.keys(TOOLS)].map(id => ({ id, s: score(id, query) })).filter(x => x.s > 0).sort((a, b) => b.s - a.s || TOOLS[a.id].title.localeCompare(TOOLS[b.id].title, 'it')).map(x => x.id);
+  return { show, close, toggle: show, rank, score };
 })();
 
 function initApp() {
@@ -14486,7 +14572,7 @@ async function startRedact(stage, files, _tool, auto = null) {
       checkbox('Rimuovi i metadati del documento', st.meta, v => st.meta = v, 'Autore, titolo, software e date di creazione.'),
       checkbox('Verifica il risultato rileggendolo', st.verify, v => st.verify = v, 'Le pagine oscurate si rileggono come farebbe chiunque: se un dato oscurato si legge ancora, te lo dico.'),
       checkbox('Rapporto di oscuramento', st.report, v => st.report = v, 'Un PDF a parte con che cosa è stato tolto (categorie e pagine, mai i dati), le impronte del file prima e dopo e l’esito della verifica: per dimostrarlo.')),
-    h('div', { class: 'hint warn' }, 'Oscuramento definitivo: le pagine con aree oscurate vengono ricostruite come immagine, quindi il contenuto nascosto viene eliminato davvero e non solo coperto. Il resto del loro testo resta ricercabile; quello sotto le aree non esiste più.'),
+    h('div', { class: 'hint warn' }, 'Oscuramento definitivo: le pagine con aree oscurate diventano immagini, quindi ciò che sta sotto le aree sparisce davvero. Il resto del testo resta ricercabile.'),
   ], [runBtn]);
   changed();
   Flow.trackTool(() => JSON.stringify(boxes.map(b => b.map(x => [x.x, x.y, x.w, x.h, x.color]))), {
@@ -18954,9 +19040,9 @@ async function startEdit(stage, files) {
   const toolBtns = {};
   const modeBtn = (id, icn, label, title) => { const b = h('button', { class: 'rb lbl', title, onmousedown: keep, onclick: () => setMode(id), dataset: { mode: id } }, ic(icn, 17), h('span', {}, label)); toolBtns[id] = b; return b; };
   // carattere
-  const fontSel = h('select', { class: 'rsel font', title: 'Carattere', onchange: () => withSel(() => setRunProp({ f: fontSel.value }, true)) });
+  const fontSel = h('select', { class: 'rsel font', title: 'Carattere', 'aria-label': 'Carattere', onchange: () => withSel(() => setRunProp({ f: fontSel.value }, true)) });
   const SIZES = [6, 7, 8, 9, 10, 10.5, 11, 12, 14, 16, 18, 20, 22, 24, 28, 32, 36, 48, 60, 72];
-  const sizeIn = h('input', { class: 'rsel size', title: 'Dimensione', list: 'ed-sizes', inputmode: 'decimal', onchange: () => { const v = clamp(parseFloat(String(sizeIn.value).replace(',', '.')) || 12, 3, 300); withSel(() => setRunProp({ sz: v })); } });
+  const sizeIn = h('input', { class: 'rsel size', title: 'Dimensione in punti', 'aria-label': 'Dimensione del carattere in punti', list: 'ed-sizes', inputmode: 'decimal', onchange: () => { const v = clamp(parseFloat(String(sizeIn.value).replace(',', '.')) || 12, 3, 300); withSel(() => setRunProp({ sz: v })); } });
   const sizeList = h('datalist', { id: 'ed-sizes' }, SIZES.map(s => h('option', { value: String(s).replace('.', ',') })));
   const stepSize = d => withSel(() => mapRuns(r => { const cur = r.sz || 12; const i = SIZES.findIndex(s => s >= cur - 0.01); const n = d > 0 ? SIZES.find(s => s > cur + 0.01) || cur + 4 : [...SIZES].reverse().find(s => s < cur - 0.01) || Math.max(3, cur - 1); return { ...r, sz: n }; }));
   const tog = {};
@@ -18987,7 +19073,7 @@ async function startEdit(stage, files) {
   rib.append(
     group(null, undoBtn, redoBtn),
     group('Strumenti', modeBtn('edittext', 'textedit', 'Modifica testo', 'Modifica il testo del documento: clicca su un paragrafo, una cella o una riga (M)'), modeBtn('select', 'cursor', 'Seleziona', 'Seleziona, sposta e ridimensiona (V)'), modeBtn('text', 'type', 'Casella di testo', 'Aggiungi testo: clicca o trascina per una casella larga quanto vuoi (T)')),
-    group('Carattere', h('div', { class: 'rcol' }, h('div', { class: 'rg-row' }, fontSel, sizeIn, sizeList, rbtn('growfont', 'Aumenta dimensione', () => stepSize(1)), rbtn('shrinkfont', 'Riduci dimensione', () => stepSize(-1))),
+    group('Carattere', h('div', { class: 'rcol' }, h('div', { class: 'rg-row' }, fontSel, h('span', { class: 'rsel-w' }, sizeIn, h('span', { class: 'rsel-u', 'aria-hidden': 'true' }, 'pt')), sizeList, rbtn('growfont', 'Aumenta dimensione', () => stepSize(1)), rbtn('shrinkfont', 'Riduci dimensione', () => stepSize(-1))),
       h('div', { class: 'rg-row' }, togBtn('bold', 'b', 'Grassetto (Ctrl+B)'), togBtn('italic', 'i', 'Corsivo (Ctrl+I)'), togBtn('underline', 'u', 'Sottolineato (Ctrl+U)'), togBtn('strike', 's', 'Barrato'), vaBtn('sup', 'sup', 'Apice'), vaBtn('sub', 'sub', 'Pedice'), colorBtn, hlBtn, caseBtn, clearBtn))),
     group('Paragrafo', h('div', { class: 'rcol' }, h('div', { class: 'rg-row' }, listBtn('bullets', 'bullet', 'Elenco puntato'), listBtn('numbers', 'number', 'Elenco numerato'), rbtn('indentout', 'Riduci rientro', () => indent(-1)), rbtn('indentin', 'Aumenta rientro', () => indent(1)), spacingBtn),
       h('div', { class: 'rg-row' }, alignBtn('aleft', 'left', 'Allinea a sinistra'), alignBtn('acenter', 'center', 'Centra'), alignBtn('aright', 'right', 'Allinea a destra'), alignBtn('ajust', 'justify', 'Giustifica')))),
@@ -20099,7 +20185,7 @@ async function startEdit(stage, files) {
     if (it?.type === 'text') rbText();
     const pi = viewer.page - 1, pd = pageData.get(pi);
     const help = {
-      edittext: 'Passa sul documento: paragrafi, celle e righe si evidenziano. Clicca per scrivere: il paragrafo si modifica tutto insieme e va a capo da solo; nelle tabelle si modifica la singola cella. Per spostare più elementi insieme trascina un rettangolo su uno spazio vuoto, oppure Ctrl+clic su ognuno. Seleziona una o più parole per cambiarne solo lo stile o il colore.',
+      edittext: 'Clicca un paragrafo o una cella per riscriverlo: va a capo da solo. Seleziona alcune parole per cambiarne stile o colore. Per spostare più elementi, trascina un rettangolo su uno spazio vuoto o usa Ctrl+clic.',
       select: 'Clicca su un elemento per selezionarlo, trascinalo per spostarlo, usa il pallino per ridimensionarlo. Canc per eliminarlo.',
       text: 'Clicca dove vuoi scrivere, oppure trascina per creare una casella larga quanto vuoi (il testo va a capo da solo).',
       hl: 'Trascina sopra l’area da evidenziare.', rect: 'Trascina per disegnare un rettangolo.', ellipse: 'Trascina per disegnare un’ellisse.',
@@ -36035,6 +36121,7 @@ const Flow = (() => {
     if (/\.(p7m|tsd|m7m)$/.test(n)) return 'p7m';
     if (isImage(f)) return 'img';
     if (/\.zip$/.test(n)) return 'zip';
+    if (/\.(docx|xlsx|xlsm|md|markdown|csv|html?|txt)$/.test(n)) return 'office';
     return 'other';
   };
   /* fatture elettroniche: si riconoscono dal contenuto (XML, P7M, ZIP del cassetto fiscale) */
@@ -36243,6 +36330,18 @@ const Flow = (() => {
     wantPage = res.show; wantGen = GEN + 1;
     if (CURRENT_TOOL && takesPdf(CURRENT_TOOL)) handoff(CURRENT_TOOL, sessionFiles());
   }
+  function moreMenu() {
+    const v = cur(); let m;
+    const item = (icn, t, fn, cls = '') => h('button', { class: 'pm-a ' + cls, onclick: () => { m.close(); fn(); } }, ic(icn, 17), t);
+    m = modal([h('h3', { class: 'db-m-name' }, v.name),
+      h('p', { class: 'muted small', style: { margin: '2px 0 12px' } }, `${many() ? `Versione ${S.cur + 1} di ${S.versions.length} · ${v.label}` : 'Originale'}${v.pages ? ' · ' + plural(v.pages, 'pagina', 'pagine') : ''} · ${fmtSize(v.bytes.length)}`),
+      h('div', { class: 'pm-list' },
+        item('blank', 'Azioni sulla pagina (ruota, aggiungi, duplica, elimina)', () => pageMenu()),
+        many() ? item('clock', 'Versioni del documento', () => showHistory()) : null,
+        item('count', 'Conta parole e caratteri', () => { Later.all(); quickCount(cur().bytes, cur().name); }),
+        item('download', 'Scarica la versione attuale', downloadCurrent),
+        item('x', 'Chiudi il documento', async () => { if (await closeDoc()) { skipGuard = true; nav(''); } }, 'danger'))], { width: 440 });
+  }
   function pageMenu(anchor) {
     const N = cur().pages || 1;
     const inp = h('input', { class: 'input', type: 'number', min: 1, max: N, value: Math.min(curPage(), N), style: { width: '76px' } });
@@ -36277,8 +36376,10 @@ const Flow = (() => {
           h('button', { class: 'btn sm ghost', title: 'Azioni sulla pagina: ruota, pagina bianca, duplica, elimina', 'aria-label': 'Azioni sulla pagina', onclick: e => pageMenu(e.currentTarget) }, ic('blank', 15), h('span', { class: 'db-l' }, 'Pagina')),
           many() ? h('button', { class: 'btn sm ghost', title: 'Cronologia delle versioni', 'aria-label': 'Versioni', onclick: () => showHistory() }, ic('clock', 15), h('span', { class: 'db-l' }, 'Versioni')) : null,
           h('button', { class: 'btn sm ghost', title: 'Parole e caratteri del documento', 'aria-label': 'Conta parole e caratteri', onclick: () => { Later.all(); quickCount(cur().bytes, cur().name); } }, ic('count', 15), h('span', { class: 'db-l' }, 'Parole')),
-          h('button', { class: 'btn sm', title: 'Scarica la versione attuale', 'aria-label': 'Scarica', onclick: downloadCurrent }, ic('download', 15), h('span', { class: 'db-l' }, 'Scarica')),
-          h('button', { class: 'icon-btn db-x', title: 'Chiudi il documento', 'aria-label': 'Chiudi il documento', onclick: async () => { if (await closeDoc()) { skipGuard = true; nav(''); } } }, ic('x', 16))));
+          h('button', { class: 'btn sm db-dl', title: 'Scarica la versione attuale', 'aria-label': 'Scarica', onclick: downloadCurrent }, ic('download', 15), h('span', { class: 'db-l' }, 'Scarica')),
+          h('button', { class: 'icon-btn db-x', title: 'Chiudi il documento', 'aria-label': 'Chiudi il documento', onclick: async () => { if (await closeDoc()) { skipGuard = true; nav(''); } } }, ic('x', 16)),
+          // telefono: nome del file e azioni meno frequenti in un menu, così la barra sta su una riga e il documento ha più spazio
+          h('button', { class: 'icon-btn db-more', title: 'Documento: nome, pagine, versioni, chiudi', 'aria-label': 'Altre azioni sul documento', 'aria-haspopup': 'dialog', onclick: () => moreMenu() }, ic('more', 18))));
       requestAnimationFrame(() => { const on = tools.querySelector('.db-t.on'); if (on && tools.scrollWidth > tools.clientWidth) tools.scrollLeft = on.offsetLeft - tools.clientWidth / 2 + on.offsetWidth / 2; });
     };
     draw();

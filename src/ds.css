@@ -1587,3 +1587,47 @@ html:not([data-cloud="on"]) .cloud-btn{display:none !important}
 .pa-pg.warn figcaption{color:var(--warn)}
 .pa-pg figcaption b{color:var(--ink);font-weight:600}
 .pa-more{grid-column:1/-1;text-align:center}
+
+/* telefono, documento aperto: una sola barra sopra il documento (schede degli strumenti, Scarica, menu «⋯»).
+   L'intestazione dello strumento resta per i lettori di schermo (h1) ma non occupa spazio: lo strumento attivo è
+   già evidenziato nelle schede. Obiettivo misurato da un test: il documento occupa almeno il 65% dell'altezza. */
+.db-more{display:none}
+@media (max-width:640px){
+  .tool:has(.docbar) > .toolhead{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+  .tool:has(.docbar) > .toolhead button,.tool:has(.docbar) > .toolhead a,.tool:has(.docbar) > .toolhead .fam-tabs{display:none}
+  .docbar{display:flex;align-items:center;gap:var(--s-1);padding:4px var(--s-2);min-height:52px;flex-wrap:nowrap}
+  .docbar .db-doc{display:none}
+  .docbar .db-tools{flex:1;min-width:0;order:0;margin:0;padding:0;border:0}
+  .docbar .db-acts{flex:none;gap:2px;margin:0}
+  .docbar .db-acts > :not(.db-more):not(.db-dl){display:none}
+  .docbar .db-more{display:inline-grid;place-items:center}
+  .docbar .db-dl .db-l{display:none}
+  /* barra dell'app un poco più bassa mentre si lavora su un documento */
+  body:has(.tool .docbar) .topbar{height:48px}
+  .tool:has(.docbar) .v-bar{padding-block:4px}
+  .tool:has(.docbar) .v-scroll{padding-top:8px}
+  /* fascia del pulsante principale più bassa quando c'è un documento */
+  .tool:has(.docbar) .side-foot{padding-top:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px))}
+  .tool:has(.docbar) .side-foot .btn.big{min-height:48px}
+}
+.pm-list{display:grid;gap:var(--s-2)}.pm-list .pm-a{width:100%}
+/* finestra di ricerca: il campo attivo ha un segno di focus visibile (linea sotto l’intestazione) */
+.cmd-head:has(.cmd-input:focus-visible){box-shadow:inset 0 -2px 0 var(--focus)}
+
+/* Modifica: la dimensione del carattere dice la sua unità */
+.rsel-w{position:relative;display:inline-flex;align-items:center}
+.rsel-w .rsel.size{width:66px;padding-right:24px}
+.rsel-u{position:absolute;right:8px;font:500 12px/16px var(--font);color:var(--muted);pointer-events:none}
+
+/* aiuti a richiesta nei pannelli: «?» accanto al titolo della sezione */
+.sec .help-t{display:none}
+.sec.help-on .help-t{display:block}
+.sec-t:has(.help-btn){display:flex;align-items:center;gap:var(--s-2)}
+.help-btn{margin-left:auto;flex:none;width:24px;height:24px;display:inline-grid;place-items:center;border-radius:var(--r-full);border:1px solid var(--line-2);background:var(--surface);color:var(--muted);font:600 13px/1 var(--font);letter-spacing:0;text-transform:none;cursor:pointer}
+.help-btn:hover{color:var(--accent);border-color:var(--accent-line)}
+.help-btn[aria-expanded="true"]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-line)}
+.help-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+@media (pointer:coarse),(max-width:640px){.help-btn{width:44px;height:44px;margin-block:-10px;border-color:transparent;background:none}.help-btn::after{content:"";position:absolute}}
+/* Filigrana: l'anteprima della pagina */
+.fl-page{display:inline-block;padding:var(--s-3);border-radius:var(--r);background:var(--surface);box-shadow:var(--shadow);max-width:100%}
+.fl-page canvas{display:block;max-width:100%;height:auto;background:#fff}
