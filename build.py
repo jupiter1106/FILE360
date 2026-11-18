@@ -114,7 +114,9 @@ self.addEventListener('fetch', e => {
 def netlify():
     """dist/netlify/: la cartella da pubblicare su Netlify (index.html, intestazioni HTTP, cloud.json se c'è)"""
     import shutil
-    out = ROOT / 'dist' / 'netlify'; out.mkdir(parents=True, exist_ok=True)
+    out = ROOT / 'dist' / 'netlify'
+    if out.exists(): shutil.rmtree(out)   # (niente file rimasti da build precedenti)
+    out.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(ROOT / 'dist' / 'file360.html', out / 'index.html')
     # same-origin-allow-popups: la finestra di accesso di Google (e Dropbox, OneDrive) deve poter rispondere alla pagina
     (out / '_headers').write_text('/*\n  Cross-Origin-Opener-Policy: same-origin-allow-popups\n  Referrer-Policy: strict-origin-when-cross-origin\n'
