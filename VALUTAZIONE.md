@@ -301,3 +301,15 @@ Un passo è chiuso solo quando la misura passa **e** la suite completa resta ver
 - D3 (serve una prova con un lettore di schermo vero);
 - I3 (l'inglese è una scelta di mercato);
 - i criteri B, che per salire chiedono documenti reali.
+
+### Avanzamento
+
+| Passo | Stato | Misure | Criteri | Indice |
+|---|---|---|---|---|
+| 1. Fondamenta | chiuso | `git log` con i passi; build da una copia pulita del repository **identica byte per byte** (SHA-256 uguale); cartella Netlify ricreata da zero a ogni build | J3 0 → 4 (manca una copia remota: dipende da te) · J4 4 → 5 | |
+| 2. Sito vero | chiuso | **41 pagine** con contenuto, titolo, descrizione, indirizzo canonico e dati strutturati già nell'HTML (home, 37 strumenti, Informazioni, Privacy, Condizioni d'uso), leggibili anche con JavaScript spento · apertura **799 KB** (brotli), **1,53 MB** compresi i moduli scaricati subito dopo (prima: 5,08 MB) · **0 richieste** ad altri domini, OCR compreso · CSP senza `'unsafe-inline'` per gli script (25 script elencati per impronta), **0 violazioni** nel browser con OCR, Oscura, Word, Comprimi, Immagini · app installabile: pagine mai aperte e **OCR senza rete** dopo il primo uso | C2 3 → 5 · C3 3 → 5 · G2 2 → 4 · I1 1 → 4 · I2 1 → 5 · I4 3 → 4 | 3,68 → **3,98** |
+
+Note del passo 2, per onestà:
+- I1 arriva a 5 quando c'è l'indirizzo definitivo del sito (serve per la sitemap e per gli indirizzi canonici assoluti); I4 quando c'è un indirizzo per le segnalazioni. Entrambi si indicano in `site.json` (`{"url": "...", "contatto": "..."}`) e la build li usa.
+- A8 resta 2: la condivisione dal telefono (Web Share) c'era già e il voto la contava.
+- Difetti trovati e corretti strada facendo: 11 strumenti (estratto conto, F24, visure, esami, QR SEPA, copia conforme, misure, conta parole, tesi, SVG, tavola) sul sito avrebbero aperto la home invece dello strumento; i link del piè di pagina (privacy, condizioni, contatti) portavano a pagine inesistenti; la home dichiarava un contatore e spazi pubblicitari non attivi; il service worker non si sarebbe registrato con il codice in file separati.

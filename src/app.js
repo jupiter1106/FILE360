@@ -12,7 +12,9 @@ const LAZY_INLINE = {};
 function inlineLib(name) { return document.getElementById('lazy-' + name); }
 function inlineText(name) {
   return LAZY_INLINE[name] ||= (async () => {
-    const el = inlineLib(name); if (!el) return null;
+    const el = inlineLib(name);
+    // sito: i dati pesanti sono file a parte, scaricati la prima volta che servono (poi restano nella memoria del browser)
+    if (!el) { const u = window.OFFICINA_DATA && window.OFFICINA_DATA[name]; if (!u) return null; const r = await fetch(u); if (!r.ok) throw new Error('Impossibile scaricare un componente necessario: controlla la connessione e riprova.'); return r.text(); }
     const bin = atob(el.textContent.trim()), bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     if (typeof DecompressionStream !== 'undefined') return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
@@ -27,13 +29,18 @@ function inlineText(name) {
 const Later = {
   i: 0, list: null,
   _blocks() { return this.list ||= [...document.querySelectorAll('script[type="text/x-officina-later"]:not([data-lib])')]; },
-  _src(el) { if (!el.dataset.gz) return el.textContent; const bin = atob(el.textContent.trim()), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new TextDecoder().decode(pako.ungzip(u)); },
+  _src(el) {
+    // sito: il codice del blocco è un file a parte, già scaricato in anticipo (prefetch); se non è ancora arrivato si legge ora
+    if (el.dataset.src && !el.textContent) { const x = new XMLHttpRequest(); x.open('GET', el.dataset.src, false); x.send(); if (x.status !== 200) throw new Error('Impossibile scaricare un componente necessario: controlla la connessione e riprova.'); el.textContent = x.responseText; }
+    if (!el.dataset.gz) return el.textContent; const bin = atob(el.textContent.trim()), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new TextDecoder().decode(pako.ungzip(u)); },
   _run(el, strict = true) { const s = document.createElement('script'); s.textContent = (strict ? '"use strict";\n' : '') + this._src(el); document.head.append(s); s.remove(); el.remove(); },
   next() { const b = this._blocks(); if (this.i >= b.length) return false; this._run(b[this.i++]); return true; },
   all() { while (this.next()); },
   // i blocchi fino a quello che definisce «name» (l'ordine conta: i blocchi dopo possono usare quelli prima); il resto a breve
   need(name) { const b = this._blocks(); const k = name ? b.findIndex(el => (' ' + (el.dataset.defs || '') + ' ').includes(' ' + name + ' ')) : -1; if (k < 0) { if (name && !(name in globalThis)) this.all(); return; } /* non trovata nei blocchi né già definita: si esegue tutto */ while (this.i <= k && this.next()); const go = () => { if (this.next()) setTimeout(go, 0); }; setTimeout(go, 0); },
-  idle() { const step = () => { if (!this.next()) return; (window.requestIdleCallback || (f => setTimeout(f, 16)))(step, { timeout: 400 }); }; setTimeout(step, 50); },
+  // sito: scarica in sottofondo il codice dei blocchi (si esegue sempre e solo quando serve)
+  prefetch() { this._pre = Promise.all([...document.querySelectorAll('script[type="text/x-officina-later"][data-src]')].filter(el => !el.textContent).map(el => fetch(el.dataset.src).then(r => r.ok ? r.text() : null).then(t => { if (t && !el.textContent) el.textContent = t; }).catch(() => { }))); return this._pre; },
+  idle() { const step = () => { if (!this.next()) return; (window.requestIdleCallback || (f => setTimeout(f, 16)))(step, { timeout: 400 }); }; (this._pre || Promise.resolve()).then(() => setTimeout(step, 50)); },
 };
 
 /* ---------- pdf.js su richiesta ----------
@@ -3052,7 +3059,7 @@ const SEO = (() => {
       ['seal', 'Anche i formati del Fisco', 'Fatture elettroniche XML e P7M, bilanci XBRL, PDF/A per PEC e processo telematico: i file di tutti i giorni di chi lavora con la pubblica amministrazione.'],
     ],
     faq: [
-      ['file360 è davvero gratis?', 'Sì: tutti gli strumenti sono gratuiti e senza limiti di file o di utilizzo, senza registrazione. Il sito si sostiene con spazi pubblicitari e sponsor indicati come tali.'],
+      ['file360 è davvero gratis?', 'Sì: tutti gli strumenti sono gratuiti e senza limiti di file o di utilizzo, senza registrazione.'],
       ['I miei documenti vengono caricati su un server?', 'No. file360 elabora i file direttamente nel browser, senza inviarli a un server. Per questo puoi usarlo anche con documenti riservati.'],
       ['Serve registrarsi o installare qualcosa?', 'No. Basta aprire la pagina dal browser, su computer, tablet o telefono. Non servono account né programmi da installare.'],
       ['Quali browser sono supportati?', 'Le versioni recenti di Chrome, Edge, Firefox e Safari, su Windows, macOS, Linux, Android e iPhone.'],
@@ -3383,10 +3390,153 @@ const SEO = (() => {
         ['Funziona su pagine con sfondo scuro?', 'Sì: il colore del riquadro si adatta allo sfondo di ogni dato, oppure puoi sceglierlo tu, riquadro per riquadro.'],
       ],
     },
+    estrattoconto: {
+      slug: 'estratto-conto-in-excel', title: 'Estratto conto PDF in Excel, con verifica dei saldi',
+      desc: 'Trasforma gli estratti conto in PDF, anche scansioni, in un foglio Excel con data, valuta, descrizione, entrate, uscite e saldo. Gratis, senza upload su server.',
+      h1: 'Estratto conto in Excel', h2: 'Come portare i movimenti del conto corrente in Excel', rel: ["excel", "f24", "ocr"],
+      steps: ['Trascina uno o più estratti conto in PDF (anche scansioni o foto).', 'Controlla i movimenti letti e la verifica dei saldi.', 'Scarica il foglio Excel con tutti i movimenti.'],
+      faq: [
+        ['Come trasformo un estratto conto PDF in Excel?', 'Trascina il PDF nel riquadro: i movimenti vengono letti e messi in colonne (data, valuta, descrizione, entrate, uscite, saldo). Controlli la verifica dei saldi e scarichi il file Excel.'],
+        ['Come faccio a sapere che non manca nessun movimento?', 'Viene fatto un controllo automatico: saldo iniziale più movimenti deve dare il saldo finale indicato nell’estratto. Se i conti non tornano, lo vedi subito.'],
+        ['Posso unire gli estratti conto di più mesi?', 'Sì: trascinali insieme e ottieni un unico foglio con i movimenti di tutti i periodi, in ordine.'],
+        ['Funziona con gli estratti conto scansionati?', 'Sì: le scansioni e le foto vengono lette con il riconoscimento del testo (OCR), direttamente nel browser.'],
+        ['I miei dati bancari vengono inviati da qualche parte?', 'No: l’estratto conto viene letto nel tuo browser e non viene caricato su alcun server.'],
+      ],
+    },
+    f24: {
+      slug: 'f24-dichiarazioni-in-excel', title: 'F24, CU, 730 e Redditi in Excel: codici tributo e importi',
+      desc: 'Estrai codici tributo, righi e importi da F24, CU, 730, Redditi, IRAP e IVA in PDF, anche scansioni, in un foglio Excel con il riepilogo. Gratis e senza upload.',
+      h1: 'F24 e dichiarazioni in Excel', h2: 'Come portare F24 e dichiarazioni dei redditi in Excel', rel: ["estrattoconto", "excel", "fatture"],
+      steps: ['Trascina i modelli F24 o le dichiarazioni in PDF, anche tanti insieme.', 'Controlla i dati letti e la verifica del saldo.', 'Scarica il foglio Excel con il riepilogo per codice tributo.'],
+      faq: [
+        ['Come metto in Excel i dati di un F24?', 'Trascina l’F24 nel riquadro: sezioni (erario, INPS, regioni, IMU), codici tributo, anni di riferimento e importi finiscono in colonne, con il controllo del saldo del modello.'],
+        ['Quali modelli vengono letti?', 'F24 (sezioni erario, INPS, regioni e IMU), Certificazione Unica (CU), 730, Redditi, IRAP e dichiarazione IVA: righi, colonne e importi.'],
+        ['Posso elaborare gli F24 di tutti i clienti insieme?', 'Sì: trascina tanti file insieme e ottieni un unico foglio con un riepilogo per codice tributo.'],
+        ['Funziona con le quietanze scansionate?', 'Sì: le scansioni vengono lette con l’OCR nel browser. Controlla sempre gli importi segnalati come incerti.'],
+        ['I dati fiscali escono dal mio computer?', 'No: i documenti vengono letti nel browser e non vengono caricati su alcun server.'],
+      ],
+    },
+    visure: {
+      slug: 'visure-camerali-catastali-dati', title: 'Visure camerali e catastali: dati in Excel',
+      desc: 'Ricava dai PDF delle visure camerali denominazione, codice fiscale, REA, PEC, ATECO e amministratori; dalle catastali foglio, particella, rendita e valore IMU.',
+      h1: 'Visure camerali e catastali in dati', h2: 'Come ricavare i dati da una visura camerale o catastale', rel: ["excel", "estrattoconto", "ocr"],
+      steps: ['Trascina una o più visure in PDF (anche scansioni).', 'Controlla i dati riconosciuti.', 'Copia i dati o scaricali in Excel.'],
+      faq: [
+        ['Quali dati vengono letti da una visura camerale?', 'Denominazione, forma giuridica, codice fiscale e partita IVA, numero REA, PEC, sede, codice ATECO, capitale sociale e amministratori con le cariche.'],
+        ['E da una visura catastale?', 'Comune, foglio, particella e subalterno, categoria, classe, consistenza, rendita, intestati con le quote e il valore ai fini IMU calcolato dalla rendita.'],
+        ['Posso elaborare più visure insieme?', 'Sì: trascinale insieme e ottieni un foglio con una riga per ogni impresa o immobile.'],
+        ['Il valore IMU è quello da versare?', 'È la base imponibile calcolata dalla rendita con i coefficienti di legge: per l’imposta servono l’aliquota del Comune e la quota di possesso.'],
+        ['Le visure vengono caricate su un server?', 'No: vengono lette nel browser, sul tuo dispositivo.'],
+      ],
+    },
+    laboratorio: {
+      slug: 'esami-laboratorio-tabella', title: 'Esami del sangue in tabella: confronta i referti nel tempo',
+      desc: 'Metti in tabella i valori dei referti di laboratorio, con unità e intervalli di riferimento, e confronta più esami nel tempo. Nessun dato sanitario esce dal dispositivo.',
+      h1: 'Esami di laboratorio in tabella', h2: 'Come mettere in tabella e confrontare gli esami del sangue', rel: ["excel", "ocr", "oscura"],
+      steps: ['Trascina uno o più referti in PDF o in foto.', 'Controlla la tabella: i valori fuori intervallo sono evidenziati.', 'Scarica la tabella in Excel, con il confronto tra le date.'],
+      faq: [
+        ['Come confronto gli esami del sangue di date diverse?', 'Trascina insieme i referti: ogni esame diventa una riga e ogni data una colonna, così vedi come cambiano i valori nel tempo.'],
+        ['Quali valori vengono evidenziati?', 'Quelli fuori dall’intervallo di riferimento indicato nel referto stesso. Non è un parere medico: per l’interpretazione rivolgiti al tuo medico.'],
+        ['Posso usare la foto del referto?', 'Sì: le foto e le scansioni vengono lette con l’OCR nel browser.'],
+        ['I miei dati sanitari sono al sicuro?', 'Il referto non viene caricato su alcun server: viene letto nel browser, sul tuo dispositivo.'],
+        ['Posso fare la tabella per un familiare?', 'Sì, con qualsiasi referto di laboratorio in formato PDF o immagine.'],
+      ],
+    },
+    qrsepa: {
+      slug: 'qr-pagamento-sepa', title: 'QR di pagamento SEPA per bonifico, anche dalla fattura',
+      desc: 'Crea il codice QR per pagare con bonifico (standard EPC): con l’app della banca si compilano IBAN, beneficiario, importo e causale. Dalla fattura XML o a mano.',
+      h1: 'QR di pagamento SEPA', h2: 'Come creare un QR code per ricevere un bonifico', rel: ["fatture", "conforme", "numeri"],
+      steps: ['Trascina la fattura (XML, P7M, ZIP o PDF) oppure scrivi i dati a mano.', 'Controlla IBAN, beneficiario, importo e causale.', 'Scarica il QR in PNG o SVG, o stampalo sulla fattura.'],
+      faq: [
+        ['Che cos’è il QR di pagamento SEPA?', 'È un codice QR secondo lo standard europeo EPC per i bonifici: inquadrato con l’app di una banca che lo supporta, compila IBAN, beneficiario, importo e causale senza doverli scrivere.'],
+        ['Posso metterlo sulla fattura?', 'Sì: dalla fattura in PDF ottieni lo stesso PDF con il QR stampato nella posizione che scegli; dalla fattura elettronica XML i dati si compilano da soli.'],
+        ['Tutte le app bancarie lo leggono?', 'Molte app italiane ed europee lo leggono. Se la tua non lo fa, i dati del bonifico restano scritti accanto al codice.'],
+        ['L’IBAN viene controllato?', 'Sì: viene verificato il codice di controllo dell’IBAN prima di creare il QR, per evitare bonifici a un conto sbagliato.'],
+        ['Serve un account o un servizio a pagamento?', 'No: il QR si crea nel browser, gratis e senza registrazione.'],
+      ],
+    },
+    conforme: {
+      slug: 'copia-conforme-pdf', title: 'Copia conforme all’originale: dicitura sul PDF',
+      desc: 'Aggiungi al PDF la dicitura di conformità all’originale, con luogo, data, nome e impronta del file, in calce, su ogni pagina o su un foglio a parte. Gratis.',
+      h1: 'Copia conforme', h2: 'Come aggiungere l’attestazione di conformità a un PDF', rel: ["pdfa", "firme", "numeri"],
+      steps: ['Apri il PDF da dichiarare conforme.', 'Scegli il testo dell’attestazione, dove metterla e i tuoi dati.', 'Scarica il PDF e firmalo con il tuo dispositivo di firma digitale.'],
+      faq: [
+        ['Chi può usare la dicitura di conformità?', 'Avvocati, notai, pubblici ufficiali e professionisti che possono attestare la conformità di una copia all’originale: lo strumento prepara il documento, la responsabilità dell’attestazione resta di chi firma.'],
+        ['Dove viene messa l’attestazione?', 'In calce all’ultima pagina, su una pagina aggiunta in fondo, su ogni pagina (una riga breve su ciascuna e la dicitura completa sull’ultima) oppure in un documento separato che lascia il PDF intatto e ne cita nome e impronta.'],
+        ['A cosa serve l’impronta del file?', 'L’impronta (hash SHA-256) identifica in modo univoco il documento: chi lo riceve può verificare che sia proprio quello attestato.'],
+        ['La firma digitale si fa qui?', 'No: scarichi il PDF con l’attestazione e lo firmi con il tuo dispositivo o servizio di firma digitale.'],
+        ['Il PDF viene caricato su un server?', 'No: tutto avviene nel browser.'],
+      ],
+    },
+    misure: {
+      slug: 'misurare-pdf-in-scala', title: 'Misurare distanze e superfici su un PDF in scala',
+      desc: 'Misura distanze, percorsi, superfici e angoli su tavole e planimetrie in PDF: imposta la scala o tarala su una quota nota. Misure salvate nel PDF e in Excel.',
+      h1: 'Misure in scala sul PDF', h2: 'Come misurare una planimetria in PDF', rel: ["tavola", "modifica", "impagina"],
+      steps: ['Apri la tavola o la planimetria in PDF.', 'Imposta la scala (1:100, 1:50…) o tarala su una quota nota.', 'Misura distanze, superfici e angoli e salva le misure nel PDF o in Excel.'],
+      faq: [
+        ['Come misuro una superficie su una planimetria?', 'Imposta la scala, scegli la misura di superficie e fai clic sui vertici del perimetro: l’area viene calcolata in metri quadrati.'],
+        ['E se non conosco la scala?', 'Tarala su una quota nota: tracci un segmento di cui conosci la lunghezza reale (una porta, una quota scritta) e la scala si calcola da sola.'],
+        ['Le misure sono precise?', 'Sui PDF esportati dal CAD sì, perché le linee sono vettoriali. Sulle scansioni la precisione dipende dalla qualità e dalla deformazione della scansione.'],
+        ['Posso consegnare le misure?', 'Sì: restano disegnate nel PDF e puoi scaricarne l’elenco in Excel.'],
+        ['Serve un programma CAD?', 'No: basta il browser, anche su tablet.'],
+      ],
+    },
+    conta: {
+      slug: 'contare-parole-caratteri', title: 'Conta parole e caratteri di PDF e Word, con le cartelle',
+      desc: 'Conta parole, caratteri con e senza spazi, cartelle editoriali da 1.800 battute, frasi e paragrafi di PDF, Word e testi incollati. Gratis e senza upload.',
+      h1: 'Conta parole e caratteri', h2: 'Come contare le parole e i caratteri di un documento', rel: ["tesi", "word", "ocr"],
+      steps: ['Trascina PDF, Word o testi, oppure incolla il testo.', 'Leggi parole, caratteri, cartelle, frasi e tempo di lettura.', 'Guarda il conteggio pagina per pagina e copia i numeri.'],
+      faq: [
+        ['Quante battute ha una cartella editoriale?', 'La cartella editoriale standard è di 1.800 battute, spazi inclusi: il numero di cartelle viene calcolato così.'],
+        ['Gli spazi vengono contati?', 'Vengono mostrati entrambi i valori: caratteri spazi inclusi e caratteri senza spazi.'],
+        ['Posso contare le parole di un PDF scansionato?', 'Sì: le pagine scansionate e le foto vengono lette con l’OCR prima del conteggio.'],
+        ['Posso contare più file insieme?', 'Sì: ottieni il conteggio di ogni file e il totale.'],
+        ['Posso fissare un limite di caratteri?', 'Sì: imposti il limite e vedi subito quanto manca o quanto lo superi.'],
+      ],
+    },
+    tesi: {
+      slug: 'tesi-modello-controllo', title: 'Tesi di laurea: modello Word e controllo del PDF finale',
+      desc: 'Scarica il modello Word per la tesi (frontespizio, indice, margini, interlinea, numeri di pagina) e controlla il PDF finale: margini, carattere, pagine e PDF/A.',
+      h1: 'Tesi: modello e controllo', h2: 'Come impaginare la tesi e controllare il PDF da consegnare', rel: ["pdfa", "conta", "word"],
+      steps: ['Senza file: crea il modello Word con frontespizio, indice e capitoli già impostati.', 'Con il PDF finale: trascinalo per il controllo.', 'Correggi ciò che è segnalato e converti in PDF/A se richiesto.'],
+      faq: [
+        ['Cosa contiene il modello Word?', 'Frontespizio con i tuoi dati, indice automatico, capitoli con gli stili dei titoli, bibliografia (note a piè di pagina o autore-anno), margini, interlinea, carattere e numeri di pagina già impostati.'],
+        ['Cosa viene controllato nel PDF della tesi?', 'Margini, carattere e dimensione, interlinea, numero di pagine e di parole, e se il file è un PDF/A valido.'],
+        ['L’università chiede la tesi in PDF/A: come faccio?', 'Il controllo ti dice se il file è già PDF/A; se non lo è, con «PDF in PDF/A» lo converti e lo verifichi, nel browser.'],
+        ['Il testo della tesi viene inviato a qualcuno?', 'No: il PDF viene analizzato nel browser, sul tuo dispositivo.'],
+        ['Va bene per qualsiasi ateneo?', 'Scegli tra le impostazioni più diffuse per triennale, magistrale e dottorato; verifica sempre le indicazioni del tuo corso di laurea.'],
+      ],
+    },
+    vettoriale: {
+      slug: 'immagine-in-svg', title: 'Timbro o logo da foto a SVG vettoriale e PNG trasparente',
+      desc: 'Trasforma la foto di un timbro, di un logo o di una firma in un disegno vettoriale pulito: SVG o PNG senza sfondo, con colore e spessore regolabili. Gratis.',
+      h1: 'Immagine in SVG', h2: 'Come trasformare un timbro o un logo in SVG', rel: ["modifica", "immagini", "migliora"],
+      steps: ['Trascina la foto o la scansione del timbro, del logo o della firma.', 'Regola colori, spessore e pulizia delle macchie.', 'Scarica in SVG o in PNG trasparente, o salvalo tra i tuoi timbri.'],
+      faq: [
+        ['Come ottengo un timbro senza sfondo?', 'Fotografa il timbro su carta bianca e trascina la foto: lo sfondo viene tolto e ottieni un PNG trasparente o un SVG da mettere sui documenti.'],
+        ['Che differenza c’è tra SVG e PNG?', 'L’SVG è vettoriale: si ingrandisce senza perdere nitidezza ed è adatto a stampe e loghi. Il PNG è un’immagine a punti, comoda per incollarla ovunque.'],
+        ['Posso usarlo poi nei PDF?', 'Sì: salvato tra i tuoi timbri, lo inserisci con un clic in «Modifica PDF».'],
+        ['Funziona con i loghi a più colori?', 'Sì: scegli quanti colori tenere e vengono separati in zone pulite.'],
+        ['L’immagine viene caricata su un server?', 'No: viene elaborata nel browser.'],
+      ],
+    },
+    tavola: {
+      slug: 'stampare-tavola-grande-a4', title: 'Stampare una tavola A0 o A1 su fogli A4 o A3, in scala',
+      desc: 'Stampa una tavola A0, A1 o A2 in scala reale su fogli A4 o A3, con le parti sovrapposte per incollarli, i crocini e il numero di ogni foglio. Gratis e senza upload.',
+      h1: 'Stampa una tavola grande', h2: 'Come stampare un PDF grande su più fogli A4', rel: ["misure", "impagina", "dividi"],
+      steps: ['Apri la tavola in PDF.', 'Scegli il formato dei fogli (A4 o A3) e la sovrapposizione.', 'Scarica il PDF pronto da stampare al 100% e unisci i fogli seguendo i crocini.'],
+      faq: [
+        ['Come stampo una tavola A1 con una stampante A4?', 'Apri la tavola, scegli fogli A4: ottieni un PDF con tanti fogli quanti servono, ciascuno numerato, da stampare al 100% (senza «adatta alla pagina») e da unire.'],
+        ['La scala resta quella reale?', 'Sì: le misure sulla carta restano quelle della tavola. Stampa sempre al 100% delle dimensioni.'],
+        ['Come unisco i fogli?', 'Ogni foglio ha una parte che si sovrappone al vicino, con crocini e numero di riga e colonna: allinea i crocini e incolla.'],
+        ['Posso invece ridurla su un solo foglio?', 'Sì: puoi stampare l’intera tavola ridotta su un unico A4 o A3.'],
+        ['Serve un programma CAD?', 'No: basta il PDF della tavola e il browser.'],
+      ],
+    },
   };
   const BY_SLUG = Object.fromEntries(Object.entries(P).map(([id, p]) => [p.slug, id]));
   const slug = id => (P[id] || {}).slug || id;
-  const idFromSlug = s => BY_SLUG[s] || (P[s] ? s : '');
+  const idFromSlug = s => BY_SLUG[s] || (P[s] || (typeof TOOLS !== 'undefined' && TOOLS[s]) ? s : '');
   const meta = id => P[id] ? { title: P[id].title + ' · ' + NAME, desc: P[id].desc } : { title: HOME.title, desc: HOME.desc };
   return { NAME, HOME, P, slug, idFromSlug, meta };
 })();
@@ -3631,14 +3781,15 @@ function siteFoot() {
   if (!IS_SITE) return work ? h('footer', { class: 'site-foot' }, line, work) : line;
   const a = (href, t) => h('a', { href: new URL(href, SITE_BASE).pathname }, t);
   return h('footer', { class: 'site-foot' }, line, work,
-    h('nav', { class: 'site-links', 'aria-label': 'Informazioni' }, a('privacy/', 'Privacy e cookie'), a('termini/', 'Condizioni d’uso'), a('contatti/', 'Contatti'), a('contatti/#pubblicita', 'Pubblicità e sponsor'),
+    h('nav', { class: 'site-links', 'aria-label': 'Informazioni' }, a('informazioni/', 'Informazioni'), a('privacy/', 'Privacy'), a('termini/', 'Condizioni d’uso'), a('informazioni/#contatti', 'Contatti e segnalazioni'),
+      window.OFFICINA_ADS && window.OFFICINA_ADS.mode !== 'off' ? a('informazioni/#pubblicita', 'Pubblicità e sponsor') : null,
       typeof Ads !== 'undefined' && Ads.consentLink ? Ads.consentLink() : null));
 }
 function seoHome() {
   return h('section', { class: 'seo seo-home' },
     h('h2', { class: 'seo-why-t' }, 'Perché usare file360'),
     h('div', { class: 'seo-why' }, SEO.HOME.why.map(([icon, t, d]) => h('div', { class: 'why' }, h('span', { class: 'why-ic' }, ic(icon, 20)), h('h3', {}, t), h('p', {}, d)))),
-    h('div', { class: 'seo-faq' }, h('h2', {}, 'Domande frequenti'), faqList(SEO.HOME.faq.filter(q => q[2] !== 'site' || IS_SITE))));
+    h('div', { class: 'seo-faq' }, h('h2', {}, 'Domande frequenti'), faqList(SEO.HOME.faq.filter(q => q[2] !== 'site' || (IS_SITE && window.OFFICINA_COUNTER)))));
 }
 
 function buildRail() {
@@ -4760,7 +4911,9 @@ function initApp() {
   window.addEventListener('hashchange', navHandler);
   // sito installato come app: funziona anche senza rete (service worker) e apre i PDF scelti con «Apri con»
   if (window.OFFICINA_PWA && 'serviceWorker' in navigator && /^https:$|^http:$/.test(location.protocol)) {
-    addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => console.warn('app senza rete non disponibile', e)));
+    // (dalla radice del sito, anche se la pagina aperta è quella di uno strumento; subito se la pagina è già caricata)
+    const reg = () => navigator.serviceWorker.register(new URL('sw.js', SITE_BASE).href, { scope: new URL(SITE_BASE).pathname }).catch(e => console.warn('app senza rete non disponibile', e));
+    if (document.readyState === 'complete') reg(); else addEventListener('load', reg);
   }
   if ('launchQueue' in window) launchQueue.setConsumer(async p => {
     const files = (await Promise.all((p.files || []).map(fh => fh.getFile().catch(() => null)))).filter(Boolean); if (!files.length) return;
@@ -9021,7 +9174,11 @@ const TextStyle = (() => {
    ===================================================================== */
 
 /* ----------------------------- OCR --------------------------------- */
-const TESS_PATHS = IS_ARTIFACT || IS_SITE ? (() => {
+const TESS_PATHS = IS_SITE ? (() => {
+  // sito: motore e modelli di lingua pubblicati accanto alle pagine (nessuna richiesta ad altri domini)
+  const base = new URL('tess/', SITE_BASE).href;
+  return { workerPath: base + 'worker.min.js', corePath: base, langPath: base + 'lang' };
+})() : IS_ARTIFACT ? (() => {
   // web edition: engine and language models are published next to the page.
   // Language models are stored as base64 JSON; a tiny wrapper turns them back into bytes for the engine.
   const base = new URL('tess/', SITE_BASE).href;
@@ -37089,7 +37246,7 @@ const Cloud = (() => {
     refresh();
     if (!secure() || IS_ARTIFACT) return;
     try {
-      const r = await fetch(new URL('cloud.json', location.href), { cache: 'no-store', credentials: 'omit' });
+      const r = await fetch(new URL('cloud.json', IS_SITE ? SITE_BASE : location.href), { cache: 'no-store', credentials: 'omit' });
       if (r.ok && /json/.test(r.headers.get('content-type') || '')) { const j = await r.json(); const base = window.OFFICINA_CLOUD ||= {}; for (const id of Object.keys(P)) if (j?.[id]) base[id] = { ...(base[id] || {}), ...j[id] }; }
     } catch { }
     refresh();

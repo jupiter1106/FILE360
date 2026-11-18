@@ -226,4 +226,5 @@ const Intro = (() => {
 
 // la costruzione della home è un passo a sé, dopo l'esecuzione del programma: nessun blocco lungo all'avvio
 Intro.start();
+Later.prefetch();
 setTimeout(() => { initApp(); Later.idle(); setTimeout(() => { try { BgFlow.start(); } catch (e) { console.warn(e); } }, 700); }, 0);

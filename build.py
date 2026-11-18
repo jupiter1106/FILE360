@@ -96,53 +96,85 @@ def csp():
     return '; '.join(k + ' ' + ' '.join(v) for k, v in parts) + '; upgrade-insecure-requests'
 # service worker del sito: la pagina dalla memoria del dispositivo (aggiornata in sottofondo a ogni apertura con la rete),
 # il motore OCR e i modelli di lingua conservati dopo il primo uso. Nessuna richiesta con dati dell'utente passa di qui.
-SW = """const V = 'file360-__VER__', CORE = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
-self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });
-self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V && k !== 'file360-ocr').map(k => caches.delete(k)))).then(() => self.clients.claim())); });
+SW = """// file360: la pagina, il codice e, dopo il primo uso, il motore OCR restano sul dispositivo (funziona anche senza rete).
+// I file dell'utente non passano mai di qui: non vengono mai inviati né salvati.
+const V = 'file360-__VER__', OCR = 'file360-ocr', PRE = __PRE__;
+self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(PRE)).then(() => self.skipWaiting())); });
+self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V && k !== OCR).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
+const fromCache = (name, r) => caches.open(name).then(c => c.match(r).then(hit => hit || fetch(r).then(res => { if (res.ok) c.put(r, res.clone()); return res; })));
 self.addEventListener('fetch', e => {
   const r = e.request; if (r.method !== 'GET') return;
-  const u = new URL(r.url);
-  // motore OCR e modelli di lingua (CDN): una volta scaricati restano, così l'OCR funziona anche senza rete
-  if (u.hostname === 'cdn.jsdelivr.net') { e.respondWith(caches.open('file360-ocr').then(c => c.match(r).then(hit => hit || fetch(r).then(res => { if (res.ok) c.put(r, res.clone()); return res; })))); return; }
-  if (u.origin !== location.origin || u.pathname === '/cloud.json') return;
-  // la pagina: subito dalla memoria, aggiornata in sottofondo; senza memoria, dalla rete
-  if (r.mode === 'navigate' || CORE.includes(u.pathname)) {
-    e.respondWith(caches.open(V).then(c => c.match(r.mode === 'navigate' ? '/' : r).then(hit => { const net = fetch(r).then(res => { if (res.ok) c.put(r.mode === 'navigate' ? '/' : r, res.clone()); return res; }).catch(() => hit); return hit || net; })));
+  const u = new URL(r.url); if (u.origin !== location.origin || u.pathname === '/cloud.json') return;
+  if (u.pathname.startsWith('/tess/')) { e.respondWith(fromCache(OCR, r)); return; }            // motore OCR e lingue
+  if (u.pathname.startsWith('/assets/')) { e.respondWith(fromCache(V, r)); return; }           // codice con l'impronta nel nome
+  if (r.mode === 'navigate') {                                                                  // le pagine: dalla rete, altrimenti dalla memoria
+    e.respondWith(fetch(r).then(res => { if (res.ok) caches.open(V).then(c => c.put(u.pathname, res.clone())); return res; })
+      .catch(() => caches.open(V).then(c => c.match(u.pathname).then(hit => hit || c.match('/')))));
   }
 });
 """
+def site_csp(hashes):
+    """CSP del sito: script solo dal sito stesso o elencati per impronta (niente 'unsafe-inline'), connessioni solo verso
+    il sito stesso (e, se il cloud è configurato, le sue API). Lo stile scritto nella pagina resta ammesso (non esegue codice)."""
+    cloud = cloud_on()
+    g = ['https://accounts.google.com', 'https://apis.google.com', 'https://www.googleapis.com', 'https://content.googleapis.com', 'https://docs.google.com']
+    d = ['https://www.dropbox.com', 'https://api.dropboxapi.com', 'https://content.dropboxapi.com']
+    m = ['https://login.microsoftonline.com', 'https://graph.microsoft.com']
+    js = ["'self'", "'wasm-unsafe-eval'"] + [f"'sha256-{h}'" for h in sorted(set(hashes))] + (['https://accounts.google.com', 'https://apis.google.com'] if cloud else [])
+    con = ["'self'", 'blob:', 'data:'] + (g + d + m if cloud else [])
+    fr = (['https://accounts.google.com', 'https://docs.google.com', 'https://content.googleapis.com', 'https://www.dropbox.com', 'https://login.microsoftonline.com'] if cloud else ["'none'"])
+    parts = [("default-src", ["'self'"]), ("script-src", js), ("worker-src", ["'self'", 'blob:']), ("connect-src", con),
+             ("img-src", ["'self'", 'data:', 'blob:'] + (['https://*.googleusercontent.com'] if cloud else [])), ("font-src", ["'self'", 'data:']),
+             ("style-src", ["'self'", "'unsafe-inline'"]), ("media-src", ["'self'", 'blob:', 'data:']), ("manifest-src", ["'self'"]), ("frame-src", fr),
+             ("object-src", ["'none'"]), ("base-uri", ["'none'"]), ("form-action", ["'none'"]), ("frame-ancestors", ["'none'"])]
+    return '; '.join(k + ' ' + ' '.join(v) for k, v in parts) + '; upgrade-insecure-requests'
+def site_url():
+    import os, json
+    u = os.environ.get('FILE360_SITE_URL', '').strip()
+    if not u and (ROOT / 'site.json').exists(): u = json.loads((ROOT / 'site.json').read_text(encoding='utf-8')).get('url', '').strip()
+    return u.rstrip('/')
 def netlify():
-    """dist/netlify/: la cartella da pubblicare su Netlify (index.html, intestazioni HTTP, cloud.json se c'è)"""
-    import shutil
+    """dist/netlify/: la cartella da pubblicare su Netlify (trascinarla in «Deploys»): pagine, codice, motore OCR,
+    intestazioni HTTP, app installabile. Si ricava dal file unico (tools/site.py)."""
+    import shutil, json, hashlib
+    sys.path.insert(0, str(ROOT / 'tools')); import sitegen as Site
     out = ROOT / 'dist' / 'netlify'
     if out.exists(): shutil.rmtree(out)   # (niente file rimasti da build precedenti)
     out.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(ROOT / 'dist' / 'file360.html', out / 'index.html')
+    url = site_url()
+    r = Site.make_site(ROOT, (ROOT / 'dist' / 'file360.html').read_text(encoding='utf-8'), out, site_csp, url)
+    (out / 'icons').mkdir(exist_ok=True)
+    for f in (S / 'icons').glob('*.png'): shutil.copyfile(f, out / 'icons' / f.name)
+    manifest = {'name': 'file360 — strumenti PDF nel tuo browser', 'short_name': 'file360', 'lang': 'it', 'start_url': '/', 'scope': '/', 'display': 'standalone', 'id': '/',
+                'background_color': '#ffffff', 'theme_color': '#5B2EFF', 'description': 'Strumenti PDF che lavorano nel tuo browser: nessun file viene caricato su un server.',
+                'icons': [{'src': '/icons/icon-192.png', 'sizes': '192x192', 'type': 'image/png'}, {'src': '/icons/icon-512.png', 'sizes': '512x512', 'type': 'image/png'},
+                          {'src': '/icons/maskable-512.png', 'sizes': '512x512', 'type': 'image/png', 'purpose': 'maskable'}],
+                'file_handlers': [{'action': '/', 'accept': {'application/pdf': ['.pdf'], 'image/jpeg': ['.jpg', '.jpeg'], 'image/png': ['.png']}}],
+                'launch_handler': {'client_mode': 'focus-existing'}}
+    (out / 'manifest.webmanifest').write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding='utf-8')
+    if (ROOT / 'cloud.json').exists(): shutil.copyfile(ROOT / 'cloud.json', out / 'cloud.json')
+    else: (out / 'cloud.json').write_text('{}', encoding='utf-8')   # nessun cloud: risposta vuota (niente errore 404 nella console)
+    pg = Site.pages(out, r['html'], url)
+    cfg = json.loads((ROOT / 'site.json').read_text(encoding='utf-8')) if (ROOT / 'site.json').exists() else {}
+    if url: cfg['url'] = url
+    info = Site.info_pages(out, r['html'], cfg, cloud_on(), hashlib.sha256((out / 'index.html').read_bytes()).hexdigest()[:8])
+    if url:   # sitemap: anche le pagine informative
+        sm = out / 'sitemap.xml'; t = sm.read_text(encoding='utf-8')
+        sm.write_text(t.replace('</urlset>', ''.join(f'  <url><loc>{url}/{p}</loc></url>\n' for p in info) + '</urlset>'), encoding='utf-8')
+    (out / '_redirects').write_text('/contatti /informazioni/#contatti 301\n/contatti/ /informazioni/#contatti 301\n', encoding='utf-8')
+    if not cfg.get('contatto'): print('  nota: nessun indirizzo per le segnalazioni (site.json → "contatto")')
+    # service worker: si tengono subito pagine principali e codice; dati pesanti e motore OCR al primo uso
+    pre = ['/', '/informazioni/', '/privacy/', '/termini/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'] + ['/assets/' + n for n in sorted(r['assets']) if not n.startswith('lazy-') or n.startswith('lazy-pdfworker')]
+    ver = hashlib.sha256(''.join(sorted(r['assets'])).encode() + (out / 'index.html').read_bytes()).hexdigest()[:12]
+    (out / 'sw.js').write_text(SW.replace('__VER__', ver).replace('__PRE__', json.dumps(pre)), encoding='utf-8')
     # same-origin-allow-popups: la finestra di accesso di Google (e Dropbox, OneDrive) deve poter rispondere alla pagina
     (out / '_headers').write_text('/*\n  Cross-Origin-Opener-Policy: same-origin-allow-popups\n  Referrer-Policy: strict-origin-when-cross-origin\n'
                                   '  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY\n'
                                   '  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()\n'
-                                  f'  Content-Security-Policy: {csp()}\n/cloud.json\n  Cache-Control: no-cache\n'
-                                  '  Content-Type: application/json; charset=utf-8\n', encoding='utf-8')
-    # app installabile e utilizzabile senza rete: manifest (icone, «Apri con» per i PDF) e service worker (la pagina e, dopo il
-    # primo uso, il motore OCR restano sul dispositivo). I file dell'utente non passano mai dal service worker.
-    import json, hashlib
-    ver = hashlib.sha256((out / 'index.html').read_bytes()).hexdigest()[:12]
-    (out / 'icons').mkdir(exist_ok=True)
-    for f in (S / 'icons').glob('*.png'): shutil.copyfile(f, out / 'icons' / f.name)
-    manifest = {'name': 'file360 — strumenti PDF sul tuo dispositivo', 'short_name': 'file360', 'lang': 'it', 'start_url': '/', 'scope': '/', 'display': 'standalone',
-                'background_color': '#ffffff', 'theme_color': '#5B2EFF', 'description': 'Strumenti PDF che lavorano sul tuo dispositivo: nessun file esce dal computer.',
-                'icons': [{'src': 'icons/icon-192.png', 'sizes': '192x192', 'type': 'image/png'}, {'src': 'icons/icon-512.png', 'sizes': '512x512', 'type': 'image/png'},
-                          {'src': 'icons/maskable-512.png', 'sizes': '512x512', 'type': 'image/png', 'purpose': 'maskable'}],
-                'file_handlers': [{'action': '/', 'accept': {'application/pdf': ['.pdf'], 'image/jpeg': ['.jpg', '.jpeg'], 'image/png': ['.png']}}],
-                'launch_handler': {'client_mode': 'focus-existing'}}
-    (out / 'manifest.webmanifest').write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding='utf-8')
-    (out / 'sw.js').write_text(SW.replace('__VER__', ver), encoding='utf-8')
-    html = (out / 'index.html').read_text(encoding='utf-8')
-    html = html.replace('</head>', '<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#5B2EFF"><link rel="apple-touch-icon" href="icons/icon-192.png"><script>window.OFFICINA_PWA=1</script>\n</head>', 1)
-    (out / 'index.html').write_text(html, encoding='utf-8')
-    if (ROOT / 'cloud.json').exists(): shutil.copyfile(ROOT / 'cloud.json', out / 'cloud.json')
-    else: (out / 'cloud.json').write_text('{}', encoding='utf-8')   # nessun cloud: risposta vuota (niente errore 404 nella console)
+                                  f'  Content-Security-Policy: {r["csp"]}\n'
+                                  '/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n/tess/*\n  Cache-Control: public, max-age=2592000\n'
+                                  '/sw.js\n  Cache-Control: no-cache\n/cloud.json\n  Cache-Control: no-cache\n  Content-Type: application/json; charset=utf-8\n', encoding='utf-8')
+    print(f"  sito: {pg.get('pages', 0)} pagine, {len(r['assets'])} file di codice e dati, {r['hashes']} script con impronta" + ('' if url else ' (indirizzo del sito non indicato: niente sitemap, indirizzi relativi)'))
     return out
 if __name__ == '__main__':
     n = build(); print(f'dist/file360.html  {n/1e6:.2f} MB')

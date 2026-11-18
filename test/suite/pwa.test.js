@@ -26,6 +26,16 @@ const ok = (c, m) => { if (!c) throw new Error(m); };
     await page.locator('.tool .btn-run').last().click(); await page.waitForSelector('.scrim:not(.busy) .modal.res', { timeout: 60000 });
     await ctx.setOffline(false);
   });
+  await step('senza rete: la pagina di uno strumento mai aperta prima si apre lo stesso', async () => {
+    await ctx.setOffline(true); await page.goto(base + 'comprimere-pdf/'); await page.waitForSelector('.tool .dz-input', { state: 'attached', timeout: 20000 });
+    ok(/Comprimi/.test(await page.locator('h1').first().textContent()), 'strumento sbagliato'); await ctx.setOffline(false);
+  });
+  await step('OCR senza rete dopo il primo uso (motore e lingua tenuti dal sito installato)', async () => {
+    const read = async () => { await page.goto(base + 'modificare-pdf/'); await page.waitForSelector('.tool .dz-input', { state: 'attached' });
+      await page.locator('.tool .dz-input').first().setInputFiles([fx('scansione-firma.pdf')]); await page.waitForSelector('.ed-read.done', { timeout: 180000 }); };
+    await read();                                        // prima volta, con la rete: il motore OCR si scarica e resta
+    await ctx.setOffline(true); await read(); await ctx.setOffline(false);
+  });
   await step('nessun errore', async () => { ok(!errs.length, errs.slice(0, 3).join(' | ')); });
   await b.close(); srv.kill(); console.log(fail ? `\n${fail} FALLITI` : '\ntutti verdi'); process.exit(fail ? 1 : 0);
 })();
