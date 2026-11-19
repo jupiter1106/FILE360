@@ -1,14 +1,13 @@
 /* =====================================================================
    Rilevatore di testo AI (analisi e misure in RILEVATORE-AI.md)
-   Tre livelli, sempre separati e mai mescolati in un solo numero:
    1. prove certe: impronte dei programmi che gli assistenti AI usano per creare i file (python-docx, docx.js,
-      python-pptx, PptxGenJS, openpyxl, ReportLab…), nomi di assistenti nei metadati, residui di una chat
-      (Markdown, «Spero ti sia utile», «Fammi sapere…»), caratteri invisibili o anomali;
-   2. indizi di stile: i tratti tipici dei testi di Claude, contati ed evidenziati nel testo;
-   3. indice statistico: un modello lineare su misure di stile, addestrato su testi di Claude e su testi
-      scritti da persone (corpus PAISÀ, web italiano 2010), con la soglia scelta per tenere i falsi positivi
-      sotto l'1% su testi umani mai visti. È un indizio, non una prova: lo strumento lo dice sempre.
-   Nessun modello di intelligenza artificiale, nessuna richiesta esterna: tutto è calcolo locale.
+      python-pptx, PptxGenJS, openpyxl, ReportLab…), nomi di assistenti nei metadati, caratteri delle chat, testo nascosto;
+   2. prove forti: residui di una chat (Markdown, «Spero ti sia utile», «Fammi sapere…»);
+   3. stile: modello statistico (n-grammi, regressione logistica) addestrato su 883 testi di Claude (Haiku, Sonnet,
+      Opus) e oltre 40.000 testi umani scritti prima degli assistenti AI; soglia tarata per gruppo di testi umani.
+      È una valutazione, non una prova: lo strumento lo dice sempre.
+   Le prove e lo stile restano separati e non si mescolano in un solo numero.
+   Nessuna AI esterna, nessuna richiesta di rete: il modello è un insieme di pesi dentro la pagina, tutto è calcolo locale.
    ===================================================================== */
 const RilevaAI = (() => {
   /* ---------- testo: parole, frasi, paragrafi ---------- */
@@ -296,16 +295,93 @@ const RilevaAI = (() => {
     return { fonts: [...fonts], props };
   }
 
-  return { features, piatto, FEATS, prove, confronta, segni, leggiFile, datiIncolla, fontsDaCss, tagNascosti, GENERATORI, FONT_UI, sentences, paragraphs, words };
+  /* ---------- modello statistico dello stile ----------
+     Regressione logistica su n-grammi di caratteri (3-5) e di parole (1-2), addestrata con tools/rilevaai_modello.py
+     su testi di Claude (Haiku, Sonnet, Opus, anche «umanizzati» su richiesta) e su testi scritti da persone prima degli
+     assistenti AI (web, giornali, enciclopedie, temi e appunti di studenti). Le caratteristiche si calcolano qui e lo
+     stesso codice serve all'addestramento (tools/rilevaai_feat.js), così i punteggi coincidono. */
+  function normStile(t) {
+    return String(t || '').normalize('NFC')
+      .replace(/[‘’‚‛ʼ´`]/g, "'")
+      .replace(/[“”„‟«»‹›]/g, '"')
+      .replace(/[‐-―−]/g, '-')
+      .replace(/…/g, '...')
+      .replace(/^[ \t]*(?:[-*•●▪◦>#]+|\d{1,2}[.)])[ \t]+/gm, '')
+      .replace(/[*_#]{1,3}/g, '')
+      .replace(/([a-zà-ú])\.([A-ZÀ-Ú])/g, '$1. $2')
+      .replace(/[\s ​-‍⁠﻿]+/g, ' ')
+      .trim().toLowerCase().replace(/\d/g, '0');
+  }
+  const TOK = /[\p{L}\p{N}']+|[.,;:!?"()\-]/gu;
+  function featStile(text, bits = 20, nomi) {
+    const mask = (1 << bits) - 1, t = normStile(text), m = new Map();
+    const add = k => { let x = 0x811c9dc5; for (let i = 0; i < k.length; i++) { x ^= k.charCodeAt(i); x = Math.imul(x, 16777619); } const i = (x >>> 0) & mask; m.set(i, (m.get(i) || 0) + 1); if (nomi) nomi.set(i, k); };
+    const s = ' ' + t + ' ';
+    for (let n = 3; n <= 5; n++) for (let i = 0; i + n <= s.length; i++) add('c' + s.substr(i, n));
+    const w = t.match(TOK) || [];
+    for (let i = 0; i < w.length; i++) { add('w' + w[i]); if (i) add('b' + w[i - 1] + ' ' + w[i]); }
+    let q = 0;
+    for (const [k, v] of m) { const z = 1 + Math.log(v); m.set(k, z); q += z * z; }
+    q = Math.sqrt(q) || 1;
+    for (const [k, v] of m) m.set(k, v / q);
+    return m;
+  }
+  // Finestre di circa n parole tagliate a fine frase, con la posizione nel testo originale (per evidenziare i passaggi).
+  function finestreStile(text, n = 180) {
+    const src = String(text || ''); let c = '', map = [], sp = false;
+    for (let i = 0; i < src.length; i++) { const ch = src[i]; if (/\s/.test(ch)) { if (c.length && !sp) { c += ' '; map.push(i); sp = true; } } else { c += ch; map.push(i); sp = false; } }
+    if (c.endsWith(' ')) { c = c.slice(0, -1); map.pop(); }
+    const out = []; let a = -1, b = 0, cnt = 0;
+    const span = (x, y) => { while (x < y && c[x] === ' ') x++; while (y > x && c[y - 1] === ' ') y--; return [x, y]; };
+    const push = (x, y) => { [x, y] = span(x, y); if (y > x) out.push({ t: c.slice(x, y), a: map[x], b: map[y - 1] + 1, x, y }); };
+    for (const mt of c.matchAll(/[^.!?]+[.!?]+["')»”]*\s*|[^.!?]+$/g)) {
+      if (a < 0) a = mt.index; b = mt.index + mt[0].length; cnt += (mt[0].match(/\S+/g) || []).length;
+      if (cnt >= n) { push(a, b); a = -1; cnt = 0; }
+    }
+    if (a >= 0) {
+      const [x, y] = span(a, b);
+      if (y > x) { if (out.length && cnt < n / 2) { const L = out[out.length - 1]; out[out.length - 1] = { t: c.slice(L.x, y), a: L.a, b: map[y - 1] + 1, x: L.x, y }; } else push(a, b); }
+    }
+    return out;
+  }
+  let MOD = null, PESI = null;
+  function usaModello(m) { MOD = m; PESI = null; }
+  function pesi() {
+    if (PESI || !MOD) return PESI;
+    const dec = s => typeof atob === 'function' ? Uint8Array.from(atob(s), ch => ch.charCodeAt(0)) : new Uint8Array(Buffer.from(s, 'base64'));
+    const ix = dec(MOD.idx), pw = new Int8Array(dec(MOD.pesi).buffer); PESI = new Int8Array(1 << MOD.bits);
+    let p = 0, cur = 0;
+    for (let k = 0; k < pw.length; k++) { let v = 0, sh = 0, by; do { by = ix[p++]; v |= (by & 127) << sh; sh += 7; } while (by & 128); cur += v; PESI[cur] = pw[k]; }
+    return PESI;
+  }
+  const punto = t => { const W = pesi(); let s = 0; for (const [i, v] of featStile(t, MOD.bits)) s += W[i] * v; return MOD.b + MOD.scala * s; };
+  const MIN_PAROLE = 80;
+  // Esito: punteggio medio delle finestre, confronto con la soglia (≤1% di falsi allarmi in ogni gruppo di testi umani
+  // misurati), passaggi sopra la soglia dei testi brevi, posizione rispetto ai testi umani di taratura.
+  function stile(text) {
+    if (!MOD) return null;
+    const nParole = (String(text || '').match(/\S+/g) || []).length;
+    if (nParole < MIN_PAROLE) return { breve: true, parole: nParole, min: MIN_PAROLE };
+    const F = finestreStile(text).map(f => ({ ...f, s: punto(f.t) }));
+    const score = F.reduce((x, f) => x + f.s, 0) / F.length, soglia = F.length > 1 ? MOD.soglia : MOD.soglia_breve;
+    const sopra = MOD.umani.filter(u => u < score).length / MOD.umani.length;
+    // passaggi: con il testo sopra la soglia, quelli sopra la soglia dei testi brevi; altrimenti solo quelli sopra una soglia
+    // molto più severa (6 passaggi umani su 88.705 misurati): un paragrafo di Claude dentro un testo umano
+    const ai = score > soglia, P = F.map(f => ({ a: f.a, b: f.b, s: f.s, ai: ai ? f.s > MOD.soglia_breve : f.s > (MOD.soglia_passaggio ?? Infinity) }));
+    return { score, soglia, ai, parte: !ai && F.length > 1 && P.some(p => p.ai), vicino: !ai && score > (MOD.soglia_dubbio ?? soglia - 1.5), parole: nParole, quota: sopra, passaggi: P };
+  }
+  return { normStile, featStile, finestreStile, usaModello, stile, modello: () => MOD, features, piatto, FEATS, prove, confronta, segni, leggiFile, datiIncolla, fontsDaCss, tagNascosti, GENERATORI, FONT_UI, sentences, paragraphs, words };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = RilevaAI;
 
 /* ---------- lo strumento ---------- */
 async function startRilevaAI(stage, files = []) {
   const R = RilevaAI;
+  if (!R.modello() && typeof Later !== 'undefined') Later.all();  // il modello dello stile sta in un blocco eseguito dopo
   const docs = []; let cur = 0, refs = [], pasteMeta = null;
-  const LIVELLO = d => d.prove.some(p => p.forza === 'certa') ? 'certa' : d.prove.some(p => p.forza === 'forte') ? 'forte' : d.prove.length ? 'indizio' : 'nessuna';
-  const analizza = d => { d.prove = R.prove(d.text, d); d.conf = refs.length ? R.confronta(d.text, refs) : []; return d; };
+  const LIVELLO = d => d.prove.some(p => p.forza === 'certa') ? 'certa' : d.prove.some(p => p.forza === 'forte') ? 'forte' : d.stile?.ai ? 'stile' : d.stile?.parte ? 'parte' : d.prove.length ? 'indizio' : d.stile?.vicino ? 'incerto' : 'nessuna';
+  const analizza = d => { d.prove = R.prove(d.text, d); d.stile = R.stile(d.text); d.conf = refs.length ? R.confronta(d.text, refs) : []; return d; };
+  const MIS = () => R.modello()?.misure || {};  // letto al momento: il modello può arrivare dopo l'avvio dello strumento
   // più file: ognuno si confronta anche con gli altri (passaggi in comune tra compiti)
   const incrocia = () => { if (docs.length < 2) return []; const out = []; for (let i = 0; i < docs.length; i++) { const altri = docs.map((d, j) => ({ nome: d.name, text: d.text, j })).filter(x => x.j !== i); R.confronta(docs[i].text, altri).forEach((c, k) => { if (c.parole >= 16) out.push({ i, j: altri[k].j, quota: c.quota, parole: c.parole }); }); } return out.sort((a, b) => b.quota - a.quota); };
   if (files.length) {
@@ -319,17 +395,27 @@ async function startRilevaAI(stage, files = []) {
   /* testo con i segni */
   const KIND = { chat: 'Residuo di chat', markdown: 'Markdown', invisibile: 'Carattere invisibile', omoglifo: 'Lettere di altri alfabeti', comune: 'Passaggio in comune' };
   const incrociati = i => docs.length < 2 ? [] : R.confronta(docs[i].text, docs.map((x, j) => ({ nome: x.name, text: x.text, j })).filter(x => x.j !== i)).filter(c => c.parole >= 8);
+  // passaggi dello stile (finestre di ~180 parole sopra la soglia) come sfondo, con i segni delle prove dentro
   function testoEl(d, extra = []) {
-    const t = d.text, M = R.segni(t, [...(d.conf || []), ...extra]), out = []; let at = 0;
-    for (const m of M) { if (m.a > at) out.push(t.slice(at, m.a)); const s = t.slice(m.a, m.b); out.push(h('mark', { class: 'ra-m ra-' + m.kind, title: KIND[m.kind] + (m.ref ? ` · ${m.ref}` : '') }, m.kind === 'invisibile' ? `⟨${[...s].map(c => 'U+' + c.codePointAt(0).toString(16).toUpperCase()).slice(0, 3).join(' ')}${[...s].length > 3 ? '…' : ''}⟩` : s)); at = m.b; }
-    if (at < t.length) out.push(t.slice(at));
+    const t = d.text, M = R.segni(t, [...(d.conf || []), ...extra]);
+    const piece = (a, b) => { const out = []; let at = a;
+      for (const m0 of M) { const m = { ...m0, a: Math.max(m0.a, a), b: Math.min(m0.b, b) }; if (m.b <= m.a || m.a < at) continue;
+        if (m.a > at) out.push(t.slice(at, m.a)); const s = t.slice(m.a, m.b);
+        out.push(h('mark', { class: 'ra-m ra-' + m.kind, title: KIND[m.kind] + (m.ref ? ` · ${m.ref}` : '') }, m.kind === 'invisibile' ? `⟨${[...s].map(c => 'U+' + c.codePointAt(0).toString(16).toUpperCase()).slice(0, 3).join(' ')}${[...s].length > 3 ? '…' : ''}⟩` : s)); at = m.b; }
+      if (at < b) out.push(t.slice(at, b)); return out; };
+    const P = (d.stile?.passaggi || []).filter(p => p.ai), out = []; let at = 0;
+    for (const p of P) { if (p.a > at) out.push(...piece(at, p.a)); out.push(h('span', { class: 'ra-pass', title: 'Passaggio con lo stile tipico di Claude (modello statistico)' }, piece(p.a, p.b))); at = p.b; }
+    if (at < t.length) out.push(...piece(at, t.length));
     return h('div', { class: 'ra-text', tabindex: '0', role: 'region', 'aria-label': 'Testo analizzato' }, out.length ? out : h('span', { class: 'muted' }, 'Nessun testo.'));
   }
   const VERD = {
     certa: ['bad', 'alert', 'Prove certe di un assistente AI', 'Il file porta impronte che una persona che scrive con Word, PowerPoint o Excel non lascia.'],
     forte: ['warn', 'alert', 'Tracce di copia da una chat AI', 'Nel testo restano elementi tipici delle risposte di un assistente.'],
+    stile: ['warn', 'alert', 'Stile molto simile a quello di Claude', 'Il modello statistico riconosce nel testo il modo di scrivere di Claude. È una valutazione, non una prova: usala per decidere cosa verificare, per esempio chiedendo all’autore di spiegare il testo.'],
+    parte: ['warn', 'alert', 'Alcuni passaggi scritti come scrive Claude', 'Il testo nel suo insieme resta sotto la soglia, ma i passaggi evidenziati hanno lo stile di Claude con un punteggio molto alto. Possono essere parti incollate da un assistente: verificale.'],
+    incerto: ['note', 'info', 'Nessuna prova; stile non decisivo', 'Il punteggio dello stile è nella fascia in cui cadono anche 5 testi umani su 100 (per esempio prosa letteraria o giornalistica molto curata): non indica un assistente AI.'],
     indizio: ['note', 'info', 'Solo indizi deboli', 'Ci sono elementi insoliti, ma da soli non indicano un assistente AI.'],
-    nessuna: ['ok', 'check', 'Nessuna prova trovata', 'Non significa che il testo sia scritto da una persona: un testo ricopiato o riscritto non lascia tracce. Per verificarlo, confrontalo con le risposte di Claude alla stessa consegna.'],
+    nessuna: ['ok', 'check', 'Nessuna prova trovata', 'Né prove nei file né stile da assistente AI. Un testo riscritto a mano con parole proprie può comunque sfuggire.'],
   };
   function esitoEl(d) {
     if (d.errore) return h('div', { class: 'ra-verd bad' }, h('b', {}, 'Il file non si legge'), h('div', {}, d.errore));
@@ -343,6 +429,18 @@ async function startRilevaAI(stage, files = []) {
     return h('div', { class: 'ra-list' }, d.prove.slice().sort((a, b) => ord[a.forza] - ord[b.forza]).map(p => h('div', { class: 'ra-item' },
       h('div', { class: 'ra-ih' }, h('span', { class: 'ra-chip ' + p.forza }, p.forza === 'certa' ? 'prova certa' : p.forza === 'forte' ? 'prova forte' : 'indizio'), h('b', {}, p.titolo)),
       h('div', { class: 'ra-id' }, p.dettaglio), p.esempi?.length ? h('ul', { class: 'ra-ex' }, p.esempi.map(x => h('li', {}, '«' + x + '»'))) : null)));
+  }
+  const pct = x => `${Math.round(x * 100)}%`;
+  function stileEl(d) {
+    const S = d.stile; if (!S || d.errore || (paste && !d.text.trim())) return null;
+    if (S.breve) return h('div', { class: 'ra-item' }, h('div', { class: 'ra-ih' }, h('span', { class: 'ra-chip' }, 'stile'), h('b', {}, 'Testo troppo breve per lo stile')), h('div', { class: 'ra-id' }, `Servono almeno ${S.min} parole (ora ${S.parole}). Le prove nei file e nel testo si controllano comunque.`));
+    const pos = Math.max(0, Math.min(1, (S.score - S.soglia + 4) / 8)), n = S.passaggi.length, nai = S.passaggi.filter(p => p.ai).length;
+    return h('div', { class: 'ra-item' },
+      h('div', { class: 'ra-ih' }, h('span', { class: 'ra-chip ' + (S.ai || S.parte ? 'forte' : S.vicino ? '' : 'ok') }, 'stile'), h('b', {}, S.ai ? 'Scritto come scrive Claude' : S.parte ? 'Passaggi scritti come scrive Claude' : S.vicino ? 'Sotto la soglia, fascia incerta' : 'Non scritto come scrive Claude')),
+      h('div', { class: 'ra-gauge', role: 'img', 'aria-label': `Punteggio di stile ${S.score.toFixed(1)}, soglia ${S.soglia.toFixed(1)}` }, h('i', { style: `left:${(pos * 100).toFixed(1)}%` }), h('u', { style: 'left:50%' })),
+      h('div', { class: 'ra-gl' }, h('span', {}, 'persona'), h('span', {}, 'soglia'), h('span', {}, 'Claude')),
+      h('div', { class: 'ra-id' }, (S.quota >= 0.995 ? 'Punteggio più alto di quello di tutti i testi umani di taratura.' : `Punteggio più alto di quello del ${pct(S.quota)} dei testi umani di taratura.`) + (n > 1 ? ` Passaggi con lo stile di Claude: ${nai} su ${n} (evidenziati nel testo).` : '')),
+      MIS().claude ? h('div', { class: 'ra-id ra-nota' }, `Nelle prove su testi mai visti: riconosciuti ${pct(MIS().claude)} dei testi di Claude (Haiku ${pct(MIS().haiku)}, Sonnet ${pct(MIS().sonnet)}, Opus ${pct(MIS().opus)}); falsi allarmi al massimo ${MIS().fp_max_txt} in ogni gruppo di testi umani.`) : null);
   }
   function metaEl(d) {
     const rows = Object.entries(d.props || {}).filter(([, v]) => v);
@@ -376,10 +474,11 @@ async function startRilevaAI(stage, files = []) {
         const L = LIVELLO(d), [, , t, sub] = VERD[L];
         B.push({ type: 'p', role: 'H2', runs: [{ t: d.name, b: true }], size: 12, fam: 'sans', before: 8, after: 2, keepNext: true }, P(`Esito: ${d.errore ? 'il file non si legge' : t}. ${d.errore ? '' : sub}`, { r: { b: L === 'certa' || L === 'forte' } }));
         for (const p of d.prove) B.push(P(`• [${p.forza}] ${p.titolo}: ${p.dettaglio}${p.esempi?.length ? ' Esempi: ' + p.esempi.map(x => '«' + x + '»').join('; ') : ''}`, { left: 10 }));
+        const S = d.stile; if (S && !d.errore) B.push(P(S.breve ? `• Stile: testo troppo breve (${S.parole} parole, ne servono ${S.min}).` : `• Stile: ${S.ai ? 'scritto come scrive Claude' : S.parte ? 'alcuni passaggi scritti come scrive Claude' : S.vicino ? 'sotto la soglia, fascia incerta, nessuna segnalazione' : 'non scritto come scrive Claude'} (punteggio ${S.score.toFixed(2)}, soglia ${S.soglia.toFixed(2)}; più alto del ${pct(S.quota)} dei testi umani di taratura; passaggi sopra la soglia: ${S.passaggi.filter(p => p.ai).length} su ${S.passaggi.length}).`, { left: 10 }));
         for (const c of d.conf || []) B.push(P(`• Confronto con «${c.nome}»: ${Math.round(c.quota * 100)}% delle parole in passaggi identici di almeno 8 parole (${plural(c.tratti.length, 'passaggio', 'passaggi')}).`, { left: 10 }));
       }
       const X = incrocia(); if (X.length) { B.push({ type: 'p', role: 'H2', runs: [{ t: 'Passaggi in comune tra i file', b: true }], size: 12, fam: 'sans', before: 10, after: 2 }); X.slice(0, 40).forEach(x => B.push(P(`• «${docs[x.i].name}» e «${docs[x.j].name}»: ${Math.round(x.quota * 100)}% (${x.parole} parole)`, { left: 10 }))); }
-      B.push({ type: 'space', h: 10 }, P('Metodo. Prove certe: impronte nei metadati dei programmi con cui gli assistenti AI creano i file, nomi di assistenti nei metadati, caratteri tipografici delle interfacce delle chat, testo nascosto. Prove forti: residui di una conversazione con un assistente e formattazione Markdown non interpretata. Il controllo non attribuisce percentuali di «scrittura AI» basate sullo stile: misurate su oltre 11.000 testi umani, non distinguono in modo affidabile i testi di un assistente da quelli di una persona che scrive bene.', { r: { i: true, color: '#555555' }, size: 9 }));
+      B.push({ type: 'space', h: 10 }, P(`Metodo. Prove certe: impronte nei metadati dei programmi con cui gli assistenti AI creano i file, nomi di assistenti nei metadati, caratteri tipografici delle interfacce delle chat, testo nascosto. Prove forti: residui di una conversazione con un assistente e formattazione Markdown non interpretata. Stile: modello statistico locale (sequenze di lettere e di parole) addestrato su testi di Claude (Haiku, Sonnet, Opus, anche scritti su richiesta «per non sembrare AI») e su testi scritti da persone prima degli assistenti AI; soglia scelta per non superare ${MIS().fp_max_txt || '1%'} di falsi allarmi in ogni gruppo di testi umani misurato${MIS().claude ? `; sui testi di prova mai visti ha riconosciuto il ${pct(MIS().claude)} dei testi di Claude` : ''}. Lo stile è una valutazione statistica, non una prova.`, { r: { i: true, color: '#555555' }, size: 9 }));
       const out = await FlowPdf.make({ size: FlowPdf.SIZES.a4, margins: { t: 56, r: 56, b: 56, l: 56 }, blocks: B, title: 'Rapporto di verifica AI', lang: 'it-IT', brand: false });
       showResult([{ name: 'Rapporto verifica AI.pdf', bytes: out.bytes, type: 'application/pdf', info: plural(docs.length, 'documento', 'documenti') }], { title: 'Rapporto pronto' });
     });
@@ -392,22 +491,22 @@ async function startRilevaAI(stage, files = []) {
   function draw() {
     const d = docs[cur], X = incrocia();
     const tb = h('div', { class: 'toolbar' }, h('div', { class: 'tb-title' }, paste ? 'Testo da verificare' : docs.length > 1 ? `${plural(docs.length, 'file', 'file')} · ${d.name}` : d.name));
-    const tabella = docs.length > 1 ? h('table', { class: 'ra-tab' }, h('thead', {}, h('tr', {}, h('th', {}, 'File'), h('th', {}, 'Esito'), h('th', {}, 'In comune con un altro file'))),
-      h('tbody', {}, docs.map((x, i) => { const L = LIVELLO(x), mx = X.filter(y => y.i === i)[0]; return h('tr', { class: i === cur ? 'on' : '', tabindex: '0', onclick: () => { cur = i; draw(); }, onkeydown: e => { if (e.key === 'Enter') { cur = i; draw(); } } }, h('td', {}, x.name), h('td', {}, h('span', { class: 'ra-chip ' + (x.errore ? 'certa' : L === 'nessuna' ? 'ok' : L) }, x.errore ? 'non leggibile' : VERD[L][2])), h('td', {}, mx ? `${Math.round(mx.quota * 100)}% con «${docs[mx.j].name}»` : '—')); }))) : null;
+    const tabella = docs.length > 1 ? h('table', { class: 'ra-tab' }, h('thead', {}, h('tr', {}, h('th', {}, 'File'), h('th', {}, 'Esito'), h('th', {}, 'Stile'), h('th', {}, 'In comune con un altro file'))),
+      h('tbody', {}, docs.map((x, i) => { const L = LIVELLO(x), mx = X.filter(y => y.i === i)[0]; return h('tr', { class: i === cur ? 'on' : '', tabindex: '0', onclick: () => { cur = i; draw(); }, onkeydown: e => { if (e.key === 'Enter') { cur = i; draw(); } } }, h('td', {}, x.name), h('td', {}, h('span', { class: 'ra-chip ' + (x.errore ? 'certa' : L === 'nessuna' ? 'ok' : L === 'stile' ? 'forte' : L) }, x.errore ? 'non leggibile' : VERD[L][2])), h('td', {}, !x.stile || x.errore ? '—' : x.stile.breve ? 'troppo breve' : x.stile.ai ? 'come Claude' : x.stile.parte ? 'passaggi come Claude' : x.stile.vicino ? 'non decisivo' : 'da persona'), h('td', {}, mx ? `${Math.round(mx.quota * 100)}% con «${docs[mx.j].name}»` : '—')); }))) : null;
     if (paste) {
       if (!ta) { ta = h('textarea', { class: 'input ra-ta', rows: 12, placeholder: 'Incolla o scrivi qui il testo da verificare. Incollando da Word o da una pagina web si controllano anche i caratteri tipografici.', 'aria-label': 'Testo da verificare',
         oninput: () => { d.text = ta.value; clearTimeout(ta._t); ta._t = setTimeout(() => { analizza(d); draw(); }, 250); },
         onpaste: e => { const html = e.clipboardData?.getData('text/html'); if (html) { pasteMeta = R.datiIncolla(html); d.fonts = pasteMeta.fonts; d.props = pasteMeta.props; } } }); }
-      main.replaceChildren(...[tb, ta, d.text.trim() && (d.prove.length || d.conf.length) ? h('div', { class: 'ra-sec' }, h('div', { class: 'ra-st' }, 'Dove sono le tracce'), testoEl(d)) : null].filter(Boolean));
+      main.replaceChildren(...[tb, ta, d.text.trim() && (d.prove.length || d.conf.length || d.stile?.passaggi?.some(p => p.ai)) ? h('div', { class: 'ra-sec' }, h('div', { class: 'ra-st' }, 'Dove sono le tracce'), testoEl(d)) : null].filter(Boolean));
     } else main.replaceChildren(...[tb, tabella, d.nota ? h('div', { class: 'hint' }, d.nota) : null, testoEl(d, incrociati(cur))].filter(Boolean));
     side.replaceChildren(...[
-      sec('Esito', esitoEl(d), proveEl(d)),
+      sec('Esito', esitoEl(d), stileEl(d), proveEl(d)),
       metaEl(d),
       sec('Confronta con altri testi', h('div', { class: 'muted small' }, 'Passaggi identici di almeno 8 parole con le risposte di Claude alla stessa consegna, con una fonte o con altri compiti.'), confEl(d),
         h('div', { class: 'ra-acts' }, h('button', { class: 'btn sm', onclick: aggiungiTesto }, ic('plus', 15), 'Incolla un testo'), h('button', { class: 'btn sm', onclick: aggiungiFile }, ic('upload', 15), 'Aggiungi file'), refs.length ? h('button', { class: 'btn sm ghost', onclick: () => { refs = []; docs.forEach(analizza); draw(); } }, 'Togli i confronti') : null)),
-      h('details', { class: 'adv' }, h('summary', {}, 'Perché non c’è una percentuale «scritto con l’AI»'),
-        h('p', { class: 'small' }, 'Abbiamo misurato lo stile di testi scritti da Claude e di oltre 11.000 testi scritti da persone (web italiano, articoli del Post e di Fanpage). Le parole e le formule ritenute «tipiche dell’AI» sono altrettanto frequenti nei testi umani; la differenza principale è l’assenza di errori, che hanno anche i buoni articoli di giornale.'),
-        h('p', { class: 'small' }, 'Un indice di stile tarato per accusare al massimo un innocente su cento riconosceva un solo testo di Claude su venti, e sugli articoli del Post avrebbe segnalato il 14% dei testi umani. Per questo lo strumento mostra solo ciò che si può dimostrare: impronte nei file, residui di chat, testo nascosto, passaggi identici.')),
+      h('details', { class: 'adv' }, h('summary', {}, 'Come funziona l’analisi dello stile'),
+        h('p', { class: 'small' }, 'Un modello statistico, calcolato su questo dispositivo, confronta le sequenze di lettere e di parole del testo con quelle di centinaia di testi scritti da Claude (Haiku, Sonnet e Opus, anche su richieste come «scrivilo in modo che non sembri fatto con l’AI») e di decine di migliaia di testi scritti da persone prima che esistessero gli assistenti AI: siti web, giornali, enciclopedie, temi e appunti di studenti.'),
+        h('p', { class: 'small' }, `La soglia è scelta per segnalare per errore al massimo ${MIS().fp_max_txt || 'un testo umano su cento'} in ogni gruppo di testi umani, anche quelli scritti meglio (articoli di giornale).` + (MIS().claude ? ` Su testi di prova mai visti dal modello ha riconosciuto il ${pct(MIS().claude)} dei testi di Claude.` : '') + ' Un testo riscritto a mano con parole proprie può sfuggire; un testo segnalato va verificato, non sanzionato sulla sola base del punteggio.')),
     ].filter(Boolean));
   }
   const ws = workspace(stage, main, [side], [h('button', { class: 'btn primary big btn-run', onclick: rapporto }, ic('download', 18), 'Scarica il rapporto'), h('div', { class: 'muted small ra-foot' }, 'Tutto avviene su questo dispositivo: i testi non vengono inviati a nessuno.')]);

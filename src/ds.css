@@ -1792,3 +1792,9 @@ html:not([data-cloud="on"]) .cloud-btn{display:none !important}
 .ra-dlg{display:flex;flex-direction:column;gap:var(--s-3)}
 .ra-dacts{display:flex;gap:var(--s-2);justify-content:flex-end}
 .ra-foot{text-align:center}
+.ra-pass{background:color-mix(in srgb,var(--warn) 14%,transparent);border-radius:var(--r-xs)}
+.ra-gauge{position:relative;height:8px;margin:6px 0 2px;border-radius:var(--r-full);background:linear-gradient(90deg,var(--ok-soft),var(--surface-2) 50%,var(--warn-soft))}
+.ra-gauge i{position:absolute;top:-4px;width:4px;height:16px;margin-left:-2px;border-radius:var(--r-xs);background:var(--ink)}
+.ra-gauge u{position:absolute;top:-2px;width:2px;height:12px;margin-left:-1px;background:var(--muted);text-decoration:none}
+.ra-gl{display:flex;justify-content:space-between;font:400 11px/14px var(--font);color:var(--muted)}
+.ra-nota{color:var(--muted)}

@@ -438,6 +438,15 @@ test('Testo scritto con l’AI?: un testo incollato da una chat mostra le prove 
   ok(/Tracce di copia da una chat AI/.test(await page.locator('.ra-verd').innerText()), 'nessuna traccia nel testo copiato da una chat');
   ok(await page.locator('.ra-text .ra-chat').count() >= 2 && await page.locator('.ra-text .ra-markdown').count() >= 1, 'le tracce non sono evidenziate nel testo');
 });
+test('Testo scritto con l’AI?: lo stile di Claude è riconosciuto e i passaggi evidenziati; un testo umano no', async b => {
+  const fs = require('fs'), path = require('path'); const F = f => fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'ai', f), 'utf8');
+  const { page } = await open(b, 'desk1280'); await page.evaluate(() => { location.hash = '#rilevaai'; }); await page.waitForSelector('.dz-nofile'); await page.click('.dz-nofile'); await page.waitForSelector('.ra-ta');
+  await page.fill('.ra-ta', F('claude-sonnet.txt')); await page.waitForTimeout(700);
+  ok(/Stile molto simile a quello di Claude/.test(await page.locator('.ra-verd').innerText()), 'testo di Claude non riconosciuto');
+  ok(await page.locator('.ra-text .ra-pass').count() >= 1 && /Nelle prove su testi mai visti/.test(await page.locator('.ra-side').innerText()), 'passaggi o misure non mostrati');
+  await page.fill('.ra-ta', F('costituzione.txt')); await page.waitForTimeout(700);
+  ok(/Nessuna prova trovata/.test(await page.locator('.ra-verd').innerText()) && await page.locator('.ra-text .ra-pass').count() === 0, 'testo umano segnalato');
+});
 test('Testo scritto con l’AI?: più file insieme, esito per ciascuno, passaggi in comune tra compiti, rapporto', async b => {
   const { page } = await open(b, 'desk1280'); await openTool(page, 'rilevaai', ['ai/compito-a.docx', 'ai/compito-b.docx', 'ai/umano.docx', 'ai/ai-docxjs.docx']);
   await page.waitForSelector('.ra-tab', { timeout: 30000 });

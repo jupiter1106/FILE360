@@ -40,6 +40,18 @@ let fail = 0; const step = (name, c, det) => { console.log(`${c ? '✓' : '✗'}
     for (const f of fl) { const r = await leggi(f, fs.readFileSync(path.join(process.env.CHATGPT, f))); if (r.prove.some(x => x[1] === 'certa')) ok++; for (const x of r.prove.filter(x => x[1] === 'certa')) tipi[x[2]] = (tipi[x[2]] || 0) + 1; }
     step(`raccolta reale (ChatGPT): file con una prova certa`, ok === fl.length, `${ok}/${fl.length} · ${JSON.stringify(tipi)}`);
   }
+  // modello statistico dello stile: testi di Claude (uno per modello, scritti su richieste «da studente»), testo umano
+  // (Costituzione, atto ufficiale), testo breve, tempo su un testo lungo
+  const rd = f => fs.readFileSync(path.join(D, f), 'utf8');
+  const st = await p.evaluate(T => { const o = {}; for (const [k, t] of Object.entries(T)) { const s = RilevaAI.stile(t); o[k] = s && { ai: s.ai, parte: s.parte, breve: !!s.breve, score: s.score, n: s.passaggi?.length, nai: s.passaggi?.filter(x => x.ai).length }; }
+    const lungo = Array(40).fill(T.costituzione).join('\n\n'), t0 = performance.now(); const L = RilevaAI.stile(lungo); o.ms = performance.now() - t0; o.lungo = L.passaggi.length; o.mod = !!RilevaAI.modello(); return o; },
+    { haiku: rd('claude-haiku.txt'), sonnet: rd('claude-sonnet.txt'), opus: rd('claude-opus.txt'), costituzione: rd('costituzione.txt'), breve: 'Ieri sono andata al mare con mia sorella, faceva freddo ma ci siamo divertite lo stesso.', misto: rd('costituzione.txt') + '\n\n' + rd('claude-sonnet.txt') });
+  step('modello dello stile caricato nel programma', st.mod);
+  for (const m of ['haiku', 'sonnet', 'opus']) step(`stile: testo di Claude ${m} «da studente» riconosciuto`, st[m]?.ai, st[m] && `punteggio ${st[m].score.toFixed(2)}`);
+  step('stile: testo umano (Costituzione) non segnalato', st.costituzione && !st.costituzione.ai && st.costituzione.nai === 0, st.costituzione && `punteggio ${st.costituzione.score.toFixed(2)}, ${st.costituzione.n} passaggi`);
+  step('stile: testo breve non valutato', st.breve?.breve);
+  step('stile: paragrafo di Claude dentro un testo umano: passaggio segnalato, testo non attribuito per intero', st.misto && !st.misto.ai && st.misto.parte && st.misto.nai === 1, st.misto && `${st.misto.nai} passaggi su ${st.misto.n}`);
+  step('stile: testo lungo (~29.000 parole) valutato in meno di 2 secondi', st.ms < 2000, `${Math.round(st.ms)} ms, ${st.lungo} passaggi`);
   step('nessun errore nella pagina', !errs.length, errs[0]);
   await b.close(); console.log(fail ? '\nFALLITI' : '\ntutti verdi'); process.exit(fail ? 1 : 0);
 })();
