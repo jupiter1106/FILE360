@@ -272,11 +272,13 @@ const Contratti = (() => {
     return P.map(x => `${x.tipo || 'pertinenza'}${x.descr.trim() ? ` (${x.descr.trim()})` : ''}${x.foglio.trim() || x.part.trim() ? `, identificata al Catasto Fabbricati al foglio ${val(x.foglio, 'foglio')}, particella ${val(x.part, 'particella')}${x.sub.trim() ? `, subalterno ${x.sub.trim()}` : ''}${x.categoria.trim() ? `, categoria ${x.categoria.trim().toUpperCase()}` : ''}${num(x.rendita) > 0 ? `, rendita euro ${eur(num(x.rendita))}` : ''}` : ''}`).join('; ');
   }
   // terreni del fondo rustico (Catasto Terreni): foglio, particella, superficie, qualità, redditi
-  const ha = v => { const n = num(v); return isFinite(n) && n > 0 ? n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) : ''; };
+  // ettari: la virgola è sempre il separatore dei decimali («1,5000» è un ettaro e mezzo); con il solo punto, il punto
+  const haNum = v => { const t = String(v ?? '').replace(/\s/g, ''); if (!t) return NaN; return +(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t); };
+  const ha = v => { const n = haNum(v); return isFinite(n) && n > 0 ? n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) : ''; };
   function terreni(st) {
     const T = st.fondo.terreni; if (!T.length) return PH('terreni: foglio, particella e superficie');
     const one = x => `foglio ${val(x.foglio, 'foglio')}, particella ${val(x.part, 'particella')}${ha(x.sup) ? `, superficie ettari ${ha(x.sup)}` : ''}${String(x.qualita || '').trim() ? `, qualità ${String(x.qualita).trim()}` : ''}${num(x.rd) > 0 ? `, reddito dominicale euro ${eur(num(x.rd))}` : ''}${num(x.ra) > 0 ? `, reddito agrario euro ${eur(num(x.ra))}` : ''}`;
-    const tot = T.reduce((a, x) => a + (num(x.sup) > 0 ? num(x.sup) : 0), 0);
+    const tot = T.reduce((a, x) => a + (haNum(x.sup) > 0 ? haNum(x.sup) : 0), 0);
     return T.map(one).join('; ') + (T.length > 1 && tot > 0 ? `; per una superficie complessiva di ettari ${ha(tot)}` : '');
   }
   const ARTICOLO = (key, title, paras, o = {}) => ({ key, title, paras: paras.filter(Boolean), ...o });
@@ -848,6 +850,7 @@ async function startContratto(stage, files = []) {
         row(F(`fondo.terreni.${i}.foglio`, 'Foglio', { req: true, w: 'third' }), F(`fondo.terreni.${i}.part`, 'Particella', { req: true, w: 'third' }), F(`fondo.terreni.${i}.sup`, 'Superficie (ettari)', { w: 'third', im: 'decimal', ph: '1,2500' })),
         row(F(`fondo.terreni.${i}.qualita`, 'Qualità', { w: 'third', ph: 'seminativo' }), F(`fondo.terreni.${i}.rd`, 'Reddito dominicale €', { w: 'third', im: 'decimal' }), F(`fondo.terreni.${i}.ra`, 'Reddito agrario €', { w: 'third', im: 'decimal' }))));
       out.push(sezione('imm', 'Terreni', [
+        row(btn('Compila dalla visura catastale (PDF)', () => pickVisura(), 'upload'), h('span', { class: 'ct-h' }, 'Terreni, superfici, redditi e proprietari si leggono dalla visura del Catasto Terreni, sul tuo dispositivo.')),
         row(F('imm.comune', 'Comune', { req: true, w: 'grow' }), F('imm.prov', 'Prov.', { up: true, w: 'xs', maxlength: 2 })),
         F('imm.indirizzo', 'Località (facoltativa)', { ph: 'contrada …' }),
         h('div', { class: 'ct-group' }, 'Catasto Terreni (dalla visura)'),
@@ -1053,8 +1056,31 @@ async function startContratto(stage, files = []) {
         const doc = await openPdf(file); if (!doc) throw withBusy.last || new Error('Impossibile aprire il file');
         const pages = await DocRead.pages(doc, { getWorker: async () => worker ||= await makeOcrWorker(new Set(['ita']), 300) });
         const v = CatastoRead.parse(pages), fab = (v.rows || []).filter(x => x.cat === 'Fabbricati');
+        // proprietari → locatori (solo se il locatore non è ancora compilato)
+        const aiLocatori = () => { let nOwn = 0; const vuoto = p => !p.nome.trim() && !p.cognome.trim() && !p.cf.trim() && !p.den.trim();
+        if ((v.owners || []).length && st.A.every(vuoto)) {
+          st.A = v.owners.slice(0, 4).map(o => { const p = C.persona(), cf = String(o.cf || '').toUpperCase(); if (/^\d{11}$/.test(cf)) { p.tipo = 'pg'; p.den = o.nome; p.cf = cf; } else { Object.assign(p, nomeDaVisura(o.nome, cf)); p.cf = cf; const dd = C.daCf(cf); if (dd) Object.assign(p, dd); } return p; });
+          nOwn = st.A.length;
+        }
+        return nOwn; };
+        // fondo rustico: i terreni del Catasto Terreni (superficie in ettari, qualità, redditi)
+        const cmn = /^(.*?)\s*\(([A-Z0-9]{2,4})\)/.exec(v.comune || '');
+        // una visura con soli terreni porta da sola al contratto di affitto di fondo rustico
+        if (st.tipo !== 'fondo' && !fab.length && (v.rows || []).some(x => x.cat === 'Terreni')) { st.tipo = 'fondo'; st.dep.mesi = 0; st.dur.anni = Math.max(+st.dur.anni || 0, 15); st.can.periodo = 'annuale'; }
+        if (st.tipo === 'fondo') {
+          const ter = (v.rows || []).filter(x => x.cat === 'Terreni');
+          if (!ter.length) { msg = ['Non ho trovato terreni del Catasto Terreni in questa visura.', 'error']; return; }
+          if (cmn) { st.imm.comune = title(cmn[1]); if (/^[A-Z]{2}$/.test(cmn[2])) st.imm.prov = cmn[2]; }
+          let n = 0;
+          for (const x of ter) if (!st.fondo.terreni.some(t => t.foglio === String(x.foglio) && t.part === String(x.part))) {
+            st.fondo.terreni.push({ foglio: String(x.foglio || ''), part: String(x.part || ''), sup: num(x.sup) > 0 ? (x.sup / 10000).toLocaleString('it-IT', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : '', qualita: String(x.qualita || '').toLowerCase(), rd: x.rdom != null ? C.eur(x.rdom) : '', ra: x.ragr != null ? C.eur(x.ragr) : '' }); n++;
+          }
+          const nO = aiLocatori();
+          msg = [`Dalla visura: ${plural(n, 'terreno', 'terreni')} con foglio, particella, superficie e redditi${nO ? `, ${plural(nO, 'proprietario', 'proprietari')} come ${r().Ap}` : ''}.`, ''];
+          open.add('imm'); saveLocal(); return;
+        }
         if (!fab.length) { msg = ['Non ho trovato immobili del Catasto Fabbricati: è una visura catastale?', 'error']; return; }
-        const main = fab.find(x => /^A/i.test(x.categoria || '')) || fab[0], I = st.imm;
+        const main = (st.tipo === 'box' ? fab.find(x => /^C\/?[67]$/i.test(x.categoria || '')) : st.tipo === 'commerciale' ? fab.find(x => /^(C\/?[13]|D|A\/?10)/i.test(x.categoria || '')) : null) || fab.find(x => /^A/i.test(x.categoria || '')) || fab[0], I = st.imm;
         Object.assign(I.cat, { foglio: String(main.foglio || ''), part: String(main.part || ''), sub: String(main.sub || ''), categoria: String(main.categoria || '').toUpperCase(), classe: String(main.classe || ''), rendita: main.rendita != null ? C.eur(main.rendita) : '', sez: String(main.sez || '') });
         // «ROMA (H501)»: il nome del Comune; la provincia solo se è una sigla di due lettere (non il codice catastale)
         const cm = /^(.*?)\s*\(([A-Z0-9]{2,4})\)/.exec(v.comune || ''); if (cm) { I.comune = title(cm[1]); if (/^[A-Z]{2}$/.test(cm[2])) I.prov = cm[2]; }
@@ -1068,12 +1094,7 @@ async function startContratto(stage, files = []) {
         const TIPO = { 'C/2': 'cantina', 'C/6': 'box auto', 'C/7': 'posto auto' };
         const pert = fab.filter(x => x !== main && TIPO[(x.categoria || '').toUpperCase()]);
         for (const x of pert) if (!I.pert.some(p => p.foglio === String(x.foglio) && p.part === String(x.part) && p.sub === String(x.sub || ''))) I.pert.push({ tipo: TIPO[x.categoria.toUpperCase()], descr: '', foglio: String(x.foglio || ''), part: String(x.part || ''), sub: String(x.sub || ''), categoria: x.categoria.toUpperCase(), rendita: x.rendita != null ? C.eur(x.rendita) : '' });
-        // proprietari → locatori (solo se il locatore non è ancora compilato)
-        let nOwn = 0; const vuoto = p => !p.nome.trim() && !p.cognome.trim() && !p.cf.trim() && !p.den.trim();
-        if ((v.owners || []).length && st.A.every(vuoto)) {
-          st.A = v.owners.slice(0, 4).map(o => { const p = C.persona(), cf = String(o.cf || '').toUpperCase(); if (/^\d{11}$/.test(cf)) { p.tipo = 'pg'; p.den = o.nome; p.cf = cf; } else { Object.assign(p, nomeDaVisura(o.nome, cf)); p.cf = cf; const dd = C.daCf(cf); if (dd) Object.assign(p, dd); } return p; });
-          nOwn = st.A.length;
-        }
+        const nOwn = aiLocatori();
         const others = fab.filter(x => x !== main && !TIPO[(x.categoria || '').toUpperCase()]).length;
         msg = [`Dalla visura: dati catastali (${main.categoria || 'categoria'}), indirizzo${pert.length ? `, ${plural(pert.length, 'pertinenza', 'pertinenze')}` : ''}${nOwn ? `, ${plural(nOwn, 'proprietario', 'proprietari')} come ${r().Ap}` : ''}.${others ? ` La visura contiene altre ${others} unità: controlla di aver preso quella giusta.` : ''} Controlla i dati prima di firmare.`, 'ok'];
         open.add('imm'); saveLocal();

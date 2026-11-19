@@ -414,6 +414,14 @@ test('Contratto: dalla visura catastale si compilano dati catastali, pertinenze 
   ok(r[0] === 'Roma' && r[1] === '123' && r[2] === '456' && r[3] === '7' && r[4] === 'A/2' && r[5] === 'Rossi' && r[6] === 'Mario' && r[7] >= 1, JSON.stringify(r));
   await page.evaluate(() => { try { localStorage.removeItem('officina-contratto'); } catch { } });
 });
+test('Contratto: una visura del Catasto Terreni porta all’affitto di fondo rustico con i terreni compilati', async b => {
+  const { page } = await open(b, 'desk1280'); await ctOpen(page, ['visura-terreni.pdf']);
+  await page.waitForFunction(() => document.querySelector('[data-path="fondo.terreni.2.part"] input')?.value, null, { timeout: 60000 });
+  const r = await page.evaluate(() => { const v = p => document.querySelector(`[data-path="${p}"] input`)?.value; return { tipo: document.querySelector('input[name="ct-tipo"]:checked')?.value, t: [0, 1, 2].map(i => [v(`fondo.terreni.${i}.foglio`), v(`fondo.terreni.${i}.part`), v(`fondo.terreni.${i}.sup`), v(`fondo.terreni.${i}.qualita`), v(`fondo.terreni.${i}.rd`)].join('/')), own: v('A.0.cognome'), txt: document.querySelector('.ct-paper').innerText }; });
+  ok(r.tipo === 'fondo' && r.t[0] === '12/34/1,5000/seminativo/10,50' && r.t[2] === '13/101/2,0540/vigneto/95,40' && r.own === 'Verdi', JSON.stringify(r).slice(0, 300));
+  ok(/superficie complessiva di ettari 4,304/.test(r.txt) && /AFFITTO DI FONDO RUSTICO/i.test(r.txt), 'testo del contratto senza i terreni: ' + (r.txt.match(/superficie complessiva[^;.]*/) || [r.txt.slice(0, 200)])[0]);
+  await page.evaluate(() => { try { localStorage.removeItem('officina-contratto'); } catch { } });
+});
 test('Contratto: si scaricano il PDF, il Word e il promemoria; con dati mancanti si avvisa e si può avere la bozza', async b => {
   const { page } = await open(b, 'desk1280'); await ctOpen(page);
   await page.locator('.tool .btn-run').click(); await page.waitForSelector('.modal .ct-dlg');

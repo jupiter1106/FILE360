@@ -207,6 +207,26 @@ def visura_soggetto():
     c.drawString(45, y, 'Totale immobili: 3 Rendita: euro 428,15 Vani: 5,5 Superficie: 35 m2')
     c.save()
 
+def visura_terreni():
+    # visura per soggetto, Catasto Terreni: tre particelle (dati inventati)
+    c = canvas.Canvas(str(OUT / 'visura-terreni.pdf'), pagesize=A4); W, H = A4
+    ter = [('12', '34', 'SEMINATIVO', '2', '1 ha 50 are 00 ca', '10,50', '5,20'), ('12', '35', 'ULIVETO', '1', '75 are 00 ca', '18,30', '9,10'), ('13', '101', 'VIGNETO', '1', '2 ha 05 are 40 ca', '95,40', '47,70')]
+    c.setFont('Helvetica', 8); c.drawString(40, H - 40, 'Direzione Provinciale di Prova'); c.drawString(380, H - 40, 'Data: 01/02/2026'); c.drawString(40, H - 52, 'Ufficio Provinciale - Territorio'); c.drawString(380, H - 52, 'Pag: 1 - Fine'); c.drawString(40, H - 64, 'Servizi Catastali')
+    y = H - 110; c.setFont('Helvetica-Bold', 12); c.drawString(170, y, 'Visura attuale per soggetto'); y -= 30
+    c.setFont('Helvetica', 9); c.drawString(40, y, 'Terreni siti nel comune di PAESE DI PROVA (Z999) provincia PROVA'); y -= 20
+    c.drawString(60, y, 'Soggetto richiesto: VERDI Anna (CF: ' + cf('VRDNNA70A41H501') + ')'); y -= 14; c.drawString(60, y, 'Totali immobili: di catasto terreni 3'); y -= 26
+    for n, (fo, pa, q, cl, sup, rd, ra) in enumerate(ter, 1):
+        c.setFont('Helvetica-Bold', 9); c.drawString(60, y, 'Immobile di catasto terreni - n.%d' % n); c.setFont('Helvetica', 8); c.drawString(310, y, 'Causali di aggiornamento ed annotazioni'); y -= 20
+        c.setFont('Helvetica-Bold', 9); c.drawString(45, y, 'Dati identificativi'); y -= 13; c.setFont('Helvetica', 9)
+        c.drawString(45, y, 'Comune di PAESE DI PROVA (Z999) (PR)'); c.drawString(310, y, 'Impianto meccanografico del 01/06/1985'); y -= 13
+        c.drawString(45, y, 'Foglio %s Particella %s' % (fo, pa)); y -= 18
+        c.setFont('Helvetica-Bold', 9); c.drawString(45, y, 'Dati di classamento'); y -= 13; c.setFont('Helvetica', 9)
+        c.drawString(45, y, 'Redditi: dominicale Euro %s agrario Euro %s' % (rd, ra)); y -= 13
+        c.drawString(45, y, 'Qualita: %s classe %s' % (q, cl)); y -= 13; c.drawString(45, y, 'Superficie: %s' % sup); y -= 18
+        c.drawString(45, y, "Intestazione attuale dell'immobile n. %d - totale righe intestati: 1" % n); y -= 14
+        c.drawString(45, y, '1. VERDI Anna'); y -= 12; c.drawString(45, y, '(CF ' + cf('VRDNNA70A41H501') + ')'); y -= 12; c.drawString(45, y, "Diritto di: Proprieta' per 1000/1000"); y -= 26
+    c.save()
+
 def referto(name, date, vals):
     c = canvas.Canvas(str(OUT / name), pagesize=A4); W, H = A4; y = H - 50
     c.setFont('Helvetica-Bold', 13); c.drawString(40, y, 'LABORATORIO ANALISI DI PROVA - REFERTO'); y -= 16
@@ -337,7 +357,7 @@ def moduli():
     im2.save(OUT / 'scansione-firma.pdf', 'PDF', resolution=150)
     (OUT / '_mod-1.png').unlink(); (OUT / '_mod-s.png').unlink()
 
-estratto(); f24(); redditi(); visura_camerale(); visura_catastale(); visura_soggetto(); visura_ri()
+estratto(); f24(); redditi(); visura_camerale(); visura_catastale(); visura_soggetto(); visura_terreni(); visura_ri()
 referto('referto-1.pdf', '10/01/2026', [('Emoglobina', '13,1', 'g/dL', '12,0 - 16,0'), ('Glucosio', '112', 'mg/dL', '70 - 100'), ('Colesterolo totale', '185', 'mg/dL', '< 200'), ('Creatinina', '0,6', 'mg/dL', '0,7 - 1,2'), ('Piastrine', '250', 'x10^3/uL', '150 - 400')])
 referto('referto-2.pdf', '12/04/2026', [('Emoglobina', '13,6', 'g/dL', '12,0 - 16,0'), ('Glucosio', '96', 'mg/dL', '70 - 100'), ('Colesterolo totale', '210', 'mg/dL', '< 200'), ('Creatinina', '0,8', 'mg/dL', '0,7 - 1,2'), ('Piastrine', '240', 'x10^3/uL', '150 - 400')])
 fatture_multiple(); cedolini(); tavola(); tesi(); timbro(); moduli()
