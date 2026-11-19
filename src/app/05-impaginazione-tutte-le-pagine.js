@@ -1409,7 +1409,7 @@ const RedactKit = (() => {
       ws.forEach((w, wi) => {
         if (wi && (!spaced || gaps[wi - 1] > med + lh * 0.3)) { text += ' '; map.push(null); }
         const t = w.text.trim(), b = w.bbox, L = t.length;
-        const run = { box: (k0, k1) => {
+        const run = { conf: w.confidence ?? 100, L, box: (k0, k1) => {
           const xa = b.x0 + (b.x1 - b.x0) * k0 / L, xb = b.x0 + (b.x1 - b.x0) * k1 / L, pad = (b.y1 - b.y0) * 0.12;
           const pts = [[xa, b.y0 - pad], [xb, b.y0 - pad], [xa, b.y1 + pad], [xb, b.y1 + pad]].map(([x, y]) => toPt(x, y));
           const xs = pts.map(q => q[0]), ys = pts.map(q => q[1]);
@@ -1429,7 +1429,9 @@ const RedactKit = (() => {
       const g = groups[groups.length - 1];
       if (g && g.run === m.run && g.k1 === m.k) g.k1 = m.k + 1; else groups.push({ run: m.run, k0: m.k, k1: m.k + 1 });
     }
-    return groups.map(g => g.run.box(g.k0, g.k1));
+    // parola letta dall'OCR: le posizioni delle lettere sono stimate; se il dato ne copre buona parte si copre la parola intera
+    // (altrimenti un pezzo, «1804,» o «35.», può restare leggibile ai bordi)
+    return groups.map(g => g.run.L && g.k1 - g.k0 >= g.run.L * 0.5 ? g.run.box(0, g.run.L) : g.run.box(g.k0, g.k1));
   }
   /* la ricerca: senza accenti, con spazi elastici fra le lettere (testi spaziati o spezzati in pezzi) */
   function queryRegex(q, { regex = false, cs = false } = {}) {
@@ -1479,7 +1481,7 @@ const RedactKit = (() => {
   /* le parole di un indice, con i loro riquadri (per sceglierle con un clic) */
   function wordsOf(idx) {
     const out = [], re = /[^\s]+/g; let m;
-    while ((m = re.exec(idx.text))) { const bx = boxesOf(idx, m.index, m.index + m[0].length); if (bx.length) out.push({ s: m.index, e: m.index + m[0].length, t: m[0], boxes: bx, line: idx.text.slice(0, m.index).split('\n').length - 1 }); }
+    while ((m = re.exec(idx.text))) { const bx = boxesOf(idx, m.index, m.index + m[0].length); if (bx.length) out.push({ s: m.index, e: m.index + m[0].length, t: m[0], boxes: bx, conf: idx.map[m.index]?.run?.conf ?? 100, line: idx.text.slice(0, m.index).split('\n').length - 1 }); }
     return out;
   }
   /* righe di caratteri in una foto (targhe, cartelli, didascalie): segni d'inchiostro di altezza simile, allineati e
@@ -1570,7 +1572,7 @@ const RedactKit = (() => {
 
 // modelli di Oscura: quali categorie si scelgono da sole dopo la ricerca (le altre restano nell'elenco, da spuntare)
 const REDACT_MODELS = (() => {
-  const ID_CATS = ['nome', 'cf', 'piva', 'iban', 'carta', 'email', 'tel', 'indirizzo', 'nascita', 'doc', 'targa', 'utenza', 'web'];
+  const ID_CATS = ['nome', 'ente', 'cf', 'piva', 'iban', 'carta', 'email', 'tel', 'indirizzo', 'luogo', 'catasto', 'nascita', 'doc', 'targa', 'utenza', 'web'];
   return { gdpr: { label: 'Tutti i dati (GDPR)', cats: null }, albo: { label: 'Pubblicazione (albo)', cats: [...ID_CATS, 'sanita', 'giudiziari', 'particolari', 'segno'] }, sanita: { label: 'Sanità', cats: [...ID_CATS, 'sanita', 'particolari'] }, id: { label: 'Solo identificativi', cats: ID_CATS } };
 })();
 async function startRedact(stage, files, _tool, auto = null) {
@@ -1898,7 +1900,15 @@ async function startRedact(stage, files, _tool, auto = null) {
       // primo giro: i nomi certi; secondo giro: gli stessi cognomi in tutto il documento
       const first = idxs.flatMap(i => PiiKit.detect(i.text, { cfs }));
       const names = PiiKit.surnamesOf(first);
-      idxs.forEach((idx, k) => { for (const f of PiiKit.detect(idx.text, { cfs, names })) { const bx = RK.boxesOf(idx, f.start, f.end); if (bx.length) per.push({ page: k + 1, cat: f.cat, text: f.text.replace(/\s+/g, ' ').trim(), sure: f.sure, boxes: bx, on: pickOn(f.cat) }); } });
+      idxs.forEach((idx, k) => { for (const f of PiiKit.detect(idx.text, { cfs, names })) { const bx = RK.boxesOf(idx, f.start, f.end); if (bx.length) per.push({ page: k + 1, cat: f.cat, text: f.text.replace(/\s+/g, ' ').trim(), sure: f.sure, boxes: bx, on: pickOn(f.cat), at: [f.start, f.end] }); } });
+      // ogni dato trovato si cerca anche altrove nel documento: un'altra copia dello stesso dato, dove il contesto non c'era
+      // (l'IBAN senza la parola «IBAN», il comune senza «in», il nome senza «Sig.»), si copre lo stesso
+      { const seen = new Map(); for (const it of per) { const v = it.text; if (v.replace(/[^\p{L}\p{N}]/gu, '').length >= 5 && !['importo', 'data', 'segno'].includes(it.cat) && !seen.has(v.toLowerCase())) seen.set(v.toLowerCase(), it); }
+        const esc = v => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*');
+        for (const [, it] of seen) { const re = new RegExp('(?<![\\p{L}\\p{N}])' + esc(it.text) + '(?![\\p{L}\\p{N}])', 'giu');
+          idxs.forEach((idx, k) => { let m; re.lastIndex = 0; while ((m = re.exec(idx.text))) { const s0 = m.index, e0 = s0 + m[0].length;
+            if (per.some(q => q.page === k + 1 && q.at && q.at[0] < e0 && s0 < q.at[1])) continue;
+            const bx = RK.boxesOf(idx, s0, e0); if (bx.length) per.push({ page: k + 1, cat: it.cat, text: it.text, sure: it.sure, boxes: bx, on: pickOn(it.cat), at: [s0, e0] }); } }); } }
       // firme e timbri (nelle scansioni) e codici QR o a barre (ovunque): si vedono, non sono testo
       Busy.set(1, 'Firme, timbri e codici…');
       const bd = typeof BarcodeDetector !== 'undefined' ? await BarcodeDetector.getSupportedFormats().then(f => f.length ? new BarcodeDetector({ formats: f.filter(x => /qr|data_matrix|pdf417|aztec/.test(x)) }) : null).catch(() => null) : null;
@@ -1907,11 +1917,19 @@ async function startRedact(stage, files, _tool, auto = null) {
         const idx = idxs[k]; if (!idx.scan && !bd) return per;
         try {
           const pim = await pageImg(k + 1);
-          if (idx.scan && !idx.photo) {   // (firme e timbri si cercano sui fogli scansionati, non nelle foto senza testo)
+          // (firme e timbri si cercano sui fogli scansionati, non nelle foto; un foglio con poche righe e le firme, quasi tutto
+          // bianco, è un foglio anche se la lettura rapida l'ha preso per una foto)
+          const paper = () => { let w = 0, n = 0; for (let j = 0; j < pim.a.length; j += 4 * 7) { n++; if (pim.a[j] > 200 && pim.a[j + 1] > 200 && pim.a[j + 2] > 200) w++; } return w / Math.max(1, n) > 0.85; };
+          if (idx.scan && (!idx.photo || paper())) {
             if (typeof ScanEdit === 'undefined') await Later.all();
             const g = new Uint8Array(pim.w * pim.h); for (let i = 0, j = 0; i < g.length; i++, j += 4) g[i] = (pim.a[j] * 77 + pim.a[j + 1] * 150 + pim.a[j + 2] * 29) >> 8;
-            const wb = RK.wordsOf(idx).flatMap(w => w.boxes).map(q => ({ x0: q.x, x1: q.x + q.w, y0: q.y, y1: q.y + q.h }));
-            for (const o of ScanEdit.objects({ w: pim.w, h: pim.h, rgba: pim.a, g }, pim.s, wb, []).filter(o => Math.max(o.w, o.h) >= 40 && o.w * o.h >= 700)) per.push({ page: k + 1, cat: 'segno', text: o.w / o.h > 1.8 ? 'Firma' : 'Timbro o firma', sure: false, boxes: [{ x: o.x - 2, y: o.y - 2, w: o.w + 4, h: o.h + 4 }], on: pickOn('segno') });
+            // le «parole» lette con poca sicurezza o senza senso (i tratti di una firma letti come lettere) non sono testo:
+            // se restassero, la firma che coprono non si troverebbe
+            const W0 = RK.wordsOf(idx), hs = W0.map(w => Math.max(...w.boxes.map(q => q.h))).sort((x, y) => x - y), mh = hs.length ? hs[hs.length >> 1] : 12;
+            // (e quelle molto più alte del testo della pagina: la scrittura a mano)
+            const real = w => w.conf >= 72 && /[\p{L}\p{N}]{2,}/u.test(w.t) && !(w.t.length >= 4 && !/[aeiouàèéìòù0-9]/i.test(w.t)) && Math.max(...w.boxes.map(q => q.h)) <= mh * 1.6;
+            const wb = W0.filter(real).flatMap(w => w.boxes).map(q => ({ x0: q.x, x1: q.x + q.w, y0: q.y, y1: q.y + q.h }));
+            for (const o of ScanEdit.objects({ w: pim.w, h: pim.h, rgba: pim.a, g }, pim.s, wb, [], { firme: true }).filter(o => Math.max(o.w, o.h) >= 40 && o.w * o.h >= 700)) per.push({ page: k + 1, cat: 'segno', text: o.w / o.h > 1.8 ? 'Firma' : 'Timbro o firma', sure: false, boxes: [{ x: o.x - 2, y: o.y - 2, w: o.w + 4, h: o.h + 4 }], on: pickOn('segno') });
           }
           if (bd) { const id = new ImageData(new Uint8ClampedArray(pim.a), pim.w, pim.h); for (const c of await bd.detect(id)) { const r = c.boundingBox; per.push({ page: k + 1, cat: 'segno', text: 'Codice ' + (c.format === 'qr_code' ? 'QR' : c.format), sure: true, boxes: [{ x: r.x / pim.s - 3, y: r.y / pim.s - 3, w: r.width / pim.s + 6, h: r.height / pim.s + 6 }], on: pickOn('segno') }); } }
         } catch (e) { console.warn('firme e codici', e); }
@@ -1964,7 +1982,7 @@ async function startRedact(stage, files, _tool, auto = null) {
   async function addPii() {
     save(); let n = 0;
     let k = 0;
-    for (const it of pii.items) if (it.on) { k++; n += await addBoxes(it.page, it.boxes.map((b, j) => ({ ...b, cat: it.cat, t: j ? undefined : it.text }))); }
+    for (const it of pii.items) if (it.on) { k++; n += await addBoxes(it.page, it.boxes.map((b, j) => ({ ...b, cat: it.cat, t: j || it.cat === 'segno' ? undefined : it.text }))); /* (firme e timbri: «Firma» è un'etichetta, non un dato da rileggere) */ }
     pii = null; drawPii(); changed(); if (!quietAdd) toast(`${plural(k, 'dato aggiunto', 'dati aggiunti')} (${plural(n, 'riquadro', 'riquadri')}): controllali sulla pagina`);
     const first = boxes.findIndex(b => b.length); if (first >= 0 && !boxes[viewer.page - 1].length) viewer.go(first + 1);
   }

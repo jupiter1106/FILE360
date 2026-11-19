@@ -1,7 +1,7 @@
 [
  {
   "name": "onde-strette",
-  "ms": 6242,
+  "ms": 6321,
   "chars": 2002,
   "note": "1 correzione automatica del testo.",
   "cer": 0.8487269096355468,
@@ -9,7 +9,7 @@
  },
  {
   "name": "onde",
-  "ms": 7512,
+  "ms": 7399,
   "chars": 2067,
   "note": "",
   "cer": 0.5344995140913509,
@@ -17,7 +17,7 @@
  },
  {
   "name": "pancia",
-  "ms": 7749,
+  "ms": 7703,
   "chars": 1955,
   "note": "",
   "cer": 0.10240655401945725,
@@ -25,7 +25,7 @@
  },
  {
   "name": "piatto",
-  "ms": 6752,
+  "ms": 6528,
   "chars": 1935,
   "note": "",
   "cer": 0.15527950310559005,
@@ -33,7 +33,7 @@
  },
  {
   "name": "rilegatura",
-  "ms": 7958,
+  "ms": 8237,
   "chars": 2040,
   "note": "1 pagina raddrizzata automaticamente prima del riconoscimento.",
   "cer": 0,
@@ -41,7 +41,7 @@
  },
  {
   "name": "storto-e-pancia",
-  "ms": 8149,
+  "ms": 8098,
   "chars": 2134,
   "note": "1 pagina raddrizzata automaticamente prima del riconoscimento.",
   "cer": 0.04688232536333802,
@@ -49,7 +49,7 @@
  },
  {
   "name": "storto4",
-  "ms": 7091,
+  "ms": 7077,
   "chars": 2015,
   "note": "1 pagina raddrizzata automaticamente prima del riconoscimento.",
   "cer": 0.04965243296921549,
@@ -57,7 +57,7 @@
  },
  {
   "name": "ventaglio",
-  "ms": 8021,
+  "ms": 7865,
   "chars": 2204,
   "note": "",
   "cer": 0,

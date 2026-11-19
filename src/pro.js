@@ -1034,7 +1034,7 @@ const ScanEdit = (() => {
     return encode({ px, W, H, X0, Y0 }, hi.s);
   }
   // timbri, firme, loghi: macchie d'inchiostro grandi che non sono testo (parole lette) né linee (cornici, tabelle)
-  function objects(img, S, boxes, tables = []) {
+  function objects(img, S, boxes, tables = [], opts = {}) {
     const W = img.w, H = img.h, g = img.g, pap = paper(img), m = new Uint8Array(W * H);
     for (let i = 0; i < m.length; i++) if (g[i] < pap - 60) m[i] = 1;
     for (const b of boxes) { const x0 = Math.max(0, Math.floor((b.x0 - 1) * S)), x1 = Math.min(W, Math.ceil((b.x1 + 1) * S)), y0 = Math.max(0, Math.floor((b.y0 - 1) * S)), y1 = Math.min(H, Math.ceil((b.y1 + 1) * S)); for (let y = y0; y < y1; y++) m.fill(0, y * W + x0, y * W + x1); }
@@ -1068,7 +1068,11 @@ const ScanEdit = (() => {
       const thin = dims.every(line);
       const inside = boxes.filter(b => b.x0 >= q.x0 - 2 && b.x1 <= q.x1 + 2 && b.y0 >= q.y0 - 2 && b.y1 <= q.y1 + 2).length;
       const cx = (q.x0 + q.x1) / 2, cy = (q.y0 + q.y1) / 2, inTable = tables.some(t => cx > t.x0 && cx < t.x1 && cy > t.y0 && cy < t.y1);
-      return big && !thin && inside < 2 && !inTable;
+      // (solo per Oscura) una firma piccola: tratti di penna più alti del testo e più larghi che alti, radi (non una macchia)
+      const W0 = q.x1 - q.x0, H0 = q.y1 - q.y0, dens = q.n / Math.max(1, W0 * H0 * S * S);
+      const cursive = opts.firme && W0 > ts * 3 && H0 > ts * 1.45 && H0 < ts * 8 && dens < 0.22 && !thin;
+      // (per Oscura le parole lette sono già tolte dall'inchiostro: una firma accanto alle etichette «Il locatore», «Il conduttore» resta valida)
+      return (big || cursive) && !thin && (inside < 2 || (opts.firme && inside < 8)) && !inTable;
     }).map(q => ({ x: q.x0 - 1.5, y: q.y0 - 1.5, w: q.x1 - q.x0 + 3, h: q.y1 - q.y0 + 3 }));
   }
   // un oggetto della scansione: la carta senza di lui (ritaglio opaco) e lui solo (ritaglio trasparente, inchiostro vero)

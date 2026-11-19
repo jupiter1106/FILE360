@@ -852,8 +852,9 @@ const PiiKit = (() => {
     indirizzo: 'Indirizzi', nascita: 'Nascita (data e luogo)', doc: 'Documenti d’identità', targa: 'Targhe',
     carta: 'Carte di pagamento e conti', sanita: 'Dati sanitari', giudiziari: 'Dati giudiziari', particolari: 'Dati particolari (religione, politica, sindacato, origine, vita sessuale)',
     web: 'Indirizzi IP e siti personali', utenza: 'Utenze e codici cliente', importo: 'Importi in denaro', data: 'Altre date', segno: 'Firme, timbri e codici QR',
+    ente: 'Ditte e società', luogo: 'Comuni, province e CAP', catasto: 'Dati catastali',
   };
-  const ORDER = ['email', 'iban', 'carta', 'cf', 'piva', 'tel', 'doc', 'targa', 'utenza', 'web', 'nascita', 'indirizzo', 'nome', 'sanita', 'giudiziari', 'particolari', 'segno', 'importo', 'data'];
+  const ORDER = ['email', 'iban', 'carta', 'cf', 'piva', 'tel', 'doc', 'targa', 'utenza', 'web', 'nascita', 'indirizzo', 'catasto', 'ente', 'nome', 'luogo', 'sanita', 'giudiziari', 'particolari', 'segno', 'importo', 'data'];
   // potenzialmente sensibili: si mostrano, ma da scegliere (non oscurati in automatico)
   const SOFT = new Set(['importo', 'data']);
 
@@ -892,6 +893,14 @@ const PiiKit = (() => {
     return m === 1;
   }
 
+  /* —— comuni italiani (src/comuni-it.js, elenco ISTAT): insieme dei nomi in minuscolo, sigle, nomi ambigui —— */
+  let GAZ = null;
+  function gaz() {
+    if (GAZ) return GAZ;
+    const nomi = COMUNI_IT.nomi.split('|').map(x => x.toLowerCase().replace(/[’]/g, "'").replace(/\s+/g, ' '));
+    GAZ = { set: new Set(nomi), sig: new Set(COMUNI_IT.sigle.split(' ')), amb: new Set(COMUNI_IT.ambigui.split(' ')), max: Math.max(...nomi.map(x => x.split(/[\s'-]+/).length)) };
+    return GAZ;
+  }
   /* —— nomi propri italiani più comuni (per riconoscere «Mario Rossi», «ROSSI MARIO») —— */
   const NAMES = new Set(('abele achille ada adele adelaide adriana adriano agata agnese agostino alba alberto alda aldo alessandra alessandro alessia alessio alfonso alfredo alice alida allegra amalia amedeo amelia anastasia andrea angela angelica angelo anita anna annalisa annamaria antonella antonietta antonino antonio arianna armando arturo assunta aurelio aurora barbara bartolomeo beatrice benedetta benedetto beniamino bernardo bianca bruna bruno calogero camilla carla carlo carlotta carmela carmelo carmen carolina caterina cecilia celeste cesare chiara cinzia clara claudia claudio clelia concetta corrado cosimo costanza cristian cristiana cristina cristiano damiano daniela daniele dante dario davide debora denis denise diana diego dino domenico donatella donato dora edoardo elena eleonora elia elisa elisabetta elvira emanuela emanuele emilia emiliano emilio emma enrico enza enzo ermanno ernesto erika ester ettore eugenio eva evelina fabiana fabio fabrizio federica federico felice fernanda fernando filippo fiorella flavia flavio francesca francesco franco gabriele gabriella gaetano gaia gerardo giacomo giada gianfranco giancarlo gianluca gianluigi gianna gianni gilberto gina gino giorgia giorgio giovanna giovanni gisella giulia giuliana giuliano giulio giuseppa giuseppe giuseppina gloria grazia graziella gregorio guglielmo guido ida ignazio ilaria ines ingrid irene iris isabella italo ivan ivana ivano jacopo laura lazzaro lea leonardo letizia lia liliana lino lisa livia lorella lorena lorenzo loredana luana luca lucia luciana luciano lucio luigi luigia luisa maddalena manuel manuela mara marcella marcello marco margherita maria mariagrazia mariangela marianna mariano marika marilena marina marino mario marisa marta martina massimiliano massimo matilde matteo mattia maurizio mauro melissa michela michele milena mirco mirella miriam monica nadia natale natalia nazzareno nicola nicoletta nicolò nicolo nino noemi norma olga oliviero orazio ornella osvaldo ottavio paola paolo pasquale patrizia patrizio pierluigi piero pietro pina pino raffaela raffaele raffaella rebecca renata renato riccardo rita roberta roberto rocco romano rosa rosalba rosalia rosanna rosaria rosario rossana rossella ruggero sabrina salvatore samuele sandra sandro santa santo sara saverio sebastiano serena sergio silvana silvano silvia silvio simona simone sofia sonia stefania stefano susanna tania teresa tiziana tiziano tommaso tullio ugo umberto valentina valentino valeria valerio vanessa vanna veronica vincenza vincenzo viola virginia vito vittoria vittorio walter zaira').split(' '));
   // parole che sembrano nomi ma sono etichette, titoli o parole comuni dei documenti
@@ -917,8 +926,8 @@ const PiiKit = (() => {
     // email
     each(/[\p{L}\p{N}._%+-]+@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.?/gu, m => add('email', m.index, m.index + m[0].length, /\.[\p{L}]{2,}$/u.test(m[0])));   // anche se l'OCR ha perso la parte finale
     // IBAN (anche a gruppi separati da spazi); si prova la lunghezza giusta per il paese
-    each(/(?:\b|(?<=[0-9|]))[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]){10,30}/g, m => {   // (anche con un segno spurio attaccato davanti, come lo legge l'OCR)
-      const raw = m[0];
+    each(/(?:\b|(?<=[0-9|]))(?:[A-Z]{2}|[1lI|]T)\d{2}(?:[ ]?[A-Z0-9]){10,30}/g, m => {   // (anche con un segno spurio attaccato davanti, come lo legge l'OCR)
+      const raw = m[0].replace(/^[1l|]T/, 'IT');   // «1T…»: la I letta come 1 dall'OCR
       for (let L = raw.length; L >= 14; L--) {
         const cand = raw.slice(0, L); if (/\s$/.test(cand)) continue;
         if (ibanValid(cand)) { add('iban', m.index, m.index + L); return; }
@@ -932,6 +941,8 @@ const PiiKit = (() => {
         if (ibanValid(fixed)) { let n = 0, e = m.index; while (e < m.index + raw.length && n < 27) { if (!/\s/.test(text[e])) n++; e++; } add('iban', m.index, e, true); return; }
       }
     });
+    // IBAN italiano letto con più errori dall'OCR (il controllo non torna): forma «IT» + 2 cifre + 23 caratteri, vicino alla parola IBAN
+    each(/(?<![A-Z0-9])(?:IT|[1lI|]T)\d{2}[ ]?[A-Z0-9](?:[ ]?[A-Z0-9]){21,23}(?![A-Z0-9])/g, m => { if (/iban|c\/c|conto|bonifico|banca|coordinate/i.test(text.slice(Math.max(0, m.index - 90), m.index) + ' ' + text.slice(m.index + m[0].length, m.index + m[0].length + 40))) add('iban', m.index, m.index + m[0].length, false); });
     // codice fiscale (anche con spazi fra i caratteri, come nelle caselle dei moduli)
     const CFS = '[A-Z]{6}[0-9LMNPQRSTUV]{2}[ABCDEHLMPRST][0-9LMNPQRSTUV]{2}[A-Z][0-9LMNPQRSTUV]{3}[A-Z]';
     each(/(?<![A-Z0-9])[A-Z]{6}[0-9LMNPQRSTUV]{2}[ABCDEHLMPRST][0-9LMNPQRSTUV]{2}[A-Z][0-9LMNPQRSTUV]{3}[A-Z](?![A-Z0-9])/gi, m => add('cf', m.index, m.index + m[0].length, cfValid(m[0])));
@@ -956,7 +967,7 @@ const PiiKit = (() => {
       if (mobile || (land && (kw || /[\s./-]/.test(s.trim()) || digits.length >= 9)) || (intl && digits.length >= 8)) add('tel', m.index, m.index + s.length, mobile || kw || intl);
     });
     // documenti d'identità (carta d'identità elettronica e cartacea, passaporto, patente) solo vicino alle parole chiave
-    each(/\b(?:[A-Z]{2}\d{5}[A-Z]{2}|[A-Z]{2}\d{7}|[A-Z]{1,2}\d{6,8}[A-Z]?)\b/g, m => {
+    each(/\b(?:[A-Z]{2}[ ]?\d{5}[ ]?[A-Z]{1,2}|[A-Z]{2}\d{7}|[A-Z]{1,2}\d{6,8}[A-Z]?)\b/g, m => {
       const ctx0 = text.slice(Math.max(0, m.index - 60), m.index).toLowerCase();
       if (/(carta\s+d['’]?identit|c\.?\s?i\.?\b|documento|passaporto|patente|n\.\s*doc)/.test(ctx0)) add('doc', m.index, m.index + m[0].length);
     });
@@ -966,7 +977,7 @@ const PiiKit = (() => {
     each(/\b[A-Z]{2}[ ]?\d{3}[ ]?[A-Z]{2}\b/g, m => { const ls = text.lastIndexOf('\n', m.index) + 1, le = (text.indexOf('\n', m.index) + 1 || text.length + 1) - 1, alone = text.slice(ls, le).trim() === m[0];
       if (/targ/.test(text.slice(Math.max(0, m.index - 30), m.index).toLowerCase()) || (alone && fewText)) add('targa', m.index, m.index + m[0].length); });
     // nascita: «nato/a a Città (PR) il 01/02/1980», «data di nascita: …», «luogo di nascita: …»
-    const DATE = '\\d{1,2}[/.-]\\d{1,2}[/.-]\\d{2,4}|\\d{1,2}°?\\s+(?:gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)\\s+\\d{4}';
+    const DATE = '\\d{1,2}[/.-]\\d{1,2}[/.-](?:\\d{2,4}|[\'’]\\d{2})|\\d{1,2}°?\\s+(?:gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)\\s+\\d{4}';
     const CITY = "[A-ZÀ-Ü][\\p{L}'’]+(?:[ -](?:[A-ZÀ-Ü][\\p{L}'’]+|di|de|del|della|sul|sull['’]|in|al))*(?:\\s*\\(\\s*[A-Z]{2}\\s*\\))?";
     each(new RegExp(`\\bnat[oaie](?:\\/[oaie])?\\s+(?:(?:a|ad|in)[\\s_.:]+(${CITY}))?(?:[\\s,]+(?:il\\s+)?(${DATE}))?`, 'giu'), m => {
       let p = m.index;
@@ -985,7 +996,7 @@ const PiiKit = (() => {
       s = s.replace(/[ \t,–-]+$/, '');
       const tail = /^\/[A-Za-z0-9]{1,3}\b/.exec(text.slice(m.index + s.length)); if (tail) s += tail[0];   // 12/B
       // non oltre l'eventuale etichetta seguente («Tel», «Email», «CF»…)
-      const cut = s.search(/[ \t,](?:tel|cell|fax|email|e-mail|pec|c\.?f\.?|p\.?\s?iva|cap)\b/i); if (cut > 6) s = s.slice(0, cut).replace(/[ \t,–-]+$/, '');
+      const cut = s.search(/[ \t,](?:tel|cell|fax|email|e-mail|pec|c\.?f\.?|p\.?\s?iva|cap|codice|cod\.|partita|nato|nata|residente|di\s+seguito)\b/i); if (cut > 6) s = s.slice(0, cut).replace(/[ \t,–-]+$/, '');
       add('indirizzo', m.index, m.index + s.length, /\d/.test(s));
     });
     each(/\b\d{5}[ \t]+(?=[A-ZÀ-Ü])[\p{L}'’]+(?:[ -][A-ZÀ-Ü][\p{L}'’]+)*(?:[ \t]*\([ \t]*[A-Z]{2}[ \t]*\))/gu, m => add('indirizzo', m.index, m.index + m[0].length, false));
@@ -1016,6 +1027,69 @@ const PiiKit = (() => {
     each(/(?:€|eur(?:o)?\.?)\s?-?\d{1,3}(?:[.\s]\d{3})*(?:,\d{1,2})?|\d{1,3}(?:[.\s]\d{3})*(?:,\d{1,2})?\s?(?:€|euro\b)/gi, m => add('importo', m.index, m.index + m[0].length, false));
     each(new RegExp(`(?<![\\d/.-])(?:${DATE})(?![\\d/.-]\\d)`, 'giu'), m => add('data', m.index, m.index + m[0].length, false));
 
+    // —— codice fiscale letto male dall'OCR (un carattere in più o scambiato: «M11» letto «MI11») ——
+    // dopo «C.F.», «cod. fisc.», «codice fiscale» si prende la parola che segue se ha la forma di un codice (lettere e cifre);
+    // senza parola chiave, una parola di 16-17 caratteri vale solo se, corretta, torna la cifra di controllo
+    each(/(?:\bc\.?\s?f\.?|\b[ct]od(?:ice)?[.,]?\s*f[i1l]s[a-z](?:ale)?[.,]?)[ \t]*[:.n°]*[ \t]*([A-Z0-9][A-Z0-9 ]{12,22}[A-Z0-9])/giu, m => {
+      const v = m[1].split(/\s{2,}/)[0], c = v.replace(/\s/g, '');
+      if (c.length < 14 || c.length > 19 || !/\d{2}/.test(c) || (c.match(/[A-Z]/gi) || []).length < 5) return;
+      const s0 = m.index + m[0].lastIndexOf(m[1]); add('cf', s0, s0 + v.length, true);
+    });
+    // «cod.» seguito direttamente dal codice (l'OCR ha perso «fisc.»), anche con uno spazio in mezzo
+    each(/\b[ct]od\.[ \t]*([A-Z]{5,6}[ \t]?[A-Z0-9]{2,6}[ \t]?[A-Z0-9]{3,8}[A-Z0-9])(?![A-Z0-9])/g, m => { const c = m[1].replace(/\s/g, ''); if (c.length >= 14 && c.length <= 18 && /\d{2}/.test(c)) { const s0 = m.index + m[0].lastIndexOf(m[1]); add('cf', s0, s0 + m[1].length, true); } });
+    const ocrFix = (c, pos) => c.replace(/./g, (ch, i) => pos.includes(i) ? ({ O: '0', I: '1', L: '1', S: '5', B: '8', Z: '2', G: '6', T: '7' }[ch] || ch) : ({ 0: 'O', 1: 'I', 5: 'S', 8: 'B', 2: 'Z', 6: 'G' }[ch] || ch));
+    each(/(?<![A-Z0-9])(?=(?:[A-Z0-9][ ]?){16,17}(?![A-Z0-9]))[A-Z0-9]{2,}(?:[ ][A-Z0-9]{2,})?(?![A-Z0-9])/g, m => {
+      const w = m[0].replace(/ /g, ''); if (w.length < 16 || w.length > 17) return; if (cfValid(w) || !/[A-Z]{3}/.test(w) || !/\d/.test(w)) return;
+      const tries = w.length === 17 ? [...Array(17).keys()].map(i => w.slice(0, i) + w.slice(i + 1)) : [w];
+      for (const t of tries) { const f = ocrFix(t, [6, 7, 9, 10, 12, 13, 14]); if (cfValid(f)) { add('cf', m.index, m.index + w.length, true); return; } }
+    });
+    // —— ditte e società: le parole con la maiuscola prima della forma giuridica (S.r.l., S.p.A., snc, sas, soc. coop.) ——
+    each(/((?:(?:[A-ZÀ-Ü0-9][\p{L}0-9'’&.-]*|&|e|di|de|del|della|dei|delle)[ \t]+){0,6}[A-ZÀ-Ü0-9][\p{L}0-9'’&.-]*)[ \t,]+(S\.?[ \t]?R\.?[ \t]?L\.?(?:[ \t]?S\.?)?|S\.?[ \t]?P\.?[ \t]?A\.?|S\.?[ \t]?N\.?[ \t]?C\.?|S\.?[ \t]?A\.?[ \t]?S\.?|S\.?[ \t]?C\.?[ \t]?(?:A\.?[ \t]?)?R\.?[ \t]?L\.?|SOC\.?[ \t]?COOP\.?(?:[ \t]?A\.?R\.?L\.?)?|SOCIET[AÀ'][ \t]+COOPERATIVA)(?![\p{L}])/giu, m => {
+      let pre = m[1].split(/[ \t]+/); const ok = w => /^[A-ZÀ-Ü0-9&]/u.test(w) || /^(e|di|de|del|della|dei|delle)$/i.test(w);
+      { let k = pre.length; while (k > 0 && ok(pre[k - 1])) k--; pre = pre.slice(k); }   // solo le parole con la maiuscola subito prima della forma giuridica
+      while (pre.length && (!ok(pre[0]) || STOP.has(pre[0].toLowerCase().replace(/\.$/, '')) || (/^(la|il|lo|le|l['’])$/i.test(pre[0]) && !(/^[A-ZÀ-Ü]+$/u.test(pre[0]) && pre[1] && /^[A-ZÀ-Ü]{2,}$/u.test(pre[1]))))) pre.shift();
+      if (!pre.length) return;
+      const s0 = m.index + m[0].indexOf(pre[0], m[0].length - m[1].length - m[2].length - 4 < 0 ? 0 : m[0].length - m[1].length - m[2].length - 4);
+      add('ente', s0 >= m.index ? s0 : m.index, m.index + m[0].length, true);
+    });
+    // —— dati catastali: foglio, particella/mappale, subalterno (identificano l'immobile e quindi il proprietario) ——
+    each(/\b(?:fogli?o?|fg\.?|f\.)\s*(?:n\.?|nr\.?|n°)?\s*\d{1,4}\b|\b(?:particell[ae]|p\.?[ \t]?lla|mappal[ei]|mapp\.?|numeratore)(?:\s+numeratore)?\s*(?:n\.?|nr\.?|n°)?\s*\d{1,5}(?:[\/-]\d{1,4})?\b|\b(?:subaltern[oi]|sub\.?)\s*(?:n\.?|nr\.?|n°)?\s*\d{1,4}\b/giu, m => {
+      if (/^f\.$/i.test(m[0].split(/\s/)[0]) && !/(catast|ncte?u|n\.c\.e\.u|n\.c\.t|mappal|particell)/i.test(text.slice(Math.max(0, m.index - 60), m.index + 60))) return;
+      add('catasto', m.index, m.index + m[0].length, true);
+    });
+    // —— interno, scala, piano dell'indirizzo ——
+    each(/\b(?:int\.|interno|scala)\s*(?:n\.?\s*)?(?:\d{1,3}[A-Z]?|[A-Z])\b|\bpiano\s+\d{1,2}°?|\b\d{1,2}°\s+piano\b/gu, m => add('indirizzo', m.index, m.index + m[0].length, false));
+    // CAP con la parola chiave
+    each(/\bc\.?a\.?p\.?[ \t]*[:.]?[ \t]*\d{5}\b/giu, m => add('luogo', m.index, m.index + m[0].length, true));
+    // —— comuni e province (elenco ISTAT): i nomi che sono anche parole comuni solo nel contesto ——
+    if (typeof COMUNI_IT !== 'undefined') {
+      const G = gaz(), sig = G.sig;
+      const tw = []; { const re = /[\p{L}'’]+/gu; let q; while ((q = re.exec(text))) tw.push({ t: q[0], s: q.index, e: q.index + q[0].length }); }
+      for (let i = 0; i < tw.length; i++) {
+        const w0 = tw[i].t; if (!/^[A-ZÀ-Ü]/u.test(w0)) continue;
+        let hit = 0;
+        for (let n = Math.min(G.max, tw.length - i); n >= 1; n--) {
+          const span = text.slice(tw[i].s, tw[i + n - 1].e);
+          if (n > 1 && /\n/.test(span)) continue;
+          const key = span.toLowerCase().replace(/[’]/g, "'").replace(/\s+/g, ' ');
+          if (!G.set.has(key)) continue;
+          const words = span.split(/[\s'-]+/), allCap = words.every(x => /^[A-ZÀ-Ü]/u.test(x) || /^(di|de|del|della|dei|delle|sul|sulla|in|al|alla|d|l)$/i.test(x));
+          if (!allCap) continue;
+          const after = text.slice(tw[i + n - 1].e, tw[i + n - 1].e + 12), before = text.slice(Math.max(0, tw[i].s - 22), tw[i].s);
+          const sigAfter = /^[ \t]*(?:\([ \t]*([A-Z]{2})[ \t]*\)|[–—-][ \t]*([A-Z]{2})\b|,[ \t]*([A-Z]{2})\b)/.exec(after);
+          const ctx = /(?:\b(?:a|ad|in|di|da|presso|comune|provincia|citt[àa]|residente|nat[oaie]|sede|sit[oaie]|situat[oaie]|domiciliat[oaie]|ubicat[oaie]|localit[àa])[ \t]*[:.]?[ \t]*|\d{5}[ \t]+)$/i.test(before) || (sigAfter && sig.has(sigAfter[1] || sigAfter[2] || sigAfter[3]));
+          if (n === 1 && G.amb.has(key) && !ctx) continue;
+          if (n === 1 && !ctx && w0.length < 4) continue;
+          // CAP subito prima e sigla della provincia subito dopo fanno parte del luogo
+          let s0 = tw[i].s, e0 = tw[i + n - 1].e; const cap = /(\d{5})[ \t]+$/.exec(text.slice(Math.max(0, s0 - 8), s0)); if (cap) s0 -= cap[0].length;
+          if (sigAfter && sig.has(sigAfter[1] || sigAfter[2] || sigAfter[3])) e0 += sigAfter[0].length;
+          add('luogo', s0, e0, ctx || n > 1 || !G.amb.has(key)); hit = n; break;
+        }
+        if (hit) i += hit - 1;
+      }
+      // «(PA)», «prov. PA», «provincia di Palermo»: la sigla della provincia da sola
+      each(/\(\s*([A-Z]{2})\s*\)|\bprov(?:incia)?\.?[ \t]+(?:di[ \t]+)?([A-Z]{2})\b/g, m => { if (sig.has(m[1] || m[2])) add('luogo', m.index, m.index + m[0].length, true); });
+    }
     // —— nomi e cognomi ——
     const tk = tokens(text);
     const nameRun = (i, max = 4) => { // sequenza di parole con la maiuscola (con particelle), sulla stessa riga
@@ -1032,8 +1106,11 @@ const PiiKit = (() => {
     // 1) dal contesto: titoli e formule
     const TITLE = /^(sig|sig\.ra|sigra|signor|signora|signore|sig\.na|dott|dott\.ssa|dottssa|dottor|dottore|dottoressa|avv|avvocato|ing|geom|rag|prof|prof\.ssa|profssa|arch|notaio|egr|gent|gentile|egregio|caro|cara|on|mr|mrs|ms)\.?$/i;
     for (let i = 0; i < tk.length - 1; i++) {
-      if (TITLE.test(tk[i].t) && tk[i].near) { const j = nameRun(i + 1, 4); if (j > i + 1) addRun(i + 1, j, true); }
+      // (il punto del titolo, «Sig. Rossi», non separa il titolo dal nome)
+      if (TITLE.test(tk[i].t) && /^\.?[ \t\u00A0]{1,3}$/.test(text.slice(tk[i].e, tk[i + 1].s))) { const j = nameRun(i + 1, 4); if (j > i + 1) addRun(i + 1, j, true); }
     }
+    // titolo attaccato al nome («Sig.Rossi», «Dott.ssa.Bianchi»)
+    each(/\b(?:[Ss]ig|[Ss]ig\.ra|[Ss]igra|[Dd]ott|[Dd]ott\.ssa|[Aa]vv|[Ii]ng|[Gg]eom|[Rr]ag|[Pp]rof|[Aa]rch)\.(?=[A-ZÀ-Ü])([A-ZÀ-Ü][\p{L}'’]+(?:[ \t]+(?:de|di|del|della|da|la|lo)?[ \t]*[A-ZÀ-Ü][\p{L}'’]+){0,3})(?![\p{L}])/gu, m => { const s0 = m.index + m[0].length - m[1].length; add('nome', s0, s0 + m[1].length, true); });
     each(/(?:sottoscritt[oaie]|nominativo|cognome\s+e\s+nome|nome\s+e\s+cognome|intestat[oaie]\s+a|a\s+favore\s+di|beneficiario|titolare|richiedente|dichiarante|ordinante|conferente|delegato|delegante|erede|de\s+cuius|paziente|assistito|cliente\s*:|signor[ae]?)[ \t]*[:.]?[ \t]*/giu, m => {
       const at = m.index + m[0].length, i = tk.findIndex(t => t.s >= at && t.s - at < 3); if (i >= 0 && /\n/.test(text.slice(at, tk[i].s))) return;
       if (i >= 0) { const j = nameRun(i, 4); if (j > i) addRun(i, j, true); }
@@ -1041,6 +1118,13 @@ const PiiKit = (() => {
     each(/(?<![\p{L}])(cognome|nome)[ \t]*:[ \t]*/giu, m => {
       const at = m.index + m[0].length, i = tk.findIndex(t => t.s >= at && t.s - at < 3);
       if (i >= 0) { const j = nameRun(i, 3); if (j > i) addRun(i, j, true); }
+    });
+    // 1b) due-quattro parole con la maiuscola subito prima di «, codice fiscale», «, C.F.», «, nato/a», «, residente»:
+    // nei contratti e negli atti è la presentazione di una persona (anche con un nome che non è nell'elenco, anche letto male dall'OCR)
+    each(/((?:[A-ZÀ-Ü][\p{L}'’]+|de|di|del|della|dei|da|la|lo|d['’])(?:[ \t]+(?:[A-ZÀ-Ü][\p{L}'’]+|de|di|del|della|dei|da|la|lo|d['’])){1,4})[ \t]*[,.]?\s*(?:[ct]od(?:ice)?[.,]?\s*f[i1l]s[a-z]|c\.[ \t]?f\.|nat[oaie]\b|residente\b|domiciliat[oaie]\b)/gu, m => {
+      const ws = m[1].split(/[ \t]+/); let k = 0; while (k < ws.length && (STOP.has(ws[k].toLowerCase()) || PARTICLE.test(ws[k]))) k++;
+      const keep = ws.slice(k); if (keep.filter(w => isCap(w) && !STOP.has(w.toLowerCase())).length < 2 || keep.some(w => STOP.has(w.toLowerCase()))) return;
+      const s0 = m.index + m[1].length - keep.join(' ').length; add('nome', s0, m.index + m[1].length, true);
     });
     // 2) nome proprio dell'elenco accanto a un cognome (Mario Rossi, ROSSI MARIO, Rossi Mario)
     for (let i = 0; i < tk.length; i++) {
