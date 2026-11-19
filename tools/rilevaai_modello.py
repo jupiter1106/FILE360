@@ -97,6 +97,10 @@ if os.path.exists(f'{D}/corpus-umano/ws/letteratura.json'):
         if nw(d['text']) < 60: continue
         if d['opera'] in PROVA_OPERE or int(hashlib.md5(d['opera'].encode()).hexdigest(), 16) % 3 == 0: test.append(dict(text=d['text'], y=0, grp='x', src='letteratura (opere mai viste)', modello='', um=False, genere='letteratura'))
         else: docs.append(dict(text=d['text'], y=0, grp='w' + d['opera'], src='letteratura', modello='', um=False, genere='letteratura'))
+# riscritture di testi umani («migliora», «parafrasa»): restano in parte umane; si misurano a parte, fuori dall'addestramento
+RISCR = 'riscrittura di un testo umano'
+riscr = [d for d in docs if d['genere'] == RISCR and d['y'] == 1]
+docs = [d for d in docs if d['genere'] != RISCR]
 print('documenti:', collections.Counter((d['src'], d['modello']) for d in docs), '| prova:', collections.Counter(d['src'] for d in test))
 
 # ---------- finestre e caratteristiche (node, stesso codice del programma) ----------
@@ -165,6 +169,9 @@ for g in sorted({d['genere'] for d in docs if d['y'] == 1}):
 
 # ---------- modello finale + prova su testi mai visti ----------
 m = fit(X, y, cur[own]); dect = m.decision_function(Xt); st = docscore(dect, ownt, len(test))
+if riscr:
+    Xr, ownr = expand(riscr, 8); sr = docscore(m.decision_function(Xr), ownr, len(riscr))
+    print(f'PROVA riscritture di testi umani fatte da Claude: riconosciute {int((sr > thr).sum())}/{len(riscr)} = {100 * (sr > thr).mean():.1f}%')
 stf = np.zeros(len(test)); stf[ownt[::-1]] = dect[::-1]
 for g in sorted({d['src'] for d in test}):
     mk = np.array([d['src'] == g for d in test])
@@ -189,6 +196,7 @@ if OUT:
                   umanizzati=rec(np.array([d['um'] for d in docs]) & (dy == 1) & (mo != 'opus-5.5')), fp_max_txt='1 testo su 100',
                   testi_ai=int(((dy == 1) & (mo != 'opus-5.5')).sum()), testi_umani=int((dy == 0).sum()) + len(test))
     misure['prova_fp'] = {g: round(float((st[np.array([d['src'] == g for d in test])] > thr).mean()), 4) for g in sorted({d['src'] for d in test})}
+    if riscr: misure['riscritture'] = round(float((sr > thr).mean()), 3)
     misure['brevi'] = {k: round(float((first[(mo == k) & (dy == 1)] > thw).mean()), 3) for k in ['haiku', 'sonnet', 'opus']}
     FPR0 = FPR; FPR = 0.05; dubbio = float(soglia(ds)); FPR = FPR0  # zona incerta: sopra la soglia del 5%
     print('misure', misure)

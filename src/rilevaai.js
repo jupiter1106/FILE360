@@ -3,7 +3,7 @@
    1. prove certe: impronte dei programmi che gli assistenti AI usano per creare i file (python-docx, docx.js,
       python-pptx, PptxGenJS, openpyxl, ReportLab…), nomi di assistenti nei metadati, caratteri delle chat, testo nascosto;
    2. prove forti: residui di una chat (Markdown, «Spero ti sia utile», «Fammi sapere…»);
-   3. stile: modello statistico (n-grammi, regressione logistica) addestrato su 883 testi di Claude (Haiku, Sonnet,
+   3. stile: modello statistico (n-grammi, regressione logistica) addestrato su 970 testi di Claude (Haiku, Sonnet,
       Opus) e oltre 40.000 testi umani scritti prima degli assistenti AI; soglia tarata per gruppo di testi umani.
       È una valutazione, non una prova: lo strumento lo dice sempre.
    Le prove e lo stile restano separati e non si mescolano in un solo numero.
@@ -366,7 +366,7 @@ const RilevaAI = (() => {
     const score = F.reduce((x, f) => x + f.s, 0) / F.length, soglia = F.length > 1 ? MOD.soglia : MOD.soglia_breve;
     const sopra = MOD.umani.filter(u => u < score).length / MOD.umani.length;
     // passaggi: con il testo sopra la soglia, quelli sopra la soglia dei testi brevi; altrimenti solo quelli sopra una soglia
-    // molto più severa (6 passaggi umani su 88.705 misurati): un paragrafo di Claude dentro un testo umano
+    // molto più severa (7 passaggi umani su 88.697 misurati): un paragrafo di Claude dentro un testo umano
     const ai = score > soglia, P = F.map(f => ({ a: f.a, b: f.b, s: f.s, ai: ai ? f.s > MOD.soglia_breve : f.s > (MOD.soglia_passaggio ?? Infinity) }));
     return { score, soglia, ai, parte: !ai && F.length > 1 && P.some(p => p.ai), vicino: !ai && score > (MOD.soglia_dubbio ?? soglia - 1.5), parole: nParole, quota: sopra, passaggi: P };
   }
