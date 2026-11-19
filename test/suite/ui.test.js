@@ -359,6 +359,77 @@ test('Commenti e note: evidenziatura agganciata alle parole e nota, annotazioni 
   ok(JSON.stringify(r.a) === JSON.stringify([['Highlight', 'Controllare il numero'], ['Text', 'Da rivedere']]), JSON.stringify(r.a));
   ok(/«Contratto di fornitura n\. 145\/2026»/.test(r.sum), r.sum.slice(0, 200));
 });
+const ctOpen = async (page, files = []) => {
+  await page.evaluate(() => { try { localStorage.removeItem('officina-contratto'); } catch { } });
+  if (files.length) await openTool(page, 'contratto', files); else { await page.evaluate(() => { location.hash = '#contratto'; }); await page.waitForSelector('.dz-nofile'); await page.click('.dz-nofile'); }
+  await page.waitForSelector('.ct-side .ct-sec', { timeout: 30000 });
+};
+const ctFill = async (page, path, v) => { const l = page.locator(`[data-path="${path}"] input, [data-path="${path}"] textarea`).first(); await l.fill(v); await l.dispatchEvent('blur'); };
+const ctSec = (page, id) => page.evaluate(id => { const d = document.querySelector(`.ct-sec[data-sec="${id}"]`); if (d && !d.open) d.querySelector('summary').click(); }, id);
+async function ctCompila(page) {
+  await ctFill(page, 'A.0.nome', 'Mario'); await ctFill(page, 'A.0.cognome', 'Rossi'); await ctFill(page, 'A.0.cf', 'RSSMRA80A01H501U'); await page.waitForTimeout(250);
+  await ctFill(page, 'A.0.luogoN', 'Roma'); await ctFill(page, 'A.0.comune', 'Roma'); await ctFill(page, 'A.0.indirizzo', 'via Appia 10');
+  await ctSec(page, 'B'); await ctFill(page, 'B.0.nome', 'Lucia'); await ctFill(page, 'B.0.cognome', 'Bianchi'); await ctFill(page, 'B.0.cf', 'BNCLCU90E52L219C'); await page.waitForTimeout(250);
+  await ctFill(page, 'B.0.luogoN', 'Torino'); await ctFill(page, 'B.0.comune', 'Torino'); await ctFill(page, 'B.0.indirizzo', 'corso Francia 5');
+  await ctSec(page, 'imm'); await ctFill(page, 'imm.comune', 'Roma'); await ctFill(page, 'imm.indirizzo', 'via Tuscolana 100'); await ctFill(page, 'imm.descr', 'ingresso, soggiorno, cucina, due camere e bagno');
+  await ctFill(page, 'imm.cat.foglio', '123'); await ctFill(page, 'imm.cat.part', '456'); await ctFill(page, 'imm.cat.sub', '7'); await ctFill(page, 'imm.cat.categoria', 'A/2');
+  await page.selectOption('[data-path="imm.ape.classe"] select', 'D');
+  await ctSec(page, 'dur'); await ctFill(page, 'dur.inizio', '2027-02-01');
+  await ctSec(page, 'can'); await ctFill(page, 'can.mensile', '750'); await ctFill(page, 'can.iban', 'IT60X0542811101000000123456'); await ctFill(page, 'can.intestatario', 'Mario Rossi');
+  await ctSec(page, 'spese'); await ctFill(page, 'spese.acconto', '60');
+  await ctSec(page, 'firma'); await ctFill(page, 'firma.luogo', 'Roma'); await page.waitForTimeout(400);
+}
+test('Contratto: i dati obbligatori guidano, il codice fiscale compila nascita e titolo, il tipo cambia il testo', async b => {
+  const { page } = await open(b, 'desk1280'); await ctOpen(page);
+  ok(/Da compilare: \d+ dati obbligatori/.test(await page.locator('.ct-status').innerText()), 'manca lo stato dei dati da compilare');
+  await ctCompila(page);
+  const r = await page.evaluate(() => ({ status: document.querySelector('.ct-status').innerText, dataN: document.querySelector('[data-path="A.0.dataN"] input').value, sesso: document.querySelector('[data-path="A.0.sesso"] select').value, txt: document.querySelector('.ct-paper').innerText }));
+  ok(/Dati obbligatori completi/.test(r.status), r.status.slice(0, 160)); ok(r.dataN === '1980-01-01' && r.sesso === 'M', 'il codice fiscale non ha compilato nascita e titolo: ' + r.dataN + ' ' + r.sesso);
+  ok(/euro 9\.000,00 \(novemila\/00\)/.test(r.txt) && /il sig\. Mario Rossi, nato a Roma il 1° gennaio 1980/.test(r.txt), 'testo del contratto inatteso');
+  await ctSec(page, 'tipo'); await page.locator('.ct-type', { hasText: 'Comodato' }).click(); await page.waitForTimeout(300);
+  const c = await page.evaluate(() => document.querySelector('.ct-paper').innerText);
+  ok(/COMODATO D’USO GRATUITO/.test(c) && /essenzialmente gratuito/.test(c) && !/Canone e pagamento/.test(c), 'il comodato non ha cambiato il testo');
+  // codice fiscale sbagliato: errore accanto al campo dopo averlo lasciato
+  await ctSec(page, 'B'); await ctFill(page, 'B.0.cf', 'BNCLCU90E52L219X'); await page.waitForTimeout(250);
+  ok(/non valido/.test(await page.locator('[data-path="B.0.cf"] .ct-e').innerText()), 'nessun errore per il codice fiscale sbagliato');
+});
+test('Contratto: un articolo si modifica e si ripristina, una clausola facoltativa compare, la bozza resta dopo il ricaricamento', async b => {
+  const { page } = await open(b, 'desk1280'); await ctOpen(page); await ctCompila(page);
+  const art = page.locator('.paper-art[data-key="consegna"]'); await art.hover(); await art.locator('button', { hasText: 'Modifica' }).click();
+  await page.locator('.paper-art.editing textarea').fill('Testo concordato a mano tra le parti.'); await page.locator('.paper-art.editing button', { hasText: 'Salva il testo' }).click(); await page.waitForTimeout(300);
+  ok(/Testo concordato a mano tra le parti\./.test(await page.locator('.paper-art[data-key="consegna"]').innerText()) && await page.locator('.paper-art.edited').count() === 1, 'la modifica dell’articolo non è entrata');
+  await ctSec(page, 'cl'); await page.locator('[data-path="cl.fumo.on"]').click(); await page.waitForTimeout(300);
+  ok(/Divieto di fumo/.test(await page.locator('.ct-paper').innerText()), 'la clausola facoltativa non compare');
+  await page.reload(); await page.waitForSelector('.dz-nofile', { timeout: 30000 }); await page.click('.dz-nofile'); await page.waitForSelector('.ct-paper');
+  const t = await page.locator('.ct-paper').innerText();
+  ok(/Testo concordato a mano/.test(t) && /Divieto di fumo/.test(t) && /Ho ripreso la bozza/.test(await page.locator('.ct-banner').innerText()), 'la bozza non è stata ripresa');
+  const a2 = page.locator('.paper-art[data-key="consegna"]'); await a2.hover(); await a2.locator('button', { hasText: 'Modifica' }).click(); await page.locator('.paper-art.editing button', { hasText: 'Ripristina' }).click(); await page.waitForTimeout(300);
+  ok(/dichiara di aver visitato/.test(await page.locator('.paper-art[data-key="consegna"]').innerText()), 'il ripristino del testo automatico non funziona');
+  await page.evaluate(() => { try { localStorage.removeItem('officina-contratto'); } catch { } });
+});
+test('Contratto: dalla visura catastale si compilano dati catastali, pertinenze e proprietari', async b => {
+  const { page } = await open(b, 'desk1280'); await ctOpen(page, ['visura-catastale.pdf']);
+  await page.waitForFunction(() => document.querySelector('[data-path="imm.cat.foglio"] input')?.value, null, { timeout: 60000 });
+  const r = await page.evaluate(() => { const v = p => document.querySelector(`[data-path="${p}"] input`)?.value; return [v('imm.comune'), v('imm.cat.foglio'), v('imm.cat.part'), v('imm.cat.sub'), v('imm.cat.categoria'), v('A.0.cognome'), v('A.0.nome'), document.querySelectorAll('[data-path$=".tipo"][data-path^="imm.pert."]').length]; });
+  ok(r[0] === 'Roma' && r[1] === '123' && r[2] === '456' && r[3] === '7' && r[4] === 'A/2' && r[5] === 'Rossi' && r[6] === 'Mario' && r[7] >= 1, JSON.stringify(r));
+  await page.evaluate(() => { try { localStorage.removeItem('officina-contratto'); } catch { } });
+});
+test('Contratto: si scaricano il PDF, il Word e il promemoria; con dati mancanti si avvisa e si può avere la bozza', async b => {
+  const { page } = await open(b, 'desk1280'); await ctOpen(page);
+  await page.locator('.tool .btn-run').click(); await page.waitForSelector('.modal .ct-dlg');
+  ok(/Mancano \d+ dati obbligatori/.test(await page.locator('.modal .ct-dlg').innerText()), 'nessun avviso per i dati mancanti');
+  await page.locator('.modal button', { hasText: 'Completa i dati' }).click(); await page.waitForTimeout(400);
+  ok(await page.evaluate(() => document.activeElement?.closest('[data-path]')?.dataset.path === 'A.0.nome'), 'il fuoco non va al primo dato mancante');
+  // la bozza con i dati mancanti si scarica davvero
+  await page.locator('.tool .btn-run').click(); await page.waitForSelector('.modal .ct-dlg'); await page.locator('.modal button', { hasText: 'Scarica la bozza' }).click();
+  await page.waitForSelector('.scrim:not(.busy) .modal.res', { timeout: 60000 });
+  ok(/Bozza pronta/.test(await page.locator('.modal.res').innerText()), 'la bozza non si scarica'); await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+  await ctCompila(page);
+  await page.locator('.tool .btn-run').click(); await page.waitForSelector('.scrim:not(.busy) .modal.res', { timeout: 60000 });
+  const names = await page.locator('.modal.res').innerText();
+  ok(/\.pdf/.test(names) && /\.docx/.test(names) && /Promemoria/.test(names) && /Registrazione entro il/.test(names), names.slice(0, 300));
+  await page.evaluate(() => { try { localStorage.removeItem('officina-contratto'); } catch { } });
+});
 test('errore d’apertura scritto anche nel riquadro del file, con le azioni', async b => {
   const { page } = await open(b, 'desk1280'); await openTool(page, 'comprimi', ['rotto.pdf']); await page.waitForSelector('.dropzone .dz-err', { timeout: 15000 });
   ok(await page.locator('.dropzone .dz-err .btn').count() >= 1, 'nessuna azione nel riquadro');

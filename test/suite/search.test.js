@@ -27,6 +27,7 @@ const Q = [
   ['raddrizzare una foto di un documento', 'migliora'], ['scansione storta', 'migliora'],
   ['movimenti del conto in excel', 'estrattoconto'], ['codici tributo f24', 'f24'], ['visura camerale', 'visure'],
   ['esami del sangue', 'laboratorio'], ['qr code per bonifico', 'qrsepa'], ['copia conforme all originale', 'conforme'],
+  ['contratto di affitto', 'contratto'], ['comodato a mio figlio', 'contratto'], ['affitto studenti', 'contratto'],
   ['misurare una planimetria', 'misure'], ['contare le parole', 'conta'], ['timbro con sfondo trasparente', 'vettoriale'],
 ];
 // seconda serie: scritta dopo le prime correzioni; i suoi errori hanno guidato il lessico per concetto (non è più indipendente)
@@ -52,7 +53,7 @@ const FRESH = [
   ['dati catastali di un immobile', 'visure'], ['importi dei versamenti f24', 'f24'],
 ];
 (async () => {
-  if (Q.length !== 60) throw new Error('le domande devono essere 60: ' + Q.length);
+  if (Q.length !== 63) throw new Error('le domande devono essere 63: ' + Q.length);
   const b = await chromium.launch(); const p = await b.newPage();
   await p.goto(APP); await p.waitForSelector('.intent, .hm-tool, .tool-card');
   const res = await p.evaluate(Q => Q.map(([q, want]) => { const r = Cmd.rank(q); return { q, want, got: r[0] || '-', pos: r.indexOf(want) + 1 }; }), Q);

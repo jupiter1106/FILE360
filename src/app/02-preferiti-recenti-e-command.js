@@ -39,6 +39,7 @@ const Recents = (() => {
 
 /* sinonimi e parole che un utente italiano digita davvero */
 const CMD_SYNONYMS = {
+  contratto: ['contratto di affitto', 'contratto di locazione', 'affitto', 'affittare', 'locazione', 'affittare casa', 'contratto 4+4', 'contratto 3+2', 'canone concordato', 'contratto transitorio', 'affitto studenti', 'contratto studenti', 'comodato', 'comodato d’uso', 'comodato gratuito', 'comodato a un figlio', 'affitto negozio', 'locazione commerciale', 'affitto ufficio', 'inquilino', 'cedolare secca', 'contratto casa'],
   annota: ['commenti', 'commentare', 'annotare', 'annotazioni', 'note', 'evidenziare', 'evidenziatore', 'sottolineare', 'barrare', 'revisione', 'correzioni', 'osservazioni', 'post-it', 'nota adesiva'],
   pdftesto: ['pdf in testo', 'pdf in txt', 'pdf in html', 'estrarre il testo', 'copiare il testo', 'solo testo', 'testo semplice', 'pagina web', 'txt', 'html'],
   pdfppt: ['pdf in powerpoint', 'pdf in pptx', 'pdf in presentazione', 'pdf in diapositive', 'slide', 'presentazione dal pdf', 'pptx', 'proiettare'],

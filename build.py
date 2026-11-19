@@ -37,7 +37,7 @@ def build():
     # i moduli dei servizi per professione (src/pro.js) stanno nei blocchi rimandati, subito prima dell'anteprima dei risultati
     if (S / 'pro.js').exists() and LATER_TO:
         L = js.split('\n'); i = next(k for k, l in enumerate(L) if l.startswith(LATER_TO)) - 1
-        js = '\n'.join(L[:i] + [rd('pro.js')] + ([rd('office.js')] if (S / 'office.js').exists() else []) + L[i:])
+        js = '\n'.join(L[:i] + [rd('pro.js')] + ([rd('office.js')] if (S / 'office.js').exists() else []) + ([rd('contratti.js')] if (S / 'contratti.js').exists() else []) + L[i:])
     later, chunks = '', []
     if LATER_FROM and LATER_FROM in js:
         L = js.split('\n'); a = next(i for i, l in enumerate(L) if l.startswith(LATER_FROM)) - 1; z = next(i for i, l in enumerate(L) if l.startswith(LATER_TO)) - 1

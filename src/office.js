@@ -26,7 +26,7 @@ const TagPdf = (() => {
   const artifact = () => op('BMC', [N('Artifact')]);
   const end = () => op('EMC');
   // dall'albero in memoria agli oggetti del PDF
-  function finish(pdf, root, state, { lang = 'it-IT', title = '' } = {}) {
+  function finish(pdf, root, state, { lang = 'it-IT', title = '', brand = true } = {}) {
     const ctx = pdf.context, pages = pdf.getPages(), refOf = new Map();
     const make = (n, parentRef) => {
       const ref = ctx.nextRef(); refOf.set(n, ref);
@@ -55,16 +55,17 @@ const TagPdf = (() => {
     pdf.catalog.set(N('Lang'), PDFString.of(lang));
     pdf.catalog.set(N('ViewerPreferences'), ctx.obj({ DisplayDocTitle: true }));
     if (title) pdf.setTitle(title, { showInWindowTitleBar: true });
-    meta(pdf, { title, lang });
+    meta(pdf, { title, lang, brand });
   }
   // metadati XMP: titolo, lingua e dichiarazione PDF/UA (la struttura è completa: ogni contenuto è taggato o decorazione)
-  function meta(pdf, { title = '', lang = 'it-IT' } = {}) {
+  // brand: false → nessun nome del programma nei metadati (documenti come i contratti, che non devono portare marchi)
+  function meta(pdf, { title = '', lang = 'it-IT', brand = true } = {}) {
     const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
     const x = `<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?><x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">`
       + `<rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:pdf="http://ns.adobe.com/pdf/1.3/" xmlns:pdfuaid="http://www.aiim.org/pdfua/ns/id/">`
       + `<dc:title><rdf:Alt><rdf:li xml:lang="x-default">${esc(title || 'Documento')}</rdf:li></rdf:Alt></dc:title><dc:language><rdf:Bag><rdf:li>${esc(lang)}</rdf:li></rdf:Bag></dc:language>`
-      + `<xmp:CreatorTool>file360</xmp:CreatorTool><xmp:CreateDate>${now}</xmp:CreateDate><xmp:ModifyDate>${now}</xmp:ModifyDate><pdf:Producer>file360</pdf:Producer><pdfuaid:part>1</pdfuaid:part>`
+      + `${brand ? '<xmp:CreatorTool>file360</xmp:CreatorTool>' : ''}<xmp:CreateDate>${now}</xmp:CreateDate><xmp:ModifyDate>${now}</xmp:ModifyDate>${brand ? '<pdf:Producer>file360</pdf:Producer>' : ''}<pdfuaid:part>1</pdfuaid:part>`
       + `</rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end="w"?>`;
     const stream = pdf.context.stream(new TextEncoder().encode(x), { Type: 'Metadata', Subtype: 'XML' });
     pdf.catalog.set(N('Metadata'), pdf.context.register(stream));
@@ -378,9 +379,10 @@ const FlowPdf = (() => {
       const laid = render(F, sec, onPage, root && sec.part ? TagPdf.node('Part', root, sec.part) : root);
       await write(F, pdf, laid, sec, st); pages += laid.pages.length;
     }
-    if (root) TagPdf.finish(pdf, root, st, { lang: doc.lang || 'it-IT', title: doc.title || '' });
+    if (root) TagPdf.finish(pdf, root, st, { lang: doc.lang || 'it-IT', title: doc.title || '', brand: doc.brand !== false });
     if (doc.title) pdf.setTitle(doc.title, { showInWindowTitleBar: true });
-    pdf.setLanguage?.('it-IT'); pdf.setProducer('file360'); pdf.setCreator('file360');
+    pdf.setLanguage?.('it-IT');
+    if (doc.brand === false) { pdf.setProducer(''); pdf.setCreator(''); } else { pdf.setProducer('file360'); pdf.setCreator('file360'); }
     return { bytes: await pdf.save({ useObjectStreams: true }), pages, missing: F.missing() };
   }
   return { make, famOf, SIZES, MM };

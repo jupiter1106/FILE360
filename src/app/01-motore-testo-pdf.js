@@ -1590,6 +1590,20 @@ const SEO = (() => {
         ['Il PDF viene caricato su un server?', 'No: tutto avviene nel browser.'],
       ],
     },
+    contratto: {
+      slug: 'contratto-affitto-comodato', title: 'Contratto di affitto e comodato gratuito: compilazione guidata, PDF e Word',
+      desc: 'Contratto di locazione 4+4, 3+2 a canone concordato, transitorio, per studenti, a uso negozio o ufficio e comodato d’uso gratuito: compilazione guidata, clausole a scelta, testo modificabile, PDF e Word. Senza upload.',
+      h1: 'Contratto di affitto e comodato', h2: 'Come scrivere un contratto di affitto o di comodato', rel: ["visure", "firme", "modifica"],
+      steps: ['Scegli il tipo di contratto (4+4, 3+2, transitorio, studenti, uso diverso o comodato).', 'Compila i dati nella colonna: quelli obbligatori sono segnati, i dati catastali si leggono anche dalla visura in PDF.', 'Scegli le clausole facoltative, modifica gli articoli che vuoi e scarica PDF, Word e il promemoria di registrazione.'],
+      faq: [
+        ['Quali contratti posso fare?', 'Locazione abitativa a canone libero (4+4), a canone concordato (3+2), transitoria (da 1 a 18 mesi), per studenti universitari (da 6 a 36 mesi), locazione a uso diverso (negozio, ufficio, laboratorio: 6+6) e comodato d’uso gratuito di immobile.'],
+        ['Il contratto rispetta la legge?', 'Il testo segue la legge 431/1998, la legge 392/1978, il D.M. 16 gennaio 2017 e il codice civile, citati articolo per articolo. Durate minime, deposito massimo di tre mensilità, clausola sull’APE e pagamento tracciabile sono applicati da soli; le clausole nulle non vengono mai proposte. Per i casi particolari è sempre bene farlo vedere a un professionista.'],
+        ['Posso modificare il testo?', 'Sì: ogni articolo si modifica direttamente nell’anteprima, si può togliere un articolo facoltativo e aggiungere clausole personalizzate. Il Word scaricato si modifica come qualsiasi documento.'],
+        ['Mi dice come registrarlo?', 'Sì: insieme al contratto c’è il promemoria con la scadenza della registrazione, l’imposta di registro e i bolli calcolati, la cedolare secca (con la lettera per l’inquilino) e le comunicazioni da fare.'],
+        ['Posso usare la visura catastale?', 'Sì: trascina la visura in PDF e foglio, particella, subalterno, categoria, rendita, indirizzo, pertinenze e proprietari si compilano da soli.'],
+        ['I dati vengono inviati da qualche parte?', 'No: tutto avviene nel browser. La bozza resta solo su questo dispositivo, oppure la salvi tu in un file.'],
+      ],
+    },
   };
   const BY_SLUG = Object.fromEntries(Object.entries(P).map(([id, p]) => [p.slug, id]));
   const slug = id => (P[id] || {}).slug || id;
@@ -1669,6 +1683,9 @@ const TOOLS = {
   laboratorio: { title: 'Esami di laboratorio in tabella', short: 'Esami', icon: 'flask', hue: '#BE123C', accept: '.pdf,application/pdf,' + IMG_ACCEPT, multiple: true,
               dzText: 'Referti in PDF o foto — più referti insieme per il confronto nel tempo',
               desc: 'I valori dei referti in una tabella: esame, risultato, unità e intervallo di riferimento, con i valori fuori intervallo evidenziati. Più referti insieme: confronto nel tempo.', start: (...a) => startDati(...a) },
+  contratto: { title: 'Contratto di affitto e comodato', short: 'Contratto affitto', icon: 'lease', hue: '#B45309', accept: '.pdf,.json,application/pdf,application/json', multiple: false, anyFile: true, noFile: 'Compila un nuovo contratto', noFileIcon: 'lease',
+              dzText: 'Facoltativo: la visura catastale in PDF (compila immobile e proprietari) o una bozza salvata (.json)',
+              desc: 'Contratto di locazione 4+4, 3+2 concordato, transitorio, per studenti, a uso negozio o ufficio, e comodato gratuito: compili i dati nella colonna, il contratto si scrive da solo con le clausole che scegli e ogni articolo si può modificare. PDF e Word, più il promemoria di registrazione e imposte.', start: (...a) => startContratto(...a) },
   qrsepa:   { title: 'QR di pagamento SEPA', short: 'QR pagamento', icon: 'qr', hue: '#0E7490', accept: '.pdf,.xml,.p7m,.zip,application/pdf,text/xml', multiple: true, anyFile: true, noFile: 'Scrivi i dati a mano', noFileIcon: 'type', dzText: 'La fattura (XML, P7M, ZIP o PDF): IBAN, importo e causale si compilano da soli',
               desc: 'Il codice QR per pagare con bonifico: inquadrato con l’app della banca compila IBAN, beneficiario, importo e causale. Dalla fattura (XML o PDF) o scrivendo i dati; in PNG, SVG o stampato sulla fattura.', start: (...a) => startQrSepa(...a) },
   conforme: { title: 'Copia conforme', short: 'Copia conforme', icon: 'stamp', hue: '#7C3AED', accept: '.pdf,application/pdf', multiple: false,
@@ -1703,7 +1720,7 @@ const TOOLS = {
 // descrizioni brevi per le schede compatte
 const SHORT_DESC = {
   estrattoconto: 'Movimenti del conto in Excel, con verifica dei saldi', f24: 'F24, CU, 730, Redditi, IRAP, IVA in Excel', visure: 'Visure camerali e catastali in dati', laboratorio: 'Referti in tabella, valori fuori intervallo evidenziati',
-  qrsepa: 'Il QR per pagare con bonifico', conforme: 'Dicitura di conformità, poi la firma', misure: 'Distanze e superfici in scala', conta: 'Parole, caratteri, cartelle', tesi: 'Modello Word e controllo del PDF', vettoriale: 'Timbri e loghi in SVG e PNG trasparente',
+  contratto: 'Locazione e comodato guidati', qrsepa: 'Il QR per pagare con bonifico', conforme: 'Dicitura di conformità, poi la firma', misure: 'Distanze e superfici in scala', conta: 'Parole, caratteri, cartelle', tesi: 'Modello Word e controllo del PDF', vettoriale: 'Timbri e loghi in SVG e PNG trasparente',
   tavola: 'A0/A1 su fogli A4 o A3', officepdf: 'Word, Excel, PowerPoint e testi in PDF', filigrana: 'Scritta o logo su tutte le pagine', pdftesto: 'Testo e pagina web dal PDF', annota: 'Evidenzia, note e commenti', pdfppt: 'Una diapositiva per pagina',
   unisci: 'Più PDF e immagini in un solo documento', immagini: 'Foto e scansioni in un PDF ordinato', dividi: 'Separa pagine o intervalli in più file',
   comprimi: 'Riduci il peso mantenendo la qualità', modifica: 'Riscrivi il testo, aggiungi immagini e firme', ruota: 'Raddrizza pagine singole o tutte',
@@ -1727,7 +1744,7 @@ const GROUPS = [
   ['Pagine', ['ordina', 'ruota', 'unisci', 'dividi', 'impagina']],
   ['Converti e ottimizza', ['word', 'excel', 'officepdf', 'ocr', 'migliora', 'pdfa', 'verificapdfa', 'comprimi', 'immagini', 'immaginipdf', 'vettoriale']],
   ['Analizza e confronta', ['analisi', 'estrai', 'confronta', 'misure', 'conta']],
-  [FISCAL_GROUP, ['fatture', 'firme', 'xbrl'], 'Fatture elettroniche, file firmati .p7m e bilanci XBRL'],
+  [FISCAL_GROUP, ['fatture', 'firme', 'xbrl', 'contratto'], 'Fatture elettroniche, file firmati .p7m, bilanci XBRL e contratti di affitto'],
 ];
 /* ---------- famiglie: strumenti simili o complementari stanno in una scheda sola ----------
    In home compare solo il primo; gli altri sono a un clic sotto di lui e, dentro, nelle linguette in alto
@@ -2217,7 +2234,7 @@ const PROFILES = [
   ['avvocato', 'Avvocato', 'sign', ['conforme', 'firme', 'unisci', 'numeri', 'confronta', 'oscura', 'pdfa'], ['Attestazione di conformità per il deposito: «Copia conforme»; «Firme» verifica le firme dei .p7m ricevuti.', 'Allegati numerati con «Numeri di pagina», atti uniti con «Unisci».']],
   ['architetto', 'Architetto', 'poster', ['misure', 'tavola', 'comprimi', 'confronta', 'firme', 'migliora'], ['«Misure in scala» si aggancia agli spigoli del disegno: misure esatte su piante e sezioni.', '«Stampa una tavola grande» divide un A1 su fogli A4 in scala reale.']],
   ['ingegnere', 'Ingegnere', 'ruler', ['misure', 'tavola', 'comprimi', 'confronta', 'firme', 'pdfa'], ['Tavole troppo pesanti per il portale? «Comprimi» le alleggerisce senza perdere le linee.', '«Confronta» mostra cosa è cambiato tra due revisioni.']],
-  ['geometra', 'Geometra', 'home', ['visure', 'misure', 'tavola', 'migliora', 'comprimi', 'firme'], ['Dalle visure catastali: foglio, particella, rendita e valore IMU in Excel.', 'Le planimetrie vecchie scansionate: «Migliora» le raddrizza e le pulisce.']],
+  ['geometra', 'Geometra', 'home', ['visure', 'contratto', 'misure', 'tavola', 'migliora', 'comprimi', 'firme'], ['Dalle visure catastali: foglio, particella, rendita e valore IMU in Excel.', 'Le planimetrie vecchie scansionate: «Migliora» le raddrizza e le pulisce.']],
   ['sanitario', 'Medico o sanitario', 'flask', ['laboratorio', 'proteggi', 'oscura', 'moduli', 'unisci', 'migliora'], ['«Esami di laboratorio» mette i referti in tabella e confronta i valori nel tempo.', 'Prima di inviare un referto, «Proteggi» lo chiude con una password.']],
   ['insegnante', 'Insegnante', 'bulb', ['conta', 'immagini', 'migliora', 'impagina', 'word', 'oscura'], ['Le foto delle verifiche diventano un PDF pulito con «Immagini in PDF» e «Migliora».', '«Impagina» stampa 2 o 4 pagine per foglio, o un libretto.']],
   ['studente', 'Studente', 'cap', ['tesi', 'conta', 'migliora', 'comprimi', 'pdfa', 'impagina'], ['«Tesi» prepara il modello Word con frontespizio e indice, e controlla il PDF finale.', '«Conta parole» ti dice battute e cartelle, anche con un limite da rispettare.']],

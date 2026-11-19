@@ -277,6 +277,7 @@ const ICONS = {
   type:'<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
   textedit:'<path d="M4 6V4h12v2"/><path d="M10 4v14"/><path d="M7 18h6"/><path d="M17 11v10"/><path d="M15 11h4M15 21h4"/>',
   square:'<rect x="3" y="3" width="18" height="18" rx="2"/>',
+  lease:'<path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M9.5 14h5M9.5 17h5"/>',
   comment:'<path d="M4 5.5h16v10H9.5L5 19.5v-4H4z"/><path d="M8 9.5h8M8 12.5h5"/>',
   textbox:'<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M8 9h8M12 9v7"/>',
   highlight:'<path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>',
@@ -499,7 +500,7 @@ const cloneRead = v => { try { return structuredClone(v); } catch { return null;
    preferenze, letture in memoria. In più:
    · scadenza: progetti, lavori da riprendere e registro più vecchi di N giorni si cancellano da soli all'apertura;
    · nessuna traccia: tutto ciò che si salva si cancella alla chiusura della scheda (e comunque alla riapertura);
-   · frase segreta: i dati personali salvati (profilo, valori dei moduli, firme e timbri, correzioni imparate) si
+   · frase segreta: i dati personali salvati (profilo, valori dei moduli, firme e timbri, correzioni imparate, bozza del contratto) si
      cifrano con AES-GCM 256 (chiave da PBKDF2-SHA-256, 310 000 passaggi): senza la frase restano illeggibili.
      La frase non si salva da nessuna parte; dimenticarla significa perdere quei dati (non il resto).
    ===================================================================== */
@@ -507,7 +508,7 @@ const Privacy = (() => {
   const CFG = 'file360.privacy';
   const KEEP = k => k === CFG || k === 'officina-theme' || k === 'file360-theme';
   const OURS = k => /^(officina|file360)/.test(k);
-  const PERSONAL = k => k === 'officina-profilo' || k === 'officina-firme' || k === 'officina.moduli' || k === 'officina.moduli.valori' || k === 'file360.stamps' || k === 'officina.ocr.impara';
+  const PERSONAL = k => k === 'officina-profilo' || k === 'officina-firme' || k === 'officina.moduli' || k === 'officina.moduli.valori' || k === 'file360.stamps' || k === 'officina.ocr.impara' || k === 'officina-contratto';
   const S = typeof Storage !== 'undefined' ? Storage.prototype : null;
   const gi = S && S.getItem, si = S && S.setItem, ri = S && S.removeItem;
   const raw = { get: k => { try { return gi.call(localStorage, k); } catch { return null; } }, set: (k, v) => { try { si.call(localStorage, k, v); } catch { } }, del: k => { try { ri.call(localStorage, k); } catch { } } };
@@ -604,7 +605,7 @@ const Privacy = (() => {
         h('p', { class: 'muted', style: { margin: '0 0 12px' } }, 'I documenti si elaborano solo in questo browser: non vengono mai caricati su internet. Sul dispositivo restano soltanto le cose elencate qui sotto, e puoi cancellarle quando vuoi.'),
         row('Progetti e versioni', 'I file aperti, le versioni e i risultati, per riprendere il lavoro.', z.projects ? `${z.projects} · ${kb(z.blobBytes)}` : 'vuoto', del('Cancella', clearProjects, 'Progetti cancellati')),
         row('Registro delle attività', 'Le operazioni fatte, con l’impronta dei file (non il loro contenuto).', z.log ? `${z.log} voci` : 'vuoto', del('Cancella', clearLog, 'Registro cancellato')),
-        row('Dati personali per i moduli', 'Profilo (nome, codice fiscale, IBAN…), valori ricordati, firme e timbri salvati, correzioni imparate.' + (vaultOn() ? (locked ? ' Protetti e bloccati.' : ' Protetti e sbloccati.') : ''), z.personal ? kb(z.personal) : 'vuoto', del('Cancella', async () => clearPersonal(), 'Dati personali cancellati')),
+        row('Dati personali per i moduli', 'Profilo (nome, codice fiscale, IBAN…), valori ricordati, firme e timbri salvati, correzioni imparate, bozza del contratto di affitto.' + (vaultOn() ? (locked ? ' Protetti e bloccati.' : ' Protetti e sbloccati.') : ''), z.personal ? kb(z.personal) : 'vuoto', del('Cancella', async () => clearPersonal(), 'Dati personali cancellati')),
         row('Preferenze', 'Preferiti, ricette, scelte degli strumenti, ultimo file aperto nel cloud.', z.prefs ? kb(z.prefs) : 'vuoto', del('Cancella', async () => clearPrefs(), 'Preferenze cancellate')),
         row('Letture in memoria', 'Il testo letto dalle scansioni in questa scheda, per non rileggerlo in ogni strumento. Sparisce chiudendo la scheda.', z.mem ? `${z.mem} pagine` : 'vuoto', del('Svuota', async () => memClear(), 'Memoria svuotata')),
         h('div', { class: 'pv-sec' }, h('b', {}, 'Cancellazione automatica'),
