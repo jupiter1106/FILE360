@@ -277,6 +277,7 @@ const ICONS = {
   type:'<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
   textedit:'<path d="M4 6V4h12v2"/><path d="M10 4v14"/><path d="M7 18h6"/><path d="M17 11v10"/><path d="M15 11h4M15 21h4"/>',
   square:'<rect x="3" y="3" width="18" height="18" rx="2"/>',
+  aidetect:'<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/><path d="M8.5 12.5 10 9.5l1.5 3M8.9 11.7h2.2M13.3 9.5v3"/>',
   lease:'<path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M9.5 14h5M9.5 17h5"/>',
   comment:'<path d="M4 5.5h16v10H9.5L5 19.5v-4H4z"/><path d="M8 9.5h8M8 12.5h5"/>',
   textbox:'<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M8 9h8M12 9v7"/>',

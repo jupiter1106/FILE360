@@ -1604,6 +1604,19 @@ const SEO = (() => {
         ['I dati vengono inviati da qualche parte?', 'No: tutto avviene nel browser. La bozza resta solo su questo dispositivo, oppure la salvi tu in un file.'],
       ],
     },
+    rilevaai: {
+      slug: 'rilevatore-testo-ai', title: 'Rilevatore di testo AI e antiplagio: Claude, ChatGPT, Gemini, senza upload',
+      desc: 'Verifica se un compito, una tesina o un documento è stato prodotto o copiato da un assistente AI: prove nei file Word, PowerPoint, Excel e PDF, residui di chat, testo nascosto, passaggi identici. Tutto sul tuo dispositivo.',
+      h1: 'Testo scritto con l’AI?', h2: 'Come verificare se un testo è stato scritto con l’AI', rel: ["confronta", "conta", "oscura"],
+      steps: ['Trascina uno o più file (Word, PowerPoint, Excel, PDF, OpenDocument) oppure incolla il testo.', 'Leggi le prove trovate: programma che ha creato il file, nomi di assistenti, caratteri delle chat, residui di conversazione, testo nascosto.', 'Confronta il testo con le risposte di Claude alla stessa consegna o con altri compiti, e scarica il rapporto.'],
+      faq: [
+        ['Dà una percentuale di testo scritto dall’AI?', 'No, e lo dichiariamo: abbiamo misurato che lo stile da solo non distingue in modo affidabile un testo di Claude da quello di una persona che scrive bene (su oltre 11.000 testi umani). Lo strumento mostra solo prove verificabili e passaggi identici.'],
+        ['Quali prove trova?', 'Le impronte dei programmi con cui gli assistenti AI creano i file (per esempio python-docx, docx.js, PptxGenJS, openpyxl, ReportLab), nomi di assistenti nei metadati, i caratteri tipografici delle interfacce delle chat rimasti nel documento, frasi della conversazione («Spero che ti sia utile», «Fammi sapere se…»), formattazione Markdown e testo nascosto con caratteri invisibili.'],
+        ['Funziona con un testo incollato?', 'Sì: scrivi o incolla il testo. Se lo incolli da Word o da una pagina web, si controllano anche i caratteri tipografici.'],
+        ['Posso controllare i compiti di tutta la classe?', 'Sì: trascina tutti i file insieme. Per ognuno vedi l’esito e, tra i file, i passaggi identici di almeno 8 parole.'],
+        ['I testi vengono inviati a un server?', 'No: tutto avviene nel browser, sul tuo dispositivo.'],
+      ],
+    },
   };
   const BY_SLUG = Object.fromEntries(Object.entries(P).map(([id, p]) => [p.slug, id]));
   const slug = id => (P[id] || {}).slug || id;
@@ -1683,6 +1696,9 @@ const TOOLS = {
   laboratorio: { title: 'Esami di laboratorio in tabella', short: 'Esami', icon: 'flask', hue: '#BE123C', accept: '.pdf,application/pdf,' + IMG_ACCEPT, multiple: true,
               dzText: 'Referti in PDF o foto — più referti insieme per il confronto nel tempo',
               desc: 'I valori dei referti in una tabella: esame, risultato, unità e intervallo di riferimento, con i valori fuori intervallo evidenziati. Più referti insieme: confronto nel tempo.', start: (...a) => startDati(...a) },
+  rilevaai: { title: 'Testo scritto con l’AI?', short: 'Rileva AI', icon: 'aidetect', hue: '#6941C6', accept: '.docx,.docm,.dotx,.pptx,.pptm,.xlsx,.xlsm,.odt,.odp,.ods,.pdf,.txt,.md,.html,.htm,.rtf,.csv', multiple: true, anyFile: true, noFile: 'Incolla o scrivi un testo', noFileIcon: 'type',
+              dzText: 'Word, PowerPoint, Excel, PDF, OpenDocument o testo — anche tanti file insieme (per esempio i compiti di una classe)',
+              desc: 'Cerca le prove che un testo è stato prodotto o copiato da un assistente AI come Claude: impronte dei programmi con cui l’AI crea i file, nomi degli assistenti nei metadati, caratteri delle chat, residui della conversazione, testo nascosto. Confronta i testi con le risposte dell’AI e tra loro: passaggi identici evidenziati.', start: (...a) => startRilevaAI(...a) },
   contratto: { title: 'Contratto di affitto e comodato', short: 'Contratto affitto', icon: 'lease', hue: '#B45309', accept: '.pdf,.json,application/pdf,application/json', multiple: false, anyFile: true, noFile: 'Compila un nuovo contratto', noFileIcon: 'lease',
               dzText: 'Facoltativo: la visura catastale in PDF (compila immobile e proprietari) o una bozza salvata (.json)',
               desc: 'Contratto di locazione 4+4, 3+2 concordato, transitorio, per studenti, a uso negozio o ufficio, e comodato gratuito: compili i dati nella colonna, il contratto si scrive da solo con le clausole che scegli e ogni articolo si può modificare. PDF e Word, più il promemoria di registrazione e imposte.', start: (...a) => startContratto(...a) },
@@ -1720,7 +1736,7 @@ const TOOLS = {
 // descrizioni brevi per le schede compatte
 const SHORT_DESC = {
   estrattoconto: 'Movimenti del conto in Excel, con verifica dei saldi', f24: 'F24, CU, 730, Redditi, IRAP, IVA in Excel', visure: 'Visure camerali e catastali in dati', laboratorio: 'Referti in tabella, valori fuori intervallo evidenziati',
-  contratto: 'Locazione e comodato guidati', qrsepa: 'Il QR per pagare con bonifico', conforme: 'Dicitura di conformità, poi la firma', misure: 'Distanze e superfici in scala', conta: 'Parole, caratteri, cartelle', tesi: 'Modello Word e controllo del PDF', vettoriale: 'Timbri e loghi in SVG e PNG trasparente',
+  contratto: 'Locazione e comodato guidati', rilevaai: 'Prove di testo AI e passaggi copiati', qrsepa: 'Il QR per pagare con bonifico', conforme: 'Dicitura di conformità, poi la firma', misure: 'Distanze e superfici in scala', conta: 'Parole, caratteri, cartelle', tesi: 'Modello Word e controllo del PDF', vettoriale: 'Timbri e loghi in SVG e PNG trasparente',
   tavola: 'A0/A1 su fogli A4 o A3', officepdf: 'Word, Excel, PowerPoint e testi in PDF', filigrana: 'Scritta o logo su tutte le pagine', pdftesto: 'Testo e pagina web dal PDF', annota: 'Evidenzia, note e commenti', pdfppt: 'Una diapositiva per pagina',
   unisci: 'Più PDF e immagini in un solo documento', immagini: 'Foto e scansioni in un PDF ordinato', dividi: 'Separa pagine o intervalli in più file',
   comprimi: 'Riduci il peso mantenendo la qualità', modifica: 'Riscrivi il testo, aggiungi immagini e firme', ruota: 'Raddrizza pagine singole o tutte',
@@ -1743,7 +1759,7 @@ const GROUPS = [
   ['Modifica e proteggi', ['modifica', 'annota', 'moduli', 'oscura', 'numeri', 'filigrana', 'proteggi']],
   ['Pagine', ['ordina', 'ruota', 'unisci', 'dividi', 'impagina']],
   ['Converti e ottimizza', ['word', 'excel', 'officepdf', 'ocr', 'migliora', 'pdfa', 'verificapdfa', 'comprimi', 'immagini', 'immaginipdf', 'vettoriale']],
-  ['Analizza e confronta', ['analisi', 'estrai', 'confronta', 'misure', 'conta']],
+  ['Analizza e confronta', ['analisi', 'estrai', 'confronta', 'rilevaai', 'misure', 'conta']],
   [FISCAL_GROUP, ['fatture', 'firme', 'xbrl', 'contratto'], 'Fatture elettroniche, file firmati .p7m, bilanci XBRL e contratti di affitto'],
 ];
 /* ---------- famiglie: strumenti simili o complementari stanno in una scheda sola ----------

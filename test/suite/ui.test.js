@@ -430,6 +430,25 @@ test('Contratto: si scaricano il PDF, il Word e il promemoria; con dati mancanti
   ok(/\.pdf/.test(names) && /\.docx/.test(names) && /Promemoria/.test(names) && /Registrazione entro il/.test(names), names.slice(0, 300));
   await page.evaluate(() => { try { localStorage.removeItem('officina-contratto'); } catch { } });
 });
+test('Testo scritto con l’AI?: un testo incollato da una chat mostra le prove e le evidenzia nel testo', async b => {
+  const { page } = await open(b, 'desk1280'); await page.evaluate(() => { location.hash = '#rilevaai'; }); await page.waitForSelector('.dz-nofile'); await page.click('.dz-nofile'); await page.waitForSelector('.ra-ta');
+  await page.fill('.ra-ta', 'Ieri sono andata al mare con mia sorella, faceva freddo ma ci siamo divertite lo stesso... poi pizza e a casa perchè era tardi.'); await page.waitForTimeout(500);
+  ok(/Nessuna prova trovata/.test(await page.locator('.ra-verd').innerText()), 'un testo spontaneo ha prodotto prove');
+  await page.fill('.ra-ta', 'Certo! Ecco una versione migliorata del tuo tema.\n\n## Introduzione\nLa scuola è **fondamentale** per la crescita.\n\nSpero che questo ti sia utile! Fammi sapere se vuoi altre modifiche.'); await page.waitForTimeout(600);
+  ok(/Tracce di copia da una chat AI/.test(await page.locator('.ra-verd').innerText()), 'nessuna traccia nel testo copiato da una chat');
+  ok(await page.locator('.ra-text .ra-chat').count() >= 2 && await page.locator('.ra-text .ra-markdown').count() >= 1, 'le tracce non sono evidenziate nel testo');
+});
+test('Testo scritto con l’AI?: più file insieme, esito per ciascuno, passaggi in comune tra compiti, rapporto', async b => {
+  const { page } = await open(b, 'desk1280'); await openTool(page, 'rilevaai', ['ai/compito-a.docx', 'ai/compito-b.docx', 'ai/umano.docx', 'ai/ai-docxjs.docx']);
+  await page.waitForSelector('.ra-tab', { timeout: 30000 });
+  const r = await page.evaluate(() => [...document.querySelectorAll('.ra-tab tbody tr')].map(tr => tr.innerText.replace(/\s+/g, ' ')));
+  ok(r.length === 4 && /compito-a.*Nessuna prova.*\d+% con «compito-b/.test(r[0]) && /ai-docxjs.*Prove certe/.test(r[3]) && /umano.*Nessuna prova.*—/.test(r[2]), JSON.stringify(r));
+  ok(await page.locator('.ra-text .ra-comune').count() === 1, 'il passaggio in comune non è evidenziato');
+  await page.locator('.ra-tab tbody tr').nth(3).click(); await page.waitForTimeout(200);
+  ok(/docx\.js/.test(await page.locator('.ra-list').innerText()), 'la prova del file creato con docx.js non è spiegata');
+  await page.locator('.tool .btn-run').click(); await page.waitForSelector('.scrim:not(.busy) .modal.res', { timeout: 60000 });
+  ok(/Rapporto verifica AI\.pdf/.test(await page.locator('.modal.res').innerText()), 'il rapporto non si scarica');
+});
 test('errore d’apertura scritto anche nel riquadro del file, con le azioni', async b => {
   const { page } = await open(b, 'desk1280'); await openTool(page, 'comprimi', ['rotto.pdf']); await page.waitForSelector('.dropzone .dz-err', { timeout: 15000 });
   ok(await page.locator('.dropzone .dz-err .btn').count() >= 1, 'nessuna azione nel riquadro');

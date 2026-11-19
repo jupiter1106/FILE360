@@ -39,6 +39,7 @@ const Recents = (() => {
 
 /* sinonimi e parole che un utente italiano digita davvero */
 const CMD_SYNONYMS = {
+  rilevaai: ['rilevatore ai', 'rilevatore di intelligenza artificiale', 'testo scritto con l’ai', 'scritto con chatgpt', 'scritto con claude', 'testo generato dall’intelligenza artificiale', 'ai detector', 'gpt detector', 'compilatio', 'antiplagio', 'plagio', 'copiato', 'compito copiato', 'tesina copiata', 'verificare se un testo è stato scritto dall’ai', 'chatgpt', 'claude', 'gemini', 'intelligenza artificiale'],
   contratto: ['contratto di affitto', 'contratto di locazione', 'affitto', 'affittare', 'locazione', 'affittare casa', 'contratto 4+4', 'contratto 3+2', 'canone concordato', 'contratto transitorio', 'affitto studenti', 'contratto studenti', 'comodato', 'comodato d’uso', 'comodato gratuito', 'comodato a un figlio', 'affitto negozio', 'locazione commerciale', 'affitto ufficio', 'inquilino', 'cedolare secca', 'contratto casa'],
   annota: ['commenti', 'commentare', 'annotare', 'annotazioni', 'note', 'evidenziare', 'evidenziatore', 'sottolineare', 'barrare', 'revisione', 'correzioni', 'osservazioni', 'post-it', 'nota adesiva'],
   pdftesto: ['pdf in testo', 'pdf in txt', 'pdf in html', 'estrarre il testo', 'copiare il testo', 'solo testo', 'testo semplice', 'pagina web', 'txt', 'html'],
