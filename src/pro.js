@@ -1060,6 +1060,7 @@ const ScanEdit = (() => {
     for (let it = 0; it < 3; it++) for (let i = 0; i < groups.length; i++) for (let j = i + 1; j < groups.length; j++) { const a = groups[i], b = groups[j]; if (b.x0 < a.x1 + near && b.x1 > a.x0 - near && b.y0 < a.y1 + near && b.y1 > a.y0 - near) { a.x0 = Math.min(a.x0, b.x0); a.x1 = Math.max(a.x1, b.x1); a.y0 = Math.min(a.y0, b.y0); a.y1 = Math.max(a.y1, b.y1); a.n += b.n; a.parts.push(...b.parts); groups.splice(j--, 1); } }
     // un oggetto vero ha almeno un tratto grande rispetto al testo (l'anello di un timbro, la linea di una firma, un logo),
     // non è fatto solo di linee sottili (una cornice, i bordi di una tabella) e non contiene parole lette
+    if (opts.debug) opts.debug.push(...groups.map(q => ({ x: Math.round(q.x0), y: Math.round(q.y0), w: Math.round(q.x1 - q.x0), h: Math.round(q.y1 - q.y0), n: q.n, dens: +(q.n / Math.max(1, (q.x1 - q.x0) * (q.y1 - q.y0) * S * S)).toFixed(3), ts })));   // (per il banco)
     return groups.filter(q => {
       if (q.x1 - q.x0 < 18 || q.y1 - q.y0 < 9 || q.n < 120 * S * S / 4) return false;
       const dims = q.parts.map(c => [c.x1 - c.x0, c.y1 - c.y0]);
@@ -1072,7 +1073,10 @@ const ScanEdit = (() => {
       const W0 = q.x1 - q.x0, H0 = q.y1 - q.y0, dens = q.n / Math.max(1, W0 * H0 * S * S);
       const cursive = opts.firme && W0 > ts * 3 && H0 > ts * 1.45 && H0 < ts * 8 && dens < 0.22 && !thin;
       // (per Oscura le parole lette sono già tolte dall'inchiostro: una firma accanto alle etichette «Il locatore», «Il conduttore» resta valida)
-      return (big || cursive) && !thin && (inside < 2 || (opts.firme && inside < 8)) && !inTable;
+      // un blocco di firme sulle righe «La parte locatrice ___» può racchiudere le etichette: per Oscura vale lo stesso
+      // (le parole lette sono già tolte dall'inchiostro, il gruppo è fatto solo di tratti di penna e timbri)
+      const blocco = opts.firme && big && dens < 0.15 && inside < 25;
+      return (big || cursive) && !thin && (inside < 2 || (opts.firme && inside < 8) || blocco) && !inTable;
     }).map(q => ({ x: q.x0 - 1.5, y: q.y0 - 1.5, w: q.x1 - q.x0 + 3, h: q.y1 - q.y0 + 3 }));
   }
   // un oggetto della scansione: la carta senza di lui (ritaglio opaco) e lui solo (ritaglio trasparente, inchiostro vero)
