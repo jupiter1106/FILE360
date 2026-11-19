@@ -104,6 +104,14 @@ Scritti per questo lavoro da Claude Haiku, Sonnet e Opus.
 - 300/300 file reali prodotti da ChatGPT con una prova certa;
 - 0 prove forti o certe su 11.000 testi umani.
 
+**File reali di claude.ai** (forniti il 19/11/2026; nel banco con i metadati dell'autore anonimizzati):
+
+| Come è arrivato in Word | Che cosa resta nel file | Esito |
+|---|---|---|
+| Documento Word creato da claude.ai | libreria docx.js (autore «Un-named») | prova certa + stile |
+| Pulsante «Copia» sotto la risposta | Markdown non interpretato (`#`, `**`, `-`, tabelle con `\|`) | prova forte + stile |
+| Testo selezionato e incollato | nessuna traccia di Claude: claude.ai non lascia il nome di un suo carattere (ChatGPT lascia «OpenAI Sans»); Word usa Times New Roman con la spaziatura delle pagine web, come per qualsiasi pagina | riconosciuto solo dallo stile (punteggio 4,1 contro soglia 0,8) |
+
 ## 4. Limiti, detti chiaramente nello strumento
 
 - **È una valutazione statistica, non una prova.** Lo strumento lo scrive in ogni esito. Un testo segnalato va verificato, per esempio chiedendo all'autore di spiegarlo, e non sanzionato sul solo punteggio.

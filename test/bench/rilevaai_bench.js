@@ -52,6 +52,12 @@ let fail = 0; const step = (name, c, det) => { console.log(`${c ? '✓' : '✗'}
   step('stile: testo breve non valutato', st.breve?.breve);
   step('stile: paragrafo di Claude dentro un testo umano: passaggio segnalato, testo non attribuito per intero', st.misto && !st.misto.ai && st.misto.parte && st.misto.nai === 1, st.misto && `${st.misto.nai} passaggi su ${st.misto.n}`);
   step('stile: testo lungo (~29.000 parole) valutato in meno di 2 secondi', st.ms < 2000, `${Math.round(st.ms)} ms, ${st.lungo} passaggi`);
+  // file reali di claude.ai (metadati dell'autore anonimizzati): testo selezionato e incollato in Word, pulsante «Copia»,
+  // documento Word creato da claude.ai
+  const ca = {}; for (const f of ['claude-ai-incollato', 'claude-ai-pulsante', 'claude-ai-file']) { const r = await leggi(f + '.docx', fs.readFileSync(path.join(D, f + '.docx'))); ca[f] = { ...r, stile: await p.evaluate(t => { const s = RilevaAI.stile(t); return s && { ai: s.ai, score: s.score }; }, r.text) }; }
+  step('claude.ai, testo selezionato e incollato in Word (nessuna traccia nel file): riconosciuto dallo stile', ca['claude-ai-incollato'].stile?.ai && /fotosintesi/i.test(ca['claude-ai-incollato'].text), ca['claude-ai-incollato'].stile && `punteggio ${ca['claude-ai-incollato'].stile.score.toFixed(2)}`);
+  step('claude.ai, pulsante «Copia» incollato in Word: Markdown (prova forte) e stile', ca['claude-ai-pulsante'].prove.some(x => x[1] === 'forte' && x[0] === 'markdown') && ca['claude-ai-pulsante'].stile?.ai, ca['claude-ai-pulsante'].prove.map(x => x[2]).join(' | '));
+  step('claude.ai, documento Word creato da claude.ai: prova certa (docx.js) e stile', ca['claude-ai-file'].prove.some(x => x[1] === 'certa' && /docx\.js/.test(x[2])) && ca['claude-ai-file'].stile?.ai, ca['claude-ai-file'].prove.map(x => x[2]).join(' | '));
   step('nessun errore nella pagina', !errs.length, errs[0]);
   await b.close(); console.log(fail ? '\nFALLITI' : '\ntutti verdi'); process.exit(fail ? 1 : 0);
 })();
