@@ -25,7 +25,7 @@ run('interfaccia (95 comportamenti)', ['node', 'test/suite/ui.test.js'], lambda 
 run('ricerca: 65 domande tipiche portano allo strumento giusto (≥ 95%)', ['node', 'test/suite/search.test.js'], lambda o: 'tutti verdi' in o)
 run('Word, Excel, PowerPoint e testi in PDF, Filigrana: testo nell’ordine, celle, grafici, PDF/UA, nessuna richiesta esterna', ['node', 'test/bench/office_bench.js'], lambda o: 'tutti verdi' in o)
 run('PDF in PowerPoint modificabile: aperto da LibreOffice e python-pptx, parole al loro posto ≥ 95%, scansione storta ≥ 94%', ['node', 'test/bench/ppt_bench.js'], lambda o: 'tutti verdi' in o)
-run('Contratti di affitto e comodato: sei tipi, regole di legge, PDF/UA con veraPDF, Word uguale al PDF', ['node', 'test/bench/contratti_bench.js'], lambda o: 'tutti verdi' in o)
+run('Contratti di affitto e comodato: nove tipi (anche foresteria, box, fondo rustico), regole di legge, PDF/UA con veraPDF, Word uguale al PDF', ['node', 'test/bench/contratti_bench.js'], lambda o: 'tutti verdi' in o)
 run('Oscura nei contratti: comuni, province, CAP, società, dati catastali, dati letti male dall’OCR; nessun dato inventato nel testo comune', ['node', 'test/bench/pii_bench.js'], lambda o: 'tutti verdi' in o)
 run('Testo scritto con l’AI?: impronte dei programmi AI, carattere della chat, residui, testo nascosto, passaggi copiati, stile di Claude (Haiku, Sonnet, Opus) riconosciuto, testo umano non segnalato', ['node', 'test/bench/rilevaai_bench.js'], lambda o: 'tutti verdi' in o)
 run('PDF accessibili dall’OCR: PDF/UA-1 con veraPDF, testo intatto', ['node', 'test/bench/ua_bench.js'], lambda o: 'tutti verdi' in o)

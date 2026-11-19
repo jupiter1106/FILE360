@@ -390,7 +390,7 @@ async function startConfronta(stage, files, tool) {
         h('span', { class: 'cf-txt' }, c.ctx ? h('span', { class: 'muted' }, '…' + c.ctx.split(' ').slice(-4).join(' ') + ' ') : null, c.oldT ? h('del', {}, c.oldT.length > 160 ? c.oldT.slice(0, 160) + '…' : c.oldT) : null, c.oldT && c.newT ? ' → ' : null, c.newT ? h('ins', {}, c.newT.length > 160 ? c.newT.slice(0, 160) + '…' : c.newT) : null))),
       shown.length > 400 ? h('div', { class: 'muted small', style: { padding: '8px' } }, `… e altre ${shown.length - 400}`) : null);
     const pv = h('div', { class: 'cf-pages' });
-    view.replaceChildren(head, verdict, L.length ? chips : null, L.length ? h('div', { class: 'cf-body' }, list, pv) : null);
+    view.replaceChildren(...[head, verdict, L.length ? chips : null, L.length ? h('div', { class: 'cf-body' }, list, pv) : null].filter(Boolean));
     const c = L[curChange] || L[shown[0]?.[1]];
     if (c) showPages(r, ai, bi, c, pv);
   }

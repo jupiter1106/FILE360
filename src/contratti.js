@@ -15,11 +15,14 @@ const Contratti = (() => {
     transitorio: { label: 'Transitorio (da 1 a 18 mesi)', desc: 'Per un’esigenza temporanea del locatore o dell’inquilino, da indicare e documentare.', titolo: 'CONTRATTO DI LOCAZIONE ABITATIVA DI NATURA TRANSITORIA', sotto: 'ai sensi dell’art. 5, comma 1, della legge 9 dicembre 1998, n. 431 e del D.M. 16 gennaio 2017', mesi: [1, 18], abit: true },
     studenti: { label: 'Studenti universitari (da 6 a 36 mesi)', desc: 'Per chi è iscritto all’università in un comune diverso da quello di residenza.', titolo: 'CONTRATTO DI LOCAZIONE ABITATIVA PER STUDENTI UNIVERSITARI', sotto: 'ai sensi dell’art. 5, commi 2 e 3, della legge 9 dicembre 1998, n. 431 e del D.M. 16 gennaio 2017', mesi: [6, 36], abit: true, accordo: true },
     commerciale: { label: 'Uso diverso: negozio, ufficio, laboratorio (6+6)', desc: 'Attività commerciali, artigianali e professionali: 6 anni rinnovabili (9 per le attività alberghiere).', titolo: 'CONTRATTO DI LOCAZIONE AD USO DIVERSO DALL’ABITAZIONE', sotto: 'ai sensi degli artt. 27 e seguenti della legge 27 luglio 1978, n. 392', anni: [6, 30] },
+    foresteria: { label: 'Uso foresteria (conduttore impresa)', desc: 'Abitazione locata a un’impresa per i suoi dipendenti, collaboratori od ospiti: durata libera.', titolo: 'CONTRATTO DI LOCAZIONE DI IMMOBILE AD USO FORESTERIA', sotto: 'ai sensi degli artt. 1571 e seguenti del codice civile', anni: [1, 30], fores: true },
+    box: { label: 'Box auto o posto auto', desc: 'Autorimessa o posto auto locato da solo, non insieme a un’abitazione: durata libera, rinnovo tacito.', titolo: 'CONTRATTO DI LOCAZIONE DI AUTORIMESSA', sotto: 'ai sensi degli artt. 1571 e seguenti del codice civile', anni: [1, 30], box: true },
+    fondo: { label: 'Affitto di fondo rustico (terreni agricoli)', desc: 'Almeno 15 anni; durata e patti diversi solo con l’assistenza delle organizzazioni agricole (art. 45 L. 203/1982).', titolo: 'CONTRATTO DI AFFITTO DI FONDO RUSTICO', sotto: 'ai sensi della legge 3 maggio 1982, n. 203', anni: [1, 30], fondo: true },
     comodato: { label: 'Comodato d’uso gratuito', desc: 'L’immobile si dà in uso senza canone, per esempio a un figlio.', titolo: 'CONTRATTO DI COMODATO D’USO GRATUITO DI IMMOBILE', sotto: 'ai sensi degli artt. 1803 e seguenti del codice civile' },
   };
   const isLoc = st => st.tipo !== 'comodato';
   const isAbit = st => !!TIPI[st.tipo]?.abit;
-  const R = st => st.tipo === 'comodato' ? { A: 'comodante', B: 'comodatario', As: 'Comodante', Bs: 'Comodatario', Ap: 'comodanti', Bp: 'comodatari' } : { A: 'locatore', B: 'conduttore', As: 'Locatore', Bs: 'Conduttore', Ap: 'locatori', Bp: 'conduttori' };
+  const R = st => st.tipo === 'fondo' ? { A: 'concedente', B: 'affittuario', As: 'Concedente', Bs: 'Affittuario', Ap: 'concedenti', Bp: 'affittuari' } : st.tipo === 'comodato' ? { A: 'comodante', B: 'comodatario', As: 'Comodante', Bs: 'Comodatario', Ap: 'comodanti', Bp: 'comodatari' } : { A: 'locatore', B: 'conduttore', As: 'Locatore', Bs: 'Conduttore', Ap: 'locatori', Bp: 'conduttori' };
 
   /* ---------- dati di partenza ---------- */
   const persona = () => ({ tipo: 'pf', sesso: '', nome: '', cognome: '', luogoN: '', provN: '', dataN: '', cf: '', comune: '', prov: '', indirizzo: '', cap: '', email: '', pec: '', tel: '', den: '', piva: '', lr: '', lrCf: '', lrRuolo: 'legale rappresentante' });
@@ -34,8 +37,11 @@ const Contratti = (() => {
     dep: { mesi: 2 },
     spese: { oneri: 'acconto', acconto: '', utenze: 'conduttore' },
     comm: { attivita: '', pubblico: true },
+    box: { uso: 'ricovero dell’autovettura del conduttore', targa: '', disdetta: 30 },
+    fores: { destinatari: 'propri dipendenti, collaboratori e ospiti' },
+    fondo: { terreni: [], deroga: false, org: '', coltivatore: true, coltura: '' },
     comod: { uso: 'abitazione del comodatario e della sua famiglia', parente: false, rel: 'figlio', spCond: 'comodatario', spReg: 'comodatario' },
-    cl: { recesso: { on: false, mesi: 3 }, animali: { on: false, mode: 'consenso' }, fumo: { on: false }, subParz: { on: false }, assic: { on: false }, risolutiva: { on: false, rate: 2 }, visite: { on: true, giorni: 3 }, migliorie: { on: true }, pec: { on: false }, regLoc: { on: false }, verbale: { on: false, data: '', luce: '', gas: '', acqua: '', chiavi: '', note: '' } },
+    cl: { recesso: { on: false, mesi: 3 }, animali: { on: false, mode: 'consenso' }, fumo: { on: false }, subParz: { on: false }, assic: { on: false }, risolutiva: { on: false, rate: 2 }, visite: { on: true, giorni: 3 }, migliorie: { on: true }, pec: { on: false }, regLoc: { on: false }, verbale: { on: false, data: '', luce: '', gas: '', acqua: '', chiavi: '', note: '' }, esonero: { on: false }, bombole: { on: false }, clima: { on: false }, noPrel: { on: false } },
     pers: [], ov: {}, off: {},
     firma: { luogo: '', data: isoToday() },
   });
@@ -130,7 +136,10 @@ const Contratti = (() => {
   function piuMesi(s, m) { const d = parseIso(s); if (!d) return null; const day = d.getDate(); const e = new Date(d.getFullYear(), d.getMonth() + m, 1); e.setDate(Math.min(day, new Date(e.getFullYear(), e.getMonth() + 1, 0).getDate())); return e; }
   function fineDurata(s, mesi) { const e = piuMesi(s, mesi); if (!e) return ''; e.setDate(e.getDate() - 1); return toIso(e); }
   const piuGiorni = (s, g) => { const d = parseIso(s); if (!d) return ''; d.setDate(d.getDate() + g); return toIso(d); };
-  const anniMinimi = st => st.tipo === 'commerciale' && st.dur.alberghiero ? 9 : TIPI[st.tipo].anni?.[0];
+  const anniMinimi = st => st.tipo === 'commerciale' && st.dur.alberghiero ? 9 : st.tipo === 'fondo' ? (st.fondo.deroga ? 1 : 15) : TIPI[st.tipo].anni?.[0];
+  // il fondo rustico ha il canone annuo (si scrive quello); gli altri il canone mensile
+  const annuoDi = st => { const v = num(st.can.mensile); return isFinite(v) ? (st.tipo === 'fondo' ? v : v * 12) : NaN; };
+  const RATE = { mensile: 12, trimestrale: 4, semestrale: 2, annuale: 1 };
   // durata in mesi del contratto (i tipi «ad anni» la chiedono in anni)
   function mesiDurata(st) {
     const T = TIPI[st.tipo];
@@ -172,13 +181,26 @@ const Contratti = (() => {
       need('dep', 'gar.max', 'importo massimo garantito (art. 1938 c.c.)', num(st.gar.max) > 0);
     }
     const I = st.imm;
-    need('imm', 'imm.comune', 'Comune dell’immobile', I.comune.trim()); need('imm', 'imm.indirizzo', 'indirizzo dell’immobile', I.indirizzo.trim());
-    need('imm', 'imm.descr', 'descrizione dell’immobile', I.descr.trim());
-    need('imm', 'imm.cat.foglio', 'foglio catastale', I.cat.foglio.trim()); need('imm', 'imm.cat.part', 'particella catastale', I.cat.part.trim());
-    need('imm', 'imm.cat.categoria', 'categoria catastale', I.cat.categoria.trim());
-    if (I.cat.categoria.trim() && !/^[A-F]\/?\d{1,2}$/i.test(I.cat.categoria.trim())) warn.push({ sec: 'imm', msg: 'Categoria catastale insolita: di solito è come A/2, A/3, C/1, C/6.' });
-    if (!I.cat.sub.trim()) warn.push({ sec: 'imm', msg: 'Subalterno non indicato: quasi tutti gli appartamenti ne hanno uno (è nella visura).' });
-    if (isLoc(st)) need('imm', 'imm.ape.classe', 'classe energetica (APE)', I.ape.classe);
+    need('imm', 'imm.comune', st.tipo === 'fondo' ? 'Comune in cui si trovano i terreni' : 'Comune dell’immobile', I.comune.trim());
+    if (st.tipo === 'fondo') {
+      // terreni: almeno uno, con foglio e particella del Catasto Terreni
+      const tr = st.fondo.terreni;
+      need('imm', 'fondo.terreni', 'almeno un terreno (foglio e particella)', tr.length);
+      tr.forEach((x, i) => { need('imm', `fondo.terreni.${i}.foglio`, `foglio del terreno ${i + 1}`, String(x.foglio || '').trim()); need('imm', `fondo.terreni.${i}.part`, `particella del terreno ${i + 1}`, String(x.part || '').trim()); });
+      if (+st.dur.anni < 15 && !st.fondo.deroga) warn.push({ sec: 'dur', msg: 'Senza l’assistenza delle organizzazioni agricole la durata è di almeno 15 anni (art. 1 L. 203/1982): il contratto usa 15 anni.' });
+      if (st.fondo.deroga) need('dur', 'fondo.org', 'organizzazioni professionali agricole che assistono le parti', st.fondo.org.trim(), 'Per i patti in deroga servono le organizzazioni professionali agricole che assistono le parti (art. 45 L. 203/1982)');
+    } else {
+      need('imm', 'imm.indirizzo', 'indirizzo dell’immobile', I.indirizzo.trim());
+      need('imm', 'imm.descr', 'descrizione dell’immobile', I.descr.trim());
+      need('imm', 'imm.cat.foglio', 'foglio catastale', I.cat.foglio.trim()); need('imm', 'imm.cat.part', 'particella catastale', I.cat.part.trim());
+      need('imm', 'imm.cat.categoria', 'categoria catastale', I.cat.categoria.trim());
+      if (I.cat.categoria.trim() && !/^[A-F]\/?\d{1,2}$/i.test(I.cat.categoria.trim())) warn.push({ sec: 'imm', msg: 'Categoria catastale insolita: di solito è come A/2, A/3, C/1, C/6.' });
+      else if (st.tipo === 'box' && I.cat.categoria.trim() && !/^C\/?[67]$/i.test(I.cat.categoria.trim())) warn.push({ sec: 'imm', msg: 'Un box o un posto auto è di solito in categoria C/6 (o C/7 se coperto ma aperto): controlla la visura.' });
+      if (!I.cat.sub.trim()) warn.push({ sec: 'imm', msg: 'Subalterno non indicato: quasi tutti gli appartamenti ne hanno uno (è nella visura).' });
+    }
+    // APE: non per box, posti auto e terreni (casi esclusi dall'obbligo)
+    if (isLoc(st) && !['box', 'fondo'].includes(st.tipo)) need('imm', 'imm.ape.classe', 'classe energetica (APE)', I.ape.classe);
+    if (st.tipo === 'foresteria' && st.B.some(p => p.tipo !== 'pg')) warn.push({ sec: 'B', msg: 'Nell’uso foresteria il conduttore è un’impresa o un ente: scegli «Società o ente». Se il conduttore è una persona, il contratto giusto è un abitativo (4+4 o 3+2).' });
     if (I.arredo !== 'no' && !I.inventario.trim()) warn.push({ sec: 'imm', msg: 'Immobile arredato: scrivi l’inventario degli arredi, diventa un allegato del contratto.' });
     // durata
     need('dur', 'dur.inizio', 'data di inizio', parseIso(st.dur.inizio));
@@ -196,7 +218,7 @@ const Contratti = (() => {
     if (st.tipo === 'commerciale') need('imm', 'comm.attivita', 'attività che si svolgerà nei locali', st.comm.attivita.trim());
     // canone
     if (isLoc(st)) {
-      need('can', 'can.mensile', 'canone mensile', num(st.can.mensile) > 0);
+      need('can', 'can.mensile', st.tipo === 'fondo' ? 'canone annuo' : 'canone mensile', num(st.can.mensile) > 0);
       if (st.can.modo === 'bonifico') {
         need('can', 'can.iban', 'IBAN per il bonifico', st.can.iban.trim());
         if (st.can.iban.trim() && !ibanOk(st.can.iban)) req.push({ sec: 'can', path: 'can.iban', label: 'IBAN', msg: 'IBAN non valido: controlla le cifre' });
@@ -206,7 +228,7 @@ const Contratti = (() => {
       if (st.tipo === 'concordato' && st.can.accordo.assistenza === 'assistito') need('can', 'can.accordo.org', 'organizzazioni che assistono le parti', st.can.accordo.org.trim());
       if (st.can.cedolare && st.A.some(p => p.tipo === 'pg')) req.push({ sec: 'can', path: 'can.cedolare', label: 'cedolare secca', msg: 'La cedolare secca è solo per i locatori persone fisiche: togli la scelta' });
       if (st.tipo === 'concordato' || st.tipo === 'studenti' || (st.tipo === 'transitorio' && st.can.accordo.comune.trim())) warn.push({ sec: 'can', msg: 'Verifica che il canone rientri nei valori minimo e massimo dell’Accordo territoriale per la zona dell’immobile: il programma non li conosce.' });
-      if (st.spese.oneri === 'acconto' && !(num(st.spese.acconto) > 0)) warn.push({ sec: 'spese', msg: 'Acconto spese non indicato: scrivi l’importo mensile o scegli «a consuntivo».' });
+      if (!['fondo', 'box'].includes(st.tipo) && st.spese.oneri === 'acconto' && !(num(st.spese.acconto) > 0)) warn.push({ sec: 'spese', msg: 'Acconto spese non indicato: scrivi l’importo mensile o scegli «a consuntivo».' });
     }
     if (st.cl.recesso.on && isLoc(st)) {
       const m = +st.cl.recesso.mesi;
@@ -240,7 +262,7 @@ const Contratti = (() => {
   const elenco = a => a.length <= 1 ? (a[0] || '') : a.slice(0, -1).join(', ') + ' e ' + a[a.length - 1];
   function immobile(st, comp = true) {
     const I = st.imm, pos = [I.scala.trim() && `scala ${I.scala.trim()}`, I.piano.trim() && `piano ${I.piano.trim()}`, I.interno.trim() && `interno ${I.interno.trim()}`].filter(Boolean).join(', ');
-    const arr = I.arredo === 'si' ? ', arredata come da inventario allegato' : I.arredo === 'parz' ? ', parzialmente arredata come da inventario allegato' : st.tipo === 'commerciale' ? '' : ', non arredata';
+    const arr = ['commerciale', 'box', 'fondo'].includes(st.tipo) ? '' : I.arredo === 'si' ? ', arredata come da inventario allegato' : I.arredo === 'parz' ? ', parzialmente arredata come da inventario allegato' : ', non arredata';
     return `l’unità immobiliare sita in ${val(I.comune, 'Comune')}${prov(I.prov)}, ${val(I.indirizzo, 'indirizzo e numero civico')}${pos ? `, ${pos}` : ''}${comp ? `, composta da ${val(I.descr, 'descrizione: vani e accessori')}` : ''}${num(I.mq) > 0 ? `, della superficie di circa ${String(I.mq).trim()} m²` : ''}${arr}`;
   }
   const catasto = c => `foglio ${val(c.foglio, 'foglio')}, particella ${val(c.part, 'particella')}${c.sub.trim() ? `, subalterno ${c.sub.trim()}` : ''}, categoria ${val(c.categoria.toUpperCase(), 'categoria')}${c.classe.trim() ? `, classe ${c.classe.trim()}` : ''}${num(c.rendita) > 0 ? `, rendita catastale euro ${eur(num(c.rendita))}` : ''}`;
@@ -248,6 +270,14 @@ const Contratti = (() => {
     const P = st.imm.pert.filter(x => x.tipo || x.descr);
     if (!P.length) return '';
     return P.map(x => `${x.tipo || 'pertinenza'}${x.descr.trim() ? ` (${x.descr.trim()})` : ''}${x.foglio.trim() || x.part.trim() ? `, identificata al Catasto Fabbricati al foglio ${val(x.foglio, 'foglio')}, particella ${val(x.part, 'particella')}${x.sub.trim() ? `, subalterno ${x.sub.trim()}` : ''}${x.categoria.trim() ? `, categoria ${x.categoria.trim().toUpperCase()}` : ''}${num(x.rendita) > 0 ? `, rendita euro ${eur(num(x.rendita))}` : ''}` : ''}`).join('; ');
+  }
+  // terreni del fondo rustico (Catasto Terreni): foglio, particella, superficie, qualità, redditi
+  const ha = v => { const n = num(v); return isFinite(n) && n > 0 ? n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) : ''; };
+  function terreni(st) {
+    const T = st.fondo.terreni; if (!T.length) return PH('terreni: foglio, particella e superficie');
+    const one = x => `foglio ${val(x.foglio, 'foglio')}, particella ${val(x.part, 'particella')}${ha(x.sup) ? `, superficie ettari ${ha(x.sup)}` : ''}${String(x.qualita || '').trim() ? `, qualità ${String(x.qualita).trim()}` : ''}${num(x.rd) > 0 ? `, reddito dominicale euro ${eur(num(x.rd))}` : ''}${num(x.ra) > 0 ? `, reddito agrario euro ${eur(num(x.ra))}` : ''}`;
+    const tot = T.reduce((a, x) => a + (num(x.sup) > 0 ? num(x.sup) : 0), 0);
+    return T.map(one).join('; ') + (T.length > 1 && tot > 0 ? `; per una superficie complessiva di ettari ${ha(tot)}` : '');
   }
   const ARTICOLO = (key, title, paras, o = {}) => ({ key, title, paras: paras.filter(Boolean), ...o });
   // «un mese», «una mensilità», «tre mesi»
@@ -258,13 +288,17 @@ const Contratti = (() => {
     const loc = isLoc(st), abit = isAbit(st), comm = st.tipo === 'commerciale';
     const mesi = mesiDurata(st), ini = st.dur.inizio, fine = mesi ? fineDurata(ini, mesi) : st.dur.fine;
     const dIni = ini ? dataEstesa(ini) : PH('data di inizio'), dFine = fine && parseIso(ini) ? dataEstesa(fine) : PH('data di fine');
-    const can = num(st.can.mensile), annuo = can > 0 ? can * 12 : NaN;
+    const annuo = annuoDi(st) > 0 ? annuoDi(st) : NaN, can = annuo / 12;
     const canTxt = v => isFinite(v) && v > 0 ? importo(v) : `euro ${PH('importo')}`;
     const multiB = st.B.length > 1;
 
     /* oggetto */
-    const ogg = [`Il ${A} concede ${loc ? 'in locazione' : 'in comodato d’uso gratuito'} al ${B}, che accetta, ${immobile(st)}.`,
+    const fondo = st.tipo === 'fondo', box = st.tipo === 'box', fores = st.tipo === 'foresteria';
+    const ogg = fondo ? [`Il ${A} concede in affitto all’${B}, che accetta, i terreni agricoli siti nel Comune di ${val(st.imm.comune, 'Comune')}${prov(st.imm.prov)}${st.imm.indirizzo.trim() ? `, località ${st.imm.indirizzo.trim()}` : ''}, nello stato di fatto e di diritto in cui si trovano, censiti al Catasto Terreni del medesimo Comune come segue: ${terreni(st)}.`,
+      `I terreni sono concessi a corpo e non a misura, con le relative servitù attive e passive.`]
+      : [`Il ${A} concede ${loc ? 'in locazione' : 'in comodato d’uso gratuito'} al ${B}, che accetta, ${immobile(st)}.`,
       `L’unità immobiliare è identificata al Catasto Fabbricati del Comune di ${val(st.imm.comune, 'Comune')}${st.imm.cat.sez.trim() ? `, sezione ${st.imm.cat.sez.trim()}` : ''}, al ${catasto(st.imm.cat)}.`];
+    if (box) ogg.push(`Le parti comuni dell’edificio e gli spazi di manovra non sono oggetto della locazione: il ${B} ne usa soltanto per accedere all’autorimessa.`);
     const pz = pertinenze(st); if (pz) ogg.push(`Sono comprese ${loc ? 'nella locazione' : 'nel comodato'} le seguenti pertinenze: ${pz}.`);
     if (comm) ogg.push(`L’unità immobiliare è locata per l’esercizio della seguente attività: ${val(st.comm.attivita, 'attività')}. Il ${B} dichiara che l’attività ${st.comm.pubblico ? 'comporta' : 'non comporta'} contatti diretti con il pubblico degli utenti e dei consumatori.`);
     out.push(ARTICOLO('oggetto', 'Oggetto', ogg, { fixed: true }));
@@ -288,6 +322,19 @@ const Contratti = (() => {
     } else if (st.tipo === 'studenti') {
       dur.push(`Il contratto è stipulato per la durata di ${lettere(mesi)} mesi, dal ${dIni} al ${dFine}. Alla scadenza il contratto si rinnova automaticamente per uguale periodo, salvo disdetta del ${B} da comunicarsi al ${A} con lettera raccomandata almeno un mese e non oltre tre mesi prima della scadenza.`);
       dur.push(`Il contratto è stipulato in considerazione della condizione di studente universitario del ${B}, iscritto al corso di ${val(st.stud.corso, 'corso di studi')} presso ${val(st.stud.universita, 'università')}, con sede in un comune diverso da quello di residenza.`);
+    } else if (box) {
+      const g = Math.max(15, +st.box.disdetta || 30);
+      dur.push(`La locazione ha la durata di ${qta(mesi / 12, 'anno', 'anni')}, dal ${dIni} al ${dFine}. Alla scadenza il contratto si rinnova tacitamente di anno in anno alle stesse condizioni, se nessuna delle parti comunica all’altra disdetta con lettera raccomandata o posta elettronica certificata almeno ${lettere(g)} giorni prima della scadenza.`);
+    } else if (fores) {
+      dur.push(`La locazione ha la durata di ${qta(mesi / 12, 'anno', 'anni')}, dal ${dIni} al ${dFine}, e si rinnova tacitamente per un periodo di uguale durata se nessuna delle parti comunica all’altra disdetta con lettera raccomandata almeno sei mesi prima della scadenza.`);
+      dur.push(`Le parti danno atto che il ${B} è un’impresa e che l’immobile è destinato a soddisfare esigenze abitative temporanee di ${val(st.fores.destinatari, 'destinatari')}, e convengono che la locazione è regolata dagli artt. 1571 e seguenti del codice civile e, in quanto compatibili, dalle norme della legge n. 392/1978.`);
+    } else if (fondo) {
+      if (st.fondo.deroga) {
+        dur.push(`L’affitto ha la durata di ${qta(mesi / 12, 'anno', 'anni')}, dal ${dIni} al ${dFine}, data in cui cessa senza bisogno di disdetta; l’${B} rilascia i terreni liberi da persone e cose, fatti salvi i frutti pendenti della coltura in corso.`);
+        dur.push(`Le parti, assistite dalle rispettive organizzazioni professionali agricole maggiormente rappresentative a livello nazionale (${val(st.fondo.org, 'organizzazioni')}), i cui rappresentanti sottoscrivono il contratto, stipulano il presente accordo anche in deroga alle norme vigenti in materia di contratti agrari, ai sensi dell’art. 45 della legge n. 203/1982.`);
+      } else {
+        dur.push(`L’affitto ha la durata di ${qta(mesi / 12, 'anno', 'anni')}, dal ${dIni} al ${dFine} (art. 1 legge n. 203/1982). In mancanza di disdetta comunicata da una delle parti all’altra con lettera raccomandata con avviso di ricevimento almeno un anno prima della scadenza, il contratto si intende rinnovato per un periodo di uguale durata (art. 4 legge n. 203/1982).`);
+      }
     } else if (comm) {
       const a = st.dur.alberghiero, rin = a ? 'nove anni in nove anni' : 'sei anni in sei anni', prea = a ? 'diciotto' : 'dodici';
       dur.push(`La locazione ha la durata di ${lettere(mesi / 12)} anni, dal ${dIni} al ${dFine}, e si rinnova tacitamente di ${rin} se nessuna delle parti comunica all’altra disdetta con lettera raccomandata con avviso di ricevimento almeno ${prea} mesi prima della scadenza (art. 28 legge n. 392/1978).`);
@@ -299,35 +346,39 @@ const Contratti = (() => {
     const rec = [];
     if (st.tipo === 'studenti') rec.push(`Il ${B} ha facoltà di recedere dal contratto per gravi motivi, anche connessi al corso di studi, previo avviso da recapitarsi al ${A} con lettera raccomandata almeno un mese e non oltre tre mesi prima.`);
     else if (st.tipo === 'transitorio') { const m = Math.max(1, Math.min(6, +st.trans.preavviso || 3)); rec.push(`Il ${B} ha facoltà di recedere dal contratto per gravi motivi, previo avviso da recapitarsi al ${A} con lettera raccomandata almeno ${qta(m, 'mese', 'mesi')} prima.`); }
-    else if (comm) rec.push(`Il ${B} può recedere in qualsiasi momento dal contratto qualora ricorrano gravi motivi, dandone avviso al ${A} con lettera raccomandata almeno sei mesi prima della data in cui il recesso deve avere esecuzione (art. 27, ultimo comma, legge n. 392/1978).`);
+    else if (fondo) rec.push(`L’${B} può recedere dal contratto con semplice preavviso da comunicare al ${A} con lettera raccomandata con avviso di ricevimento almeno un anno prima della scadenza dell’annata agraria (art. 5, primo comma, legge n. 203/1982).`);
+    else if (box) rec.push(`Il ${B} può recedere in qualsiasi momento dal contratto dandone avviso al ${A} con lettera raccomandata o posta elettronica certificata almeno ${lettere(Math.max(15, +st.box.disdetta || 30))} giorni prima.`);
+    else if (comm || fores) rec.push(`Il ${B} può recedere in qualsiasi momento dal contratto qualora ricorrano gravi motivi, dandone avviso al ${A} con lettera raccomandata almeno sei mesi prima della data in cui il recesso deve avere esecuzione (art. 27, ultimo comma, legge n. 392/1978).`);
     else rec.push(`Il ${B} ha facoltà di recedere dal contratto qualora ricorrano gravi motivi, previo avviso da recapitarsi al ${A} con lettera raccomandata almeno sei mesi prima (art. 3, comma 6, legge n. 431/1998).`);
-    if (st.cl.recesso.on && st.tipo !== 'studenti') {
+    if (st.cl.recesso.on && !['studenti', 'box', 'fondo'].includes(st.tipo)) {
       const m = Math.max(comm ? 6 : 1, +st.cl.recesso.mesi || 3);
       rec.push(`È inoltre facoltà del ${B} recedere in qualsiasi momento dal contratto, anche in assenza di gravi motivi, dandone avviso al ${A} con lettera raccomandata almeno ${qta(m, 'mese', 'mesi')} prima della data del rilascio${comm ? ' (art. 27, comma 7, legge n. 392/1978)' : ''}.`);
     }
     if (multiB) rec.push(`In caso di recesso di uno solo dei ${r.Bp}, il contratto prosegue con gli altri, che restano obbligati in solido per l’intero canone, salvo diverso accordo scritto con il ${A}.`);
-    out.push(ARTICOLO('recesso', 'Recesso del ' + B, rec, { onerous: true }));
+    out.push(ARTICOLO('recesso', (fondo ? 'Recesso dell’' : 'Recesso del ') + B, rec, { onerous: true }));
 
     /* canone */
     const cn = [];
-    const rate = st.can.periodo === 'trimestrale' ? 4 : 12, rataV = isFinite(annuo) ? annuo / rate : NaN;
+    const rate = RATE[st.can.periodo] || 12, rataV = isFinite(annuo) ? annuo / rate : NaN;
+    const rateTxt = rate === 1 ? `in un’unica rata annuale anticipata di ${canTxt(rataV)}, entro il giorno ${Math.max(1, Math.min(28, +st.can.giorno || 5))} del primo mese di ogni annata` : `in ${lettere(rate)} rate ${rate === 12 ? 'mensili' : rate === 4 ? 'trimestrali' : 'semestrali'} anticipate di ${canTxt(rataV)} ciascuna, entro il giorno ${Math.max(1, Math.min(28, +st.can.giorno || 5))} ${rate === 12 ? 'di ogni mese' : 'del primo mese di ogni ' + (rate === 4 ? 'trimestre' : 'semestre')}`;
     const giorno = Math.max(1, Math.min(28, +st.can.giorno || 5));
-    let base = `Il canone annuo di locazione è convenuto in ${canTxt(annuo)}`;
+    let base = `Il canone annuo ${fondo ? 'di affitto' : 'di locazione'} è convenuto in ${canTxt(annuo)}`;
     if (st.tipo === 'concordato' || st.tipo === 'studenti' || (st.tipo === 'transitorio' && st.can.accordo.comune.trim())) base = `Il canone annuo di locazione, determinato dalle parti nei valori minimo e massimo stabiliti${st.can.accordo.zona.trim() ? ` per la zona ${st.can.accordo.zona.trim()}` : ''} dall’Accordo territoriale per il Comune di ${val(st.can.accordo.comune, 'Comune')}, è convenuto in ${canTxt(annuo)}`;
-    if (comm && st.can.iva) base += `, oltre IVA nella misura di legge, avendo il ${A} optato per l’imponibilità ai sensi dell’art. 10, primo comma, n. 8, del D.P.R. n. 633/1972`;
+    if ((comm || box) && st.can.iva) base += `, oltre IVA nella misura di legge, avendo il ${A} optato per l’imponibilità ai sensi dell’art. 10, primo comma, n. 8, del D.P.R. n. 633/1972`;
     const modo = st.can.modo === 'bonifico' ? `mediante bonifico bancario sul conto corrente intestato a ${val(st.can.intestatario, 'intestatario del conto')}, IBAN ${val(ibanFmt(st.can.iban), 'IBAN')}` : `con la seguente modalità tracciabile: ${val(st.can.altro, 'modalità di pagamento')}`;
-    cn.push(`${base}, che il ${B} si obbliga a corrispondere in ${lettere(rate)} rate ${rate === 12 ? 'mensili' : 'trimestrali'} anticipate di ${canTxt(rataV)} ciascuna, entro il giorno ${giorno} ${rate === 12 ? 'di ogni mese' : 'del primo mese di ogni trimestre'}, ${modo}.`);
+    cn.push(`${base}, che ${fondo ? 'l’' : 'il '}${B} si obbliga a corrispondere ${rateTxt}, ${modo}.`);
     if (abit) cn.push('Il pagamento avviene in forme che escludono l’uso del contante e ne assicurano la tracciabilità (art. 1, comma 50, legge n. 147/2013).');
     cn.push(`Il mancato pagamento, in tutto o in parte, del canone decorsi venti giorni dalla scadenza, ovvero il mancato pagamento degli oneri accessori quando l’importo non pagato superi quello di due mensilità del canone, costituisce motivo di risoluzione del contratto ai sensi dell’art. 1455 del codice civile${abit ? ', come previsto dall’art. 5 della legge n. 392/1978, fatto salvo quanto previsto dall’art. 55 della medesima legge' : ''}.`);
-    if (comm) cn.splice(cn.length - 1, 1, `Il pagamento del canone non può essere sospeso né ritardato da pretese o eccezioni del ${B}, quale ne sia il titolo. Il mancato pagamento di una rata del canone decorsi venti giorni dalla scadenza costituisce grave inadempimento ai sensi dell’art. 1455 del codice civile.`);
+    if (fondo) cn.splice(cn.length - 1, 1, `Il mancato pagamento del canone per almeno una annualità costituisce grave inadempimento ai sensi dell’art. 5, secondo comma, della legge n. 203/1982, previa contestazione con le modalità ivi previste.`);
+    if (comm || box || fores) cn.splice(cn.length - 1, 1, `Il pagamento del canone non può essere sospeso né ritardato da pretese o eccezioni del ${B}, quale ne sia il titolo. Il mancato pagamento di una rata del canone decorsi venti giorni dalla scadenza costituisce grave inadempimento ai sensi dell’art. 1455 del codice civile.`);
     out.push(ARTICOLO('canone', 'Canone e pagamento', cn, { fixed: true, onerous: true }));
 
     /* aggiornamento o cedolare secca */
     if (st.can.cedolare && abit) {
       out.push(ARTICOLO('aggiornamento', 'Cedolare secca', [`Il ${A} comunica al ${B} che intende optare per il regime della cedolare secca previsto dall’art. 3 del D.Lgs. n. 23/2011 e che, per tutta la durata dell’opzione, rinuncia a chiedere l’aggiornamento del canone a qualsiasi titolo, compreso l’aggiornamento ISTAT. Per la durata dell’opzione non sono dovute l’imposta di registro e l’imposta di bollo sul contratto.`]));
     } else {
-      const pct = comm ? Math.min(75, +st.can.istat || 0) : +st.can.istat || 0;
-      if (pct > 0 && mesi > 12) out.push(ARTICOLO('aggiornamento', 'Aggiornamento del canone', [`Il canone è aggiornato ogni anno, su richiesta del ${A} da comunicare con lettera raccomandata, nella misura del ${pct}% della variazione, accertata dall’ISTAT, dell’indice dei prezzi al consumo per le famiglie di operai e impiegati (FOI) verificatasi nell’anno precedente${comm ? ' (art. 32 legge n. 392/1978)' : ''}. L’aggiornamento decorre dal mese successivo a quello della richiesta.`]));
+      const pct = comm || fores ? Math.min(75, +st.can.istat || 0) : +st.can.istat || 0;
+      if (pct > 0 && (mesi > 12 || box)) out.push(ARTICOLO('aggiornamento', 'Aggiornamento del canone', [`Il canone è aggiornato ogni anno, su richiesta del ${A} da comunicare con lettera raccomandata, nella misura del ${pct}% della variazione, accertata dall’ISTAT, dell’indice dei prezzi al consumo per le famiglie di operai e impiegati (FOI) verificatasi nell’anno precedente${comm || fores ? ' (art. 32 legge n. 392/1978)' : ''}. L’aggiornamento decorre dal mese successivo a quello della richiesta.`]));
     }
 
     /* deposito cauzionale e garanzie */
@@ -338,18 +389,21 @@ const Contratti = (() => {
 
     /* oneri accessori e utenze */
     const on = [];
-    if (st.spese.oneri === 'inclusi') on.push(`Il canone comprende gli oneri accessori relativi ai servizi comuni dell’edificio; nulla è dovuto dal ${B} a tale titolo oltre al canone.`);
+    if (fondo) on.push(`Le imposte e i contributi gravanti sui terreni sono ripartiti tra le parti secondo la legge; i contributi dei consorzi di bonifica e di irrigazione per la parte relativa all’esercizio e alla manutenzione delle opere sono a carico dell’${B}, salvo diverso accordo scritto.`);
+    else if (box) on.push(`Sono a carico del ${B} gli oneri accessori relativi all’uso dell’autorimessa (illuminazione e pulizia delle parti comuni di accesso, manutenzione ordinaria del cancello o della porta automatica), nella misura indicata dal ${A} sulla base del rendiconto condominiale.`);
+    else if (st.spese.oneri === 'inclusi') on.push(`Il canone comprende gli oneri accessori relativi ai servizi comuni dell’edificio; nulla è dovuto dal ${B} a tale titolo oltre al canone.`);
     else {
       on.push(`Sono interamente a carico del ${B} le spese relative al servizio di pulizia, al funzionamento e all’ordinaria manutenzione dell’ascensore, alla fornitura dell’acqua, dell’energia elettrica, del riscaldamento e del condizionamento dell’aria, allo spurgo dei pozzi neri e delle latrine e alla fornitura degli altri servizi comuni; le spese per il servizio di portineria sono a carico del ${B} nella misura del novanta per cento (art. 9 legge n. 392/1978).`);
       if (st.spese.oneri === 'acconto') on.push(`Il ${B} versa, insieme a ogni rata del canone, un acconto sugli oneri accessori di ${canTxt(num(st.spese.acconto) * (rate === 12 ? 1 : 3))}${rate === 12 ? ' al mese' : ' a trimestre'}; il conguaglio è effettuato ogni anno sulla base del rendiconto.`);
       on.push(`Il pagamento degli oneri accessori deve avvenire entro due mesi dalla richiesta. Prima di effettuarlo il ${B} ha diritto di ottenere l’indicazione specifica delle spese, con la menzione dei criteri di ripartizione, e di prendere visione dei documenti giustificativi.`);
     }
-    on.push(st.spese.utenze === 'locatore' ? `Le utenze restano intestate al ${A}; il ${B} ne rimborsa il costo secondo i consumi, entro trenta giorni dalla presentazione delle relative fatture.` : `Le utenze (energia elettrica, gas, acqua se con contatore individuale, telefonia e connessione) sono a carico del ${B}, che provvede a intestarsi i relativi contratti di fornitura.`);
-    out.push(ARTICOLO('oneri', 'Oneri accessori e utenze', on));
+    if (!fondo && !box) on.push(st.spese.utenze === 'locatore' ? `Le utenze restano intestate al ${A}; il ${B} ne rimborsa il costo secondo i consumi, entro trenta giorni dalla presentazione delle relative fatture.` : `Le utenze (energia elettrica, gas, acqua se con contatore individuale, telefonia e connessione) sono a carico del ${B}, che provvede a intestarsi i relativi contratti di fornitura.`);
+    out.push(ARTICOLO('oneri', fondo ? 'Imposte e contributi' : box ? 'Oneri accessori' : 'Oneri accessori e utenze', on));
 
     /* spese di registrazione e bollo */
     const reg = [];
-    if (st.can.cedolare && abit) reg.push(`Il ${A} provvede alla registrazione del contratto nel termine di trenta giorni, optando per la cedolare secca, e ne dà documentata comunicazione al ${B} e all’amministratore del condominio entro i successivi sessanta giorni (art. 13, comma 1, legge n. 431/1998).`);
+    if (fondo) reg.push(`Il ${A} provvede alla registrazione del contratto nel termine di trenta giorni dalla sottoscrizione, salva la facoltà di registrazione cumulativa prevista dall’art. 17, terzo comma, del D.P.R. n. 131/1986; l’imposta di registro, pari allo 0,50% dei canoni dovuti per l’intera durata, e l’imposta di bollo sono a carico delle parti in uguale misura.`);
+    else if (st.can.cedolare && abit) reg.push(`Il ${A} provvede alla registrazione del contratto nel termine di trenta giorni, optando per la cedolare secca, e ne dà documentata comunicazione al ${B} e all’amministratore del condominio entro i successivi sessanta giorni (art. 13, comma 1, legge n. 431/1998).`);
     else {
       reg.push(st.cl.regLoc.on ? `Le spese di bollo e l’imposta di registro per il contratto e per i rinnovi sono interamente a carico del ${A}.` : `Le spese di bollo per il contratto e per le quietanze sono a carico del ${B}; l’imposta di registro è a carico del ${A} e del ${B} in parti uguali (art. 8 legge n. 392/1978).`);
       reg.push(abit ? `Il ${A} provvede alla registrazione del contratto nel termine di trenta giorni e ne dà documentata comunicazione al ${B} e all’amministratore del condominio entro i successivi sessanta giorni (art. 13, comma 1, legge n. 431/1998).` : `Il ${A} provvede alla registrazione del contratto nel termine di trenta giorni dalla sottoscrizione.`);
@@ -361,11 +415,22 @@ const Contratti = (() => {
     if (abit) {
       uso.push(`L’immobile è destinato esclusivamente ad abitazione del ${B}${st.imm.conviventi.trim() ? ` e delle seguenti persone con lui conviventi: ${st.imm.conviventi.trim()}` : ' e delle persone con lui stabilmente conviventi'}. È vietato mutare la destinazione d’uso.`);
       uso.push(st.cl.subParz.on ? `È vietato al ${B} sublocare, in tutto o in parte, l’immobile, cederne il godimento anche gratuito a terzi e cedere il contratto senza il consenso scritto del ${A}.` : `Il ${B} non può sublocare totalmente l’immobile né cedere ad altri il contratto senza il consenso scritto del ${A}. La sublocazione parziale è consentita previa comunicazione al ${A} con lettera raccomandata che indichi la persona del subconduttore, la durata del contratto e i vani sublocati (art. 2 legge n. 392/1978).`);
+    } else if (box) {
+      uso.push(`L’autorimessa è destinata esclusivamente a ${val(st.box.uso, 'uso')}${st.box.targa.trim() ? ` (veicolo targato ${st.box.targa.trim().toUpperCase()})` : ''}. La destinazione costituisce condizione essenziale del contratto: il suo mutamento ne comporta la risoluzione.`);
+      uso.push(`Sono vietati: sostare con il veicolo negli spazi di manovra e nelle parti comuni; lavare o riparare il veicolo nell’autorimessa o nelle parti comuni; introdurre o tenere sostanze infiammabili, esplosive, maleodoranti o nocive, oltre al carburante contenuto nel serbatoio; duplicare o cedere a terzi chiavi, telecomandi o tessere di accesso; consentire l’accesso alle parti comuni a persone estranee.`);
+      uso.push(`Le chiavi, i telecomandi e le tessere di accesso sono forniti dal ${A}; le copie aggiuntive sono a carico del ${B}. Il ${B} non può sublocare l’autorimessa né cederne il godimento, anche gratuito, a terzi, né cedere il contratto senza il consenso scritto del ${A}.`);
+    } else if (fores) {
+      uso.push(`L’immobile è destinato esclusivamente all’uso foresteria, cioè ad abitazione temporanea di ${val(st.fores.destinatari, 'destinatari')} del ${B}, con esclusione di ogni altro uso. È vietato mutare la destinazione senza il consenso scritto del ${A}.`);
+      uso.push(`Il ${B} comunica al ${A}, su richiesta, i nominativi delle persone che occupano l’immobile, risponde del loro comportamento e dei danni da esse causati e provvede alle comunicazioni all’autorità di pubblica sicurezza previste dalla legge. È vietato sublocare l’immobile o cedere il contratto senza il consenso scritto del ${A}.`);
+    } else if (fondo) {
+      uso.push(`L’${B} si impegna a coltivare i terreni secondo le regole della buona tecnica agraria e a conservarne la destinazione agricola${st.fondo.coltura.trim() ? `, con il seguente indirizzo colturale: ${st.fondo.coltura.trim()}` : ''}, con la diligenza del buon coltivatore.`);
+      uso.push(`È vietato il subaffitto e la sublocazione, totale o parziale, dei terreni, a pena di risoluzione del contratto (art. 21 legge n. 203/1982). I miglioramenti, le addizioni e le trasformazioni sono regolati dagli artt. 16 e 17 della legge n. 203/1982.`);
+      if (st.fondo.coltivatore) uso.push(`L’${B} dichiara di essere coltivatore diretto o imprenditore agricolo professionale: in caso di trasferimento a titolo oneroso dei terreni gli spetta il diritto di prelazione nei limiti e con le modalità previsti dall’art. 8 della legge n. 590/1965 e dall’art. 7 della legge n. 817/1971.`);
     } else if (comm) {
       uso.push(`È vietato mutare l’attività indicata all’art. 1 senza il consenso scritto del ${A}. Il ${B} provvede a sua cura e spese alle licenze, autorizzazioni e comunicazioni amministrative necessarie all’esercizio dell’attività. Il ${A} dichiara che l’immobile ha una destinazione d’uso compatibile con l’attività indicata.`);
       uso.push(`Il ${B} può sublocare l’immobile o cedere il contratto anche senza il consenso del ${A}, purché venga insieme ceduta o locata l’azienda, dandone comunicazione al ${A} con lettera raccomandata con avviso di ricevimento; il ${A} può opporsi, per gravi motivi, entro trenta giorni dal ricevimento della comunicazione (art. 36 legge n. 392/1978). Ogni altra sublocazione o cessione richiede il consenso scritto del ${A}.`);
     }
-    out.push(ARTICOLO('uso', 'Uso, sublocazione e cessione', uso, { fixed: true, onerous: true }));
+    out.push(ARTICOLO('uso', fondo ? 'Coltivazione, subaffitto e miglioramenti' : 'Uso, sublocazione e cessione', uso, { fixed: true, onerous: true }));
 
     /* avviamento e prelazione (uso diverso con pubblico) */
     if (comm && st.comm.pubblico) out.push(ARTICOLO('avviamento', 'Indennità di avviamento e prelazione', [
@@ -373,28 +438,33 @@ const Contratti = (() => {
       `Spettano al ${B} il diritto di prelazione e di riscatto in caso di trasferimento a titolo oneroso dell’immobile e il diritto di prelazione in caso di nuova locazione, nei limiti e con le modalità degli artt. 38, 39 e 40 della legge n. 392/1978.`]));
 
     /* consegna e stato */
-    out.push(ARTICOLO('consegna', 'Consegna e stato dell’immobile', [
+    if (fondo) out.push(ARTICOLO('consegna', 'Consegna e riconsegna dei terreni', [
+      `L’${B} dichiara di conoscere i terreni, di averli visitati e di riceverli in consegna con la sottoscrizione del contratto${st.cl.verbale.on ? ', come descritto nel verbale di consegna allegato' : ''}.`,
+      `Alla cessazione del contratto l’${B} riconsegna i terreni nello stato in cui li ha ricevuti, salvo il normale deterioramento e i miglioramenti eseguiti secondo la legge, liberi da persone e cose.`]));
+    else out.push(ARTICOLO('consegna', 'Consegna e stato dell’immobile', [
       `Il ${B} dichiara di aver visitato l’unità immobiliare, di averla trovata adatta all’uso convenuto e in buono stato di manutenzione${st.cl.verbale.on ? ', come descritto nel verbale di consegna allegato,' : ''} e di prenderla in consegna con la sottoscrizione del contratto, costituendosi custode della stessa.`,
       `Al termine della locazione il ${B} restituisce l’immobile nello stato in cui lo ha ricevuto, salvo il deterioramento derivante dall’uso in conformità del contratto (art. 1590 c.c.), libero da persone e cose e con la riconsegna di tutte le chiavi.`]));
 
     /* manutenzione, modifiche, danni */
-    const man = [`Sono a carico del ${B} le riparazioni di piccola manutenzione dipendenti da deterioramenti prodotti dall’uso (art. 1609 c.c.); sono a carico del ${A} le riparazioni straordinarie e quelle necessarie a mantenere l’immobile in stato da servire all’uso convenuto (art. 1576 c.c.). Il ${B} avvisa senza ritardo il ${A} delle riparazioni che non sono a suo carico (art. 1577 c.c.).`];
+    const man = fondo ? [`Sono a carico dell’${B} la manutenzione ordinaria dei terreni, dei fossi, delle strade poderali e delle recinzioni e le riparazioni di piccola manutenzione (art. 1621 c.c.); restano a carico del ${A} le riparazioni straordinarie.`] : [`Sono a carico del ${B} le riparazioni di piccola manutenzione dipendenti da deterioramenti prodotti dall’uso (art. 1609 c.c.); sono a carico del ${A} le riparazioni straordinarie e quelle necessarie a mantenere l’immobile in stato da servire all’uso convenuto (art. 1576 c.c.). Il ${B} avvisa senza ritardo il ${A} delle riparazioni che non sono a suo carico (art. 1577 c.c.).`];
     if (st.cl.migliorie.on) man.push(`Il ${B} non può eseguire innovazioni, migliorie o addizioni senza il consenso scritto del ${A}. Quelle eseguite restano acquisite all’immobile senza diritto a indennità, salvo diverso accordo scritto, ferma la facoltà del ${A} di chiedere il ripristino dello stato originario per quelle eseguite senza consenso.`);
-    if (st.imm.riscAut) man.push(`L’immobile è dotato di impianto di riscaldamento autonomo: il ${B}, quale occupante, è responsabile dell’esercizio e della manutenzione ordinaria dell’impianto termico e dei controlli periodici di efficienza energetica, e conserva il libretto di impianto (D.P.R. n. 74/2013).`);
-    man.push(`Il ${B} è custode dell’immobile e risponde dei danni causati a sé, al ${A} o a terzi per sua colpa o negligenza, anche dalle persone che con lui convivono o che egli vi ammette.`);
+    if (box) man.push(`Sono a carico del ${B} anche le piccole riparazioni della porta, della serranda o della basculante, delle serrature e dei congegni di apertura dovute all’uso.`);
+    if (st.imm.riscAut && !box && !fondo) man.push(`L’immobile è dotato di impianto di riscaldamento autonomo: il ${B}, quale occupante, è responsabile dell’esercizio e della manutenzione ordinaria dell’impianto termico e dei controlli periodici di efficienza energetica, e conserva il libretto di impianto (D.P.R. n. 74/2013).`);
+    if (!fondo) man.push(`Il ${B} è custode dell’immobile e risponde dei danni causati a sé, al ${A} o a terzi per sua colpa o negligenza, anche dalle persone che con lui convivono o che egli vi ammette.`);
     out.push(ARTICOLO('manutenzione', 'Manutenzione, modifiche e danni', man, { onerous: st.cl.migliorie.on }));
 
     /* condominio */
+    if (st.imm.condominio && (fores || box)) out.push(ARTICOLO('condominio', 'Regolamento di condominio', [`Il ${B} si impegna a rispettare, e a far rispettare a chi usa l’immobile, il regolamento di condominio, di cui dichiara di aver ricevuto copia, e le deliberazioni dell’assemblea.`]));
     if (st.imm.condominio && abit) out.push(ARTICOLO('condominio', 'Regolamento di condominio e assemblee', [
       `Il ${B} si impegna a rispettare il regolamento di condominio, di cui dichiara di aver ricevuto copia, e le deliberazioni dell’assemblea.`,
       `Il ${B} ha diritto di voto, in luogo del proprietario, nelle delibere dell’assemblea condominiale relative alle spese e alle modalità di gestione dei servizi di riscaldamento e di condizionamento d’aria, e di intervenire, senza diritto di voto, sulle delibere relative alla modifica degli altri servizi comuni (art. 10 legge n. 392/1978).`]));
 
     /* accessi */
-    if (st.cl.visite.on) { const g = Math.max(1, +st.cl.visite.giorni || 3); out.push(ARTICOLO('accessi', 'Accesso all’immobile', [`Il ${B} consente al ${A}, o a persona da lui incaricata, di visitare l’immobile per motivate ragioni, previo avviso di almeno ${qta(g, 'giorno', 'giorni')}. In caso di disdetta, di cessazione del contratto o di messa in vendita dell’immobile, il ${B} consente la visita a chi sia interessato alla locazione o all’acquisto, in giorni e orari da concordare.`], { onerous: true })); }
+    if (st.cl.visite.on) { const g = Math.max(1, +st.cl.visite.giorni || 3), og = fondo ? 'i terreni' : 'l’immobile'; out.push(ARTICOLO('accessi', fondo ? 'Accesso ai terreni' : 'Accesso all’immobile', [`Il ${B} consente al ${A}, o a persona da lui incaricata, di visitare ${og} per motivate ragioni, previo avviso di almeno ${qta(g, 'giorno', 'giorni')}. In caso di disdetta, di cessazione del contratto o di messa in vendita ${fondo ? 'dei terreni' : 'dell’immobile'}, il ${B} consente la visita a chi sia interessato ${fondo ? 'all’affitto' : 'alla locazione'} o all’acquisto, in giorni e orari da concordare.`], { onerous: true })); }
 
     /* dichiarazioni: APE e impianti */
     const ape = st.imm.ape.classe;
-    out.push(ARTICOLO('ape', 'Prestazione energetica e impianti', [
+    if (!box && !fondo) out.push(ARTICOLO('ape', 'Prestazione energetica e impianti', [
       ape === 'esente' ? `Le parti danno atto che l’immobile rientra tra i casi di esclusione dall’obbligo di dotazione dell’attestato di prestazione energetica previsti dalla normativa vigente.` : `Il ${B} dà atto di aver ricevuto le informazioni e la documentazione, comprensiva dell’attestato, in ordine alla prestazione energetica dell’unità immobiliare (art. 6, comma 3, D.Lgs. n. 192/2005). L’immobile è in classe energetica ${val(ape, 'classe')}${st.imm.ape.codice.trim() ? ` (attestato n. ${st.imm.ape.codice.trim()})` : ''}.`,
       `Il ${A} dichiara che gli impianti dell’unità immobiliare sono conformi alla normativa vigente in materia di sicurezza; il ${B} ne fa uso secondo la loro destinazione e le istruzioni ricevute.`]));
 
@@ -446,6 +516,10 @@ const Contratti = (() => {
     if (cl.fumo.on) out.push(ARTICOLO('fumo', 'Divieto di fumo', [`È vietato fumare all’interno dell’immobile. Il ${B} risponde dei danni a pareti, tessuti e arredi causati dal fumo.`], { onerous: true }));
     if (cl.assic.on) out.push(ARTICOLO('assicurazione', 'Assicurazione', [`Il ${B} si impegna a stipulare, entro trenta giorni dalla consegna e per tutta la durata del contratto, una polizza di assicurazione per la responsabilità civile verso terzi e per i danni all’immobile derivanti da incendio, scoppio e acqua condotta (rischio locativo), consegnandone copia al ${A}.`], { onerous: true }));
     if (loc && cl.risolutiva.on) { const n = Math.max(1, Math.min(6, +cl.risolutiva.rate || 2)); out.push(ARTICOLO('risolutiva', 'Clausola risolutiva espressa', [`Il contratto si risolve di diritto, ai sensi dell’art. 1456 c.c., quando il ${A} dichiara al ${B}, con lettera raccomandata, di volersi avvalere della presente clausola in caso di: mancato pagamento di ${qta(n, 'rata', 'rate', true)} del canone, anche non consecutive; sublocazione o cessione del contratto in violazione di quanto previsto dal contratto; mutamento della destinazione d’uso dell’immobile.${isAbit(st) ? ' Resta ferma la facoltà del conduttore di sanare la morosità nei termini dell’art. 55 della legge n. 392/1978.' : ''}`], { onerous: true })); }
+    if (loc && cl.esonero.on) out.push(ARTICOLO('esonero', 'Esonero da responsabilità', [`Il ${B} esonera il ${A} da ogni responsabilità per i danni diretti o indiretti che possano derivargli da fatti dolosi o colposi di altri occupanti dell’edificio o di terzi, compresi furti e interruzioni di servizi non imputabili al ${A}.`], { onerous: true }));
+    if (cl.bombole.on && (isAbit(st) || st.tipo === 'foresteria' || st.tipo === 'comodato')) out.push(ARTICOLO('bombole', 'Divieto di bombole di gas', [`È vietato al ${B} detenere e usare nell’immobile bombole di gas di petrolio liquefatto (GPL) o altri combustibili in recipienti mobili.`], { onerous: true }));
+    if (cl.clima.on && st.tipo !== 'box' && st.tipo !== 'fondo') out.push(ARTICOLO('climatizzazione', 'Climatizzatori e pompe di calore', [`Il ${B} può installare a sua cura e spese climatizzatori o pompe di calore, nel rispetto del regolamento di condominio e delle norme vigenti, previa comunicazione scritta al ${A}. Alla riconsegna il ${B} rimuove gli apparecchi e ripristina a sue spese le parti interessate dall’installazione, salvo che il ${A} chieda per iscritto di trattenerli senza corrispettivo.`]));
+    if (cl.noPrel.on && ['libero', 'concordato', 'transitorio', 'studenti', 'foresteria', 'box'].includes(st.tipo)) out.push(ARTICOLO('prelazione', 'Prelazione', [`Le parti danno atto che al ${B} non spetta alcun diritto di prelazione, né in caso di vendita dell’immobile né in caso di nuova locazione alla scadenza, salvo quanto previsto inderogabilmente dalla legge.`]));
     for (const [i, c] of st.pers.entries()) if ((c.titolo || '').trim() || (c.testo || '').trim()) out.push(ARTICOLO('pers' + i, (c.titolo || '').trim() || 'Clausola aggiuntiva', String(c.testo || '').split(/\n{2,}/).map(t => t.trim()), { custom: true, onerous: !!c.onerosa }));
     return out;
   }
@@ -453,17 +527,17 @@ const Contratti = (() => {
   /* articoli finali: comunicazioni, dati personali, rinvio e controversie */
   function finali(st, r) {
     const A = r.A, B = r.B, out = [], loc = isLoc(st);
-    const com = [`Per ogni comunicazione relativa al contratto il ${A} elegge domicilio presso ${st.A.length > 1 ? 'le rispettive residenze o sedi' : (st.A[0].tipo === 'pg' ? 'la propria sede' : 'la propria residenza')} ${st.A.length > 1 ? 'indicate' : 'indicata'} in epigrafe e il ${B} presso l’immobile ${loc ? 'locato' : 'concesso in comodato'}.`];
+    const com = [`Per ogni comunicazione relativa al contratto il ${A} elegge domicilio presso ${st.A.length > 1 ? 'le rispettive residenze o sedi' : (st.A[0].tipo === 'pg' ? 'la propria sede' : 'la propria residenza')} ${st.A.length > 1 ? 'indicate' : 'indicata'} in epigrafe e il ${B} ${st.tipo === 'fondo' ? (st.B.length > 1 ? 'presso le rispettive residenze o sedi indicate in epigrafe' : 'presso la residenza o la sede indicata in epigrafe') : `presso l’immobile ${loc ? 'locato' : 'concesso in comodato'}`}.`];
     if (st.cl.pec.on) {
       const ind = [...st.A, ...st.B].map(p => (p.pec || p.email).trim() ? `${nomeBreve(p)}: ${(p.pec || p.email).trim()}` : null).filter(Boolean);
       com.push(`Le comunicazioni per le quali il contratto o la legge prevedono la lettera raccomandata possono essere effettuate anche a mezzo posta elettronica certificata, che le parti riconoscono a tal fine equivalente; le altre comunicazioni anche per posta elettronica ordinaria. Indirizzi: ${ind.length ? ind.join('; ') : PH('indirizzi PEC o e-mail delle parti')}.`);
     }
     out.push(ARTICOLO('comunicazioni', 'Comunicazioni e domicilio', com));
     out.push(ARTICOLO('privacy', 'Dati personali', [`Le parti si danno reciprocamente atto che i dati personali contenuti nel contratto sono trattati esclusivamente per l’esecuzione del contratto e per gli adempimenti di legge connessi, nel rispetto del Regolamento (UE) 2016/679.`]));
-    const leggi = st.tipo === 'comodato' ? 'agli artt. 1803 e seguenti del codice civile' : st.tipo === 'commerciale' ? 'al codice civile, alla legge n. 392/1978' : `al codice civile, alla legge n. 392/1978, alla legge n. 431/1998${st.tipo === 'libero' ? '' : ', al D.M. 16 gennaio 2017, all’Accordo territoriale applicabile'}`;
+    const leggi = st.tipo === 'comodato' ? 'agli artt. 1803 e seguenti del codice civile' : st.tipo === 'box' ? 'agli artt. 1571 e seguenti del codice civile' : st.tipo === 'foresteria' ? 'agli artt. 1571 e seguenti del codice civile e, in quanto compatibile, alla legge n. 392/1978' : st.tipo === 'fondo' ? 'alla legge n. 203/1982, alle altre leggi in materia di contratti agrari e al codice civile' : st.tipo === 'commerciale' ? 'al codice civile, alla legge n. 392/1978' : `al codice civile, alla legge n. 392/1978, alla legge n. 431/1998${st.tipo === 'libero' ? '' : ', al D.M. 16 gennaio 2017, all’Accordo territoriale applicabile'}`;
     const fin = [`Per quanto non previsto dal contratto le parti rinviano ${leggi} e alle altre norme vigenti. Qualsiasi modifica del contratto deve essere fatta per iscritto.`];
     if (st.B.length > 1) fin.push(`I ${r.Bp} sono obbligati in solido all’adempimento di tutte le obbligazioni derivanti dal contratto.`);
-    fin.push(`Per qualsiasi controversia relativa al contratto è competente il giudice del luogo in cui si trova l’immobile (art. 21 c.p.c.), previo esperimento del procedimento di mediazione previsto dall’art. 5 del D.Lgs. n. 28/2010.`);
+    fin.push(st.tipo === 'fondo' ? `Per qualsiasi controversia relativa al contratto è competente la sezione specializzata agraria del tribunale del luogo in cui si trovano i terreni, previo il tentativo di conciliazione previsto dall’art. 46 della legge n. 203/1982.` : `Per qualsiasi controversia relativa al contratto è competente il giudice del luogo in cui si trova l’immobile (art. 21 c.p.c.), previo esperimento del procedimento di mediazione previsto dall’art. 5 del D.Lgs. n. 28/2010.`);
     out.push(ARTICOLO('rinvio', 'Rinvio e controversie', fin, { fixed: true }));
     return out;
   }
@@ -488,15 +562,25 @@ const Contratti = (() => {
     const approv = on.length ? `Ai sensi e per gli effetti degli artt. 1341 e 1342 del codice civile, le parti dichiarano di aver letto e di approvare specificamente le clausole contenute nei seguenti articoli: ${on.map(a => `${a.n} (${a.title})`).join(', ')}.` : null;
     const firme = [...st.A.map(p => ({ ruolo: `${st.A.length > 1 ? 'Un' : 'Il'} ${r.A}`, nome: nomeBreve(p) })), ...st.B.map(p => ({ ruolo: `${st.B.length > 1 ? 'Un' : 'Il'} ${r.B}`, nome: nomeBreve(p) }))];
     if (isLoc(st) && st.gar.on) firme.push({ ruolo: 'Il garante', nome: nomeBreve(st.gar.p) });
+    if (st.tipo === 'fondo' && st.fondo.deroga) firme.push({ ruolo: 'Per le organizzazioni professionali agricole', nome: st.fondo.org.trim() || PH('organizzazioni') });
     const allegati = [];
-    if (isLoc(st) && st.imm.ape.classe && st.imm.ape.classe !== 'esente') allegati.push('attestato di prestazione energetica (APE)');
-    if (st.imm.arredo !== 'no') allegati.push('inventario degli arredi');
+    if (isLoc(st) && !['box', 'fondo'].includes(st.tipo) && st.imm.ape.classe && st.imm.ape.classe !== 'esente') allegati.push('attestato di prestazione energetica (APE)');
+    if (st.imm.arredo !== 'no' && !['box', 'fondo', 'commerciale'].includes(st.tipo)) allegati.push('inventario degli arredi');
     if (st.cl.verbale.on) allegati.push('verbale di consegna');
-    if (st.imm.condominio && isAbit(st)) allegati.push('regolamento di condominio');
+    if (st.imm.condominio && (isAbit(st) || st.tipo === 'foresteria' || st.tipo === 'box')) allegati.push('regolamento di condominio');
     if (st.tipo === 'transitorio') allegati.push(`documentazione dell’esigenza transitoria (${val(st.trans.doc, 'documento')})`);
     const appendici = [];
-    if (st.imm.arredo !== 'no') appendici.push({ key: 'inventario', title: 'Allegato – Inventario degli arredi', items: st.imm.inventario.split('\n').map(x => x.trim()).filter(Boolean) });
+    if (st.imm.arredo !== 'no' && !['box', 'fondo', 'commerciale'].includes(st.tipo)) appendici.push({ key: 'inventario', title: 'Allegato – Inventario degli arredi', items: st.imm.inventario.split('\n').map(x => x.trim()).filter(Boolean) });
     if (st.cl.verbale.on) { const v = st.cl.verbale; appendici.push({ key: 'verbale', title: 'Allegato – Verbale di consegna', rows: [['Data della consegna', v.data ? dataEstesa(v.data) : ''], ['Lettura contatore energia elettrica', v.luce], ['Lettura contatore gas', v.gas], ['Lettura contatore acqua', v.acqua], ['Chiavi consegnate', v.chiavi], ['Stato dell’immobile e osservazioni', v.note]] }); }
+    const eli = t => typeof t !== 'string' ? t : t.replace(/\b([Dd]al|[Aa]l|[Dd]el|[Nn]el) (8|11|18)(?= (?:gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)\b)/g, (m, a, n) => ({ dal: 'dall’', Dal: 'Dall’', al: 'all’', Al: 'All’', del: 'dell’', Del: 'Dell’', nel: 'nell’', Nel: 'Nell’' })[a] + n);
+    arts.forEach(a => { a.paras = a.paras.map(eli); a.auto = a.auto.map(eli); });
+    // «affittuario» comincia per vocale: gli articoli generici («il conduttore») diventano «l’affittuario», «dell’affittuario»…
+    if (st.tipo === 'fondo') {
+      const g = t => typeof t !== 'string' ? t : t.replace(/\b([Ii]l|[Aa]l|[Dd]el|[Dd]al|[Nn]el|[Ss]ul) (affittuari[oa])\b/g, (m, a, w) => ({ il: 'l’', Il: 'L’', al: 'all’', Al: 'All’', del: 'dell’', Del: 'Dell’', dal: 'dall’', Dal: 'Dall’', nel: 'nell’', Nel: 'Nell’', sul: 'sull’', Sul: 'Sull’' })[a] + w)
+        .replace(/\b([Ii]|[Dd]ei|[Aa]i|[Dd]ai) (affittuari)\b/g, (m, a, w) => ({ i: 'gli', I: 'Gli', dei: 'degli', Dei: 'Degli', ai: 'agli', Ai: 'Agli', dai: 'dagli', Dai: 'Dagli' })[a] + ' ' + w);
+      arts.forEach(a => { a.title = g(a.title); a.paras = a.paras.map(g); a.auto = a.auto.map(g); }); off.forEach(a => { a.title = g(a.title); });
+      intro.forEach((t, i) => intro[i] = g(t)); firme.forEach(f => f.ruolo = g(f.ruolo));
+    }
     return {
       title: T.titolo, sub: T.sotto, intro, arts, off, approv,
       chiusa: `Letto, approvato e sottoscritto.\n${val(st.firma.luogo, 'luogo')}, ${st.firma.data ? dataEstesa(st.firma.data) : PH('data')}`,
@@ -609,12 +693,16 @@ const Contratti = (() => {
     const fogli = Math.max(1, Math.ceil((pagine || 4) / 4)), bollo = fogli * 16;
     const tasse = {};
     if (loc) {
-      const can = num(st.can.mensile), mesi = mesiDurata(st) || 12, primo = isFinite(can) ? can * Math.min(12, mesi) : 0;
+      const annuo = annuoDi(st), mesi = mesiDurata(st) || 12, primo = isFinite(annuo) ? annuo / 12 * Math.min(12, mesi) : 0;
       const ridotta = st.tipo === 'concordato' && st.can.alta, imp = ridotta ? primo * 0.7 : primo;
-      tasse.registro = primo ? Math.max(67, Math.round(imp * 0.02)) : null; tasse.bollo = ced ? 0 : bollo;
+      const totFondo = isFinite(annuo) ? annuo * mesi / 12 : 0;
+      tasse.registro = st.tipo === 'fondo' ? (totFondo ? Math.max(67, Math.round(totFondo * 0.005)) : null) : primo ? Math.max(67, Math.round(imp * 0.02)) : null; tasse.bollo = ced ? 0 : bollo;
       items.push({ t: `Registrazione entro il ${dl}`, d: `Con il modello RLI, online dal sito dell’Agenzia delle Entrate o presso un suo ufficio, entro 30 giorni dalla firma o dalla decorrenza se precedente (art. 17 D.P.R. 131/1986). Servono i dati catastali, già nel contratto.` });
       if (ced) items.push({ t: 'Cedolare secca: niente imposta di registro né bollo', d: `L’opzione si esercita nel modello RLI. L’aliquota è del ${ridotta || (st.tipo === 'concordato' && st.can.alta) ? '10%' : st.tipo === 'concordato' ? '21% (10% se il Comune è ad alta tensione abitativa)' : '21%'} sul canone. Prima dell’opzione consegna al ${r.B} la lettera di rinuncia all’aggiornamento del canone (art. 3, comma 11, D.Lgs. 23/2011): è tra i file scaricati.` });
-      else {
+      else if (st.tipo === 'fondo') {
+        items.push({ t: tasse.registro ? `Imposta di registro: circa ${eur(tasse.registro)} € per tutta la durata` : 'Imposta di registro: 0,50% dei canoni di tutta la durata', d: `Per l’affitto di fondi rustici l’imposta è dello 0,50% dell’ammontare dei canoni per l’intera durata, minimo 67 €, metà a carico di ciascuna parte. I contratti non formati per atto pubblico o scrittura privata autenticata si possono registrare anche cumulativamente, entro il mese di febbraio, per quelli stipulati nell’anno precedente (art. 17, comma 3, D.P.R. 131/1986).` });
+        items.push({ t: `Imposta di bollo: ${eur(bollo)} € per ciascun originale firmato`, d: '16 € ogni 4 facciate per ciascun originale.' });
+      } else {
         items.push({ t: tasse.registro ? `Imposta di registro: circa ${eur(tasse.registro)} € per la prima annualità` : 'Imposta di registro: 2% del canone annuo', d: `2% del canone ${ridotta ? 'ridotto al 70% (canone concordato in Comune ad alta tensione abitativa) ' : ''}della prima annualità, minimo 67 €; per legge metà a carico di ciascuna parte${st.cl.regLoc.on ? ' (nel contratto: tutta a carico del ' + r.A + ')' : ''}. Per gli anni successivi si paga entro 30 giorni dall’inizio di ogni annualità con il modello F24 Elementi identificativi (codice 1501), oppure si paga subito l’intera durata con lo sconto previsto.` });
         items.push({ t: `Imposta di bollo: ${eur(bollo)} € per ciascun originale firmato`, d: `16 € ogni 4 facciate: il contratto ha ${pagine || '?'} ${pagine === 1 ? 'pagina' : 'pagine'}${pagine ? ` (${fogli} ${fogli === 1 ? 'marca' : 'marche'})` : ''}; con 2 originali sono ${eur(bollo * 2)} €. Con la registrazione online il bollo si paga nel modello RLI.` });
       }
@@ -623,6 +711,8 @@ const Contratti = (() => {
       if (st.tipo === 'transitorio' && st.trans.chi === 'locatore') items.push({ t: 'Prima della scadenza: confermare l’esigenza transitoria', d: `Il ${r.A} deve confermarla con lettera raccomandata prima della scadenza, altrimenti il contratto diventa un 4+4.` });
       const mesiT = mesiDurata(st); const fine = mesiT && st.dur.inizio ? fineDurata(st.dur.inizio, mesiT) : null;
       if (fine && (st.tipo === 'libero' || st.tipo === 'concordato')) items.push({ t: `Prima scadenza: ${dataEstesa(fine)}`, d: `Disdetta del ${r.A} (solo per i motivi dell’art. 3 L. 431/1998) entro il ${dataEstesa(toIso(piuMesi(fine, -6)))}, con lettera raccomandata ricevuta almeno sei mesi prima.` });
+      if (fine && st.tipo === 'fondo' && !st.fondo.deroga) items.push({ t: `Scadenza: ${dataEstesa(fine)}`, d: `Senza disdetta comunicata con lettera raccomandata con avviso di ricevimento almeno un anno prima (entro il ${dataEstesa(toIso(piuMesi(fine, -12)))}) il contratto si rinnova per uguale durata (art. 4 L. 203/1982).` });
+      if (fine && st.tipo === 'box') items.push({ t: `Scadenza: ${dataEstesa(fine)}, poi di anno in anno`, d: `La disdetta va comunicata almeno ${Math.max(15, +st.box.disdetta || 30)} giorni prima della scadenza.` });
       if (fine && st.tipo === 'commerciale') items.push({ t: `Prima scadenza: ${dataEstesa(fine)}`, d: `Eventuale diniego di rinnovo (solo per i motivi dell’art. 29 L. 392/1978) entro il ${dataEstesa(toIso(piuMesi(fine, st.dur.alberghiero ? -18 : -12)))}, con lettera raccomandata con avviso di ricevimento.` });
       if (num(st.dep.mesi) > 0) items.push({ t: 'Deposito cauzionale', d: `Gli interessi legali sul deposito vanno corrisposti al ${r.B} alla fine di ogni anno (art. 11 L. 392/1978).` });
     } else {
@@ -631,8 +721,9 @@ const Contratti = (() => {
       items.push({ t: 'Imposta di registro: 200 € (misura fissa)', d: `Più il bollo: 16 € ogni 4 facciate per ciascun originale (${eur(bollo)} € a copia).` });
       if (st.comod.parente) items.push({ t: 'IMU ridotta del 50% (comodato a figli o genitori)', d: 'Se il comodante possiede in Italia un solo immobile abitativo (oppure un secondo, abitazione principale, nello stesso Comune), risiede e dimora nello stesso Comune, l’immobile non è di lusso (A/1, A/8, A/9) e il contratto è registrato. Va presentata la dichiarazione IMU (L. 208/2015, art. 1, comma 10).' });
     }
-    if (st.tipo !== 'commerciale') items.push({ t: `Se il ${r.B} è cittadino non UE`, d: 'Chi dà alloggio a un cittadino non UE ne dà comunicazione scritta all’autorità di pubblica sicurezza entro 48 ore (art. 7 D.Lgs. 286/1998).' });
-    if (loc && st.imm.ape.classe && st.imm.ape.classe !== 'esente') items.push({ t: 'Consegna una copia dell’APE', d: `Il contratto dichiara che il ${r.B} l’ha ricevuta (art. 6 D.Lgs. 192/2005).` });
+    if (st.tipo === 'foresteria') items.push({ t: 'Chi abita la foresteria', d: `Se gli occupanti sono cittadini non UE, chi dà loro alloggio ne dà comunicazione all’autorità di pubblica sicurezza entro 48 ore (art. 7 D.Lgs. 286/1998): nel contratto l’obbligo è del ${r.B}.` });
+    if (!['commerciale', 'box', 'fondo', 'foresteria'].includes(st.tipo)) items.push({ t: `Se il ${r.B} è cittadino non UE`, d: 'Chi dà alloggio a un cittadino non UE ne dà comunicazione scritta all’autorità di pubblica sicurezza entro 48 ore (art. 7 D.Lgs. 286/1998).' });
+    if (loc && !['box', 'fondo'].includes(st.tipo) && st.imm.ape.classe && st.imm.ape.classe !== 'esente') items.push({ t: 'Consegna una copia dell’APE', d: `Il contratto dichiara che il ${r.B} l’ha ricevuta (art. 6 D.Lgs. 192/2005).` });
     return { lim, items, tasse };
   }
 
@@ -735,7 +826,7 @@ async function startContratto(stage, files = []) {
     const out = [];
     // tipo
     out.push(sezione('tipo', 'Tipo di contratto', [h('div', { class: 'ct-types', role: 'radiogroup', 'aria-label': 'Tipo di contratto' }, Object.entries(C.TIPI).map(([id, x]) => h('label', { class: 'ct-type' + (st.tipo === id ? ' on' : '') },
-      h('input', { type: 'radio', name: 'ct-tipo', value: id, checked: st.tipo === id, onchange: () => { st.tipo = id; if (x.anni) st.dur.anni = Math.max(+st.dur.anni || 0, x.anni[0]); if (x.mesi) st.dur.mesi = Math.min(x.mesi[1], Math.max(x.mesi[0], +st.dur.mesi || x.mesi[0])); if (id === 'commerciale' && st.can.istat > 75) st.can.istat = 75; saveLocal(); rebuild(); } }),
+      h('input', { type: 'radio', name: 'ct-tipo', value: id, checked: st.tipo === id, onchange: () => { st.tipo = id; if (id === 'fondo') { st.dep.mesi = 0; st.dur.anni = Math.max(+st.dur.anni || 0, 15); st.can.periodo = 'annuale'; } else if (st.can.periodo === 'annuale' || st.can.periodo === 'semestrale') st.can.periodo = 'mensile'; if (x.anni) st.dur.anni = Math.max(+st.dur.anni || 0, x.anni[0]); if (x.mesi) st.dur.mesi = Math.min(x.mesi[1], Math.max(x.mesi[0], +st.dur.mesi || x.mesi[0])); if (id === 'commerciale' && st.can.istat > 75) st.can.istat = 75; saveLocal(); rebuild(); } }),
       h('span', {}, h('b', {}, x.label), h('span', { class: 'ct-h' }, x.desc)))))]));
     // parti
     const parti = (sec, key, ruolo, ruoloP) => sezione(sec, ruolo[0].toUpperCase() + ruolo.slice(1) + (st[key].length > 1 ? ` (${st[key].length})` : ''), [
@@ -750,14 +841,30 @@ async function startContratto(stage, files = []) {
       row(F(`imm.pert.${i}.tipo`, 'Tipo', { type: 'select', w: 'half', opts: ['cantina', 'box auto', 'posto auto', 'soffitta', 'giardino', 'magazzino', 'altro'].map(v => [v, v]) }), F(`imm.pert.${i}.descr`, 'Descrizione', { w: 'half', ph: 'al piano interrato' })),
       row(F(`imm.pert.${i}.foglio`, 'Foglio', { w: 'third' }), F(`imm.pert.${i}.part`, 'Particella', { w: 'third' }), F(`imm.pert.${i}.sub`, 'Sub.', { w: 'third' })),
       row(F(`imm.pert.${i}.categoria`, 'Categoria', { w: 'half', up: true, ph: 'C/6' }), F(`imm.pert.${i}.rendita`, 'Rendita €', { w: 'half', im: 'decimal' }))));
-    out.push(sezione('imm', st.tipo === 'commerciale' ? 'Locali' : 'Immobile', [
+    const tipo = st.tipo, isBox = tipo === 'box', isFondo = tipo === 'fondo', isFores = tipo === 'foresteria';
+    if (isFondo) {
+      const TR = st.fondo.terreni;
+      const trUI = TR.map((x, i) => h('div', { class: 'ct-card' }, h('div', { class: 'ct-ph' }, h('b', {}, `Terreno ${i + 1}`), h('button', { type: 'button', class: 'icon-btn ct-x', title: 'Togli il terreno', 'aria-label': `Togli il terreno ${i + 1}`, onclick: () => { TR.splice(i, 1); saveLocal(); rebuild(); } }, ic('x', 16))),
+        row(F(`fondo.terreni.${i}.foglio`, 'Foglio', { req: true, w: 'third' }), F(`fondo.terreni.${i}.part`, 'Particella', { req: true, w: 'third' }), F(`fondo.terreni.${i}.sup`, 'Superficie (ettari)', { w: 'third', im: 'decimal', ph: '1,2500' })),
+        row(F(`fondo.terreni.${i}.qualita`, 'Qualità', { w: 'third', ph: 'seminativo' }), F(`fondo.terreni.${i}.rd`, 'Reddito dominicale €', { w: 'third', im: 'decimal' }), F(`fondo.terreni.${i}.ra`, 'Reddito agrario €', { w: 'third', im: 'decimal' }))));
+      out.push(sezione('imm', 'Terreni', [
+        row(F('imm.comune', 'Comune', { req: true, w: 'grow' }), F('imm.prov', 'Prov.', { up: true, w: 'xs', maxlength: 2 })),
+        F('imm.indirizzo', 'Località (facoltativa)', { ph: 'contrada …' }),
+        h('div', { class: 'ct-group' }, 'Catasto Terreni (dalla visura)'),
+        ...trUI, row(btn('Aggiungi un terreno', () => { TR.push({ foglio: TR[TR.length - 1]?.foglio || '', part: '', sup: '', qualita: '', rd: '', ra: '' }); saveLocal(); rebuild(); }, 'plus')),
+        F('fondo.coltura', 'Indirizzo colturale (facoltativo)', { ph: 'seminativo, vigneto, uliveto…' }),
+        CB('fondo.coltivatore', 'L’affittuario è coltivatore diretto o imprenditore agricolo professionale', 'Il contratto ricorda il suo diritto di prelazione in caso di vendita (art. 8 L. 590/1965).'),
+      ], TR.length ? null : 'Aggiungi i terreni con foglio e particella: si leggono dalla visura del Catasto Terreni.'));
+    } else out.push(sezione('imm', tipo === 'commerciale' ? 'Locali' : isBox ? 'Box o posto auto' : 'Immobile', [
       row(btn('Compila dalla visura catastale (PDF)', () => pickVisura(), 'upload'), h('span', { class: 'ct-h' }, 'Dati catastali, indirizzo, pertinenze e proprietari si leggono dalla visura, sul tuo dispositivo.')),
       row(F('imm.comune', 'Comune', { req: true, w: 'grow' }), F('imm.prov', 'Prov.', { up: true, w: 'xs', maxlength: 2 })),
       row(F('imm.indirizzo', 'Indirizzo e numero civico', { req: true, w: 'grow', ph: 'via Garibaldi 12' }), F('imm.cap', 'CAP', { w: 'xs', im: 'numeric', maxlength: 5 })),
       row(F('imm.scala', 'Scala', { w: 'third' }), F('imm.piano', 'Piano', { w: 'third' }), F('imm.interno', 'Interno', { w: 'third' })),
-      F('imm.descr', st.tipo === 'commerciale' ? 'Descrizione dei locali' : 'Composizione', { req: true, type: 'textarea', rows: 2, ph: st.tipo === 'commerciale' ? 'un locale al piano terra con vetrina, retro e bagno' : 'ingresso, soggiorno, cucina, due camere e bagno' }),
-      row(F('imm.mq', 'Superficie m²', { w: 'half', im: 'decimal' }), F('imm.arredo', 'Arredi', { type: 'select', w: 'half', rebuild: true, opts: [['no', 'Non arredato'], ['si', 'Arredato'], ['parz', 'Parzialmente arredato']] })),
-      I.arredo !== 'no' ? F('imm.inventario', 'Inventario degli arredi (uno per riga)', { type: 'textarea', rows: 4, ph: 'Cucina con elettrodomestici\nDivano tre posti\nLetto matrimoniale con materasso', hint: 'Diventa l’allegato «Inventario degli arredi».' }) : null,
+      F('imm.descr', tipo === 'commerciale' ? 'Descrizione dei locali' : isBox ? 'Descrizione' : 'Composizione', { req: true, type: 'textarea', rows: 2, ph: tipo === 'commerciale' ? 'un locale al piano terra con vetrina, retro e bagno' : isBox ? 'box auto al piano interrato con porta basculante' : 'ingresso, soggiorno, cucina, due camere e bagno' }),
+      isBox ? F('imm.mq', 'Superficie m²', { im: 'decimal' }) : row(F('imm.mq', 'Superficie m²', { w: 'half', im: 'decimal' }), F('imm.arredo', 'Arredi', { type: 'select', w: 'half', rebuild: true, opts: [['no', 'Non arredato'], ['si', 'Arredato'], ['parz', 'Parzialmente arredato']] })),
+      isBox ? row(F('box.uso', 'Destinato a', { w: 'grow' }), F('box.targa', 'Targa (facoltativa)', { w: 'sm', up: true, maxlength: 10 })) : null,
+      isFores ? F('fores.destinatari', 'Chi lo abiterà', { req: true, hint: 'Per esempio: «propri dipendenti, collaboratori e ospiti».' }) : null,
+      I.arredo !== 'no' && !isBox ? F('imm.inventario', 'Inventario degli arredi (uno per riga)', { type: 'textarea', rows: 4, ph: 'Cucina con elettrodomestici\nDivano tre posti\nLetto matrimoniale con materasso', hint: 'Diventa l’allegato «Inventario degli arredi».' }) : null,
       st.tipo === 'commerciale' ? F('comm.attivita', 'Attività che si svolgerà', { req: true, ph: 'vendita al dettaglio di abbigliamento' }) : null,
       st.tipo === 'commerciale' ? CB('comm.pubblico', 'L’attività comporta contatti diretti con il pubblico', 'Dà diritto all’indennità di avviamento e alla prelazione (artt. 34, 38–40 L. 392/1978).') : null,
       h('div', { class: 'ct-group' }, 'Dati catastali (dalla visura)'),
@@ -765,9 +872,9 @@ async function startContratto(stage, files = []) {
       row(F('imm.cat.categoria', 'Categoria', { req: true, w: 'third', up: true, ph: 'A/2' }), F('imm.cat.classe', 'Classe', { w: 'third' }), F('imm.cat.rendita', 'Rendita €', { w: 'third', im: 'decimal' })),
       F('imm.cat.sez', 'Sezione urbana (se c’è)', { w: 'half' }),
       ...pertUI, row(btn('Aggiungi una pertinenza (box, cantina…)', () => { I.pert.push({ tipo: 'cantina', descr: '', foglio: I.cat.foglio, part: I.cat.part, sub: '', categoria: '', rendita: '' }); saveLocal(); rebuild(); }, 'plus')),
-      loc() ? row(F('imm.ape.classe', 'Classe energetica (APE)', { req: true, type: 'select', w: 'half', opts: [['', 'Scegli…'], ...['A4', 'A3', 'A2', 'A1', 'B', 'C', 'D', 'E', 'F', 'G'].map(v => [v, v]), ['esente', 'Non richiesto (casi esclusi)']] }), F('imm.ape.codice', 'Codice dell’attestato', { w: 'half' })) : null,
-      CB('imm.riscAut', 'Riscaldamento autonomo', 'Esercizio e manutenzione della caldaia a chi abita (D.P.R. 74/2013).'),
-      abit() ? CB('imm.condominio', 'L’immobile è in un condominio', 'Regolamento allegato e voto del conduttore sul riscaldamento (art. 10 L. 392/1978).') : null,
+      loc() && !isBox ? row(F('imm.ape.classe', 'Classe energetica (APE)', { req: true, type: 'select', w: 'half', opts: [['', 'Scegli…'], ...['A4', 'A3', 'A2', 'A1', 'B', 'C', 'D', 'E', 'F', 'G'].map(v => [v, v]), ['esente', 'Non richiesto (casi esclusi)']] }), F('imm.ape.codice', 'Codice dell’attestato', { w: 'half' })) : null,
+      !isBox ? CB('imm.riscAut', 'Riscaldamento autonomo', 'Esercizio e manutenzione della caldaia a chi abita (D.P.R. 74/2013).') : null,
+      abit() || isFores || isBox ? CB('imm.condominio', 'L’immobile è in un condominio', abit() ? 'Regolamento allegato e voto del conduttore sul riscaldamento (art. 10 L. 392/1978).' : 'Regolamento di condominio allegato e da rispettare.') : null,
       abit() ? F('imm.conviventi', 'Persone che abiteranno con il conduttore (facoltativo)', { ph: 'nomi o «nessuno»' }) : null,
     ]));
     // durata
@@ -776,8 +883,11 @@ async function startContratto(stage, files = []) {
       F('dur.inizio', 'Data di inizio', { req: true, type: 'date' }),
       t.anni ? F('dur.anni', `Durata in anni (minimo ${C.anniMinimi(st)})`, { type: 'number', min: C.anniMinimi(st), max: t.anni[1], im: 'numeric' }) : null,
       t.mesi ? F('dur.mesi', `Durata in mesi (da ${t.mesi[0]} a ${t.mesi[1]})`, { type: 'number', min: t.mesi[0], max: t.mesi[1], im: 'numeric' }) : null,
+      st.tipo === 'box' ? F('box.disdetta', 'Preavviso per la disdetta e il recesso', { type: 'select', num: true, opts: [[30, '30 giorni'], [60, '60 giorni'], [90, '90 giorni']] }) : null,
+      st.tipo === 'fondo' ? CB('fondo.deroga', 'Patti in deroga con le organizzazioni agricole', 'Durata e patti diversi dalla legge, con l’assistenza delle organizzazioni professionali agricole che firmano il contratto (art. 45 L. 203/1982).') : null,
+      st.tipo === 'fondo' && st.fondo.deroga ? F('fondo.org', 'Organizzazioni che assistono le parti', { req: true, ph: 'nomi delle organizzazioni e dei loro rappresentanti' }) : null,
       st.tipo === 'commerciale' ? CB('dur.alberghiero', 'Attività alberghiera o teatrale', 'Durata minima 9 anni, rinnovo di 9, disdetta 18 mesi prima.') : null,
-      fine ? note(`Fine: ${C.dataEstesa(fine)}${st.tipo === 'libero' ? ' (poi rinnovo di 4 anni)' : st.tipo === 'concordato' ? ' (poi proroga di 2 anni)' : st.tipo === 'commerciale' ? ` (poi rinnovo di ${st.dur.alberghiero ? 9 : 6} anni)` : ''}`) : null,
+      fine ? note(`Fine: ${C.dataEstesa(fine)}${st.tipo === 'libero' ? ' (poi rinnovo di 4 anni)' : st.tipo === 'concordato' ? ' (poi proroga di 2 anni)' : st.tipo === 'commerciale' ? ` (poi rinnovo di ${st.dur.alberghiero ? 9 : 6} anni)` : st.tipo === 'box' ? ' (poi di anno in anno)' : st.tipo === 'foresteria' || (st.tipo === 'fondo' && !st.fondo.deroga) ? ' (poi rinnovo per uguale durata)' : ''}`) : null,
       st.tipo === 'comodato' ? CB('dur.termine', 'Con una data di fine', 'Senza data di fine il comodatario restituisce l’immobile quando il comodante lo chiede (art. 1810 c.c.).') : null,
       st.tipo === 'comodato' && st.dur.termine ? F('dur.fine', 'Data di fine', { req: true, type: 'date' }) : null,
       st.tipo === 'comodato' && !st.dur.termine ? F('dur.preavviso', 'Giorni per restituirlo dopo la richiesta', { type: 'number', min: 1, im: 'numeric' }) : null,
@@ -792,8 +902,8 @@ async function startContratto(stage, files = []) {
       const can = C.num(st.can.mensile), pg = st.A.some(p => p.tipo === 'pg');
       const accordo = t.accordo || st.tipo === 'transitorio';
       out.push(sezione('can', 'Canone e pagamento', [
-        row(F('can.mensile', 'Canone mensile €', { req: true, w: 'half', im: 'decimal', ph: '750,00', fmt: v => { const n = C.num(v); return isFinite(n) && n > 0 ? C.eur(n) : v; } }), F('can.periodo', 'Rate', { type: 'select', w: 'half', opts: [['mensile', 'Mensili'], ['trimestrale', 'Trimestrali']] })),
-        can > 0 ? note(`Canone annuo: ${C.eur(can * 12)} € (${C.eurLettere(can * 12)})`) : null,
+        row(F('can.mensile', st.tipo === 'fondo' ? 'Canone annuo €' : 'Canone mensile €', { req: true, w: 'half', im: 'decimal', ph: st.tipo === 'fondo' ? '3.000,00' : '750,00', fmt: v => { const n = C.num(v); return isFinite(n) && n > 0 ? C.eur(n) : v; } }), F('can.periodo', 'Rate', { type: 'select', w: 'half', opts: st.tipo === 'fondo' ? [['annuale', 'Una rata annuale'], ['semestrale', 'Semestrali']] : [['mensile', 'Mensili'], ['trimestrale', 'Trimestrali']] })),
+        can > 0 && st.tipo !== 'fondo' ? note(`Canone annuo: ${C.eur(can * 12)} € (${C.eurLettere(can * 12)})`) : can > 0 ? note(`${C.eurLettere(can)}`) : null,
         F('can.giorno', 'Da pagare entro il giorno', { type: 'select', num: true, opts: [1, 5, 10, 15, 20, 25, 28].map(v => [v, String(v)]) }),
         F('can.modo', 'Modalità di pagamento', { type: 'select', rebuild: true, opts: [['bonifico', 'Bonifico bancario'], ['altro', 'Altra modalità tracciabile']], hint: abit() ? 'Per l’abitativo il contante non è ammesso (art. 1, c. 50, L. 147/2013).' : null }),
         st.can.modo === 'bonifico' ? F('can.iban', 'IBAN', { req: true, up: true, maxlength: 42, fmt: C.ibanFmt }) : null,
@@ -805,8 +915,8 @@ async function startContratto(stage, files = []) {
           st.tipo === 'concordato' && st.can.accordo.assistenza === 'assistito' ? F('can.accordo.org', 'Organizzazioni', { req: true, ph: 'nomi delle organizzazioni di proprietari e inquilini' }) : null,
           st.tipo === 'concordato' ? CB('can.alta', 'Comune ad alta tensione abitativa', 'Solo per il promemoria fiscale: base del registro al 70% e cedolare al 10%.') : null) : null,
         abit() ? CB('can.cedolare', 'Cedolare secca', pg ? 'Non disponibile: c’è un locatore società.' : 'Niente registro e bollo; il locatore rinuncia all’aggiornamento ISTAT.', { disabled: pg && !st.can.cedolare }) : null,
-        st.tipo === 'commerciale' ? CB('can.iva', 'Canone più IVA', 'Se il locatore è soggetto IVA e sceglie di applicarla.') : null,
-        !(abit() && st.can.cedolare) ? F('can.istat', 'Aggiornamento ISTAT annuale', { type: 'select', num: true, opts: (st.tipo === 'commerciale' ? [0, 50, 75] : [0, 75, 100]).map(v => [v, v ? `${v}% della variazione` : 'Nessun aggiornamento']), hint: st.tipo === 'commerciale' ? 'Al massimo il 75% (art. 32 L. 392/1978).' : (C.mesiDurata(st) <= 12 ? 'Non si applica ai contratti fino a 12 mesi.' : null) }) : null,
+        st.tipo === 'commerciale' || st.tipo === 'box' ? CB('can.iva', 'Canone più IVA', 'Se il locatore è soggetto IVA e sceglie di applicarla.') : null,
+        !(abit() && st.can.cedolare) ? F('can.istat', 'Aggiornamento ISTAT annuale', { type: 'select', num: true, opts: (['commerciale', 'foresteria'].includes(st.tipo) ? [0, 50, 75] : [0, 75, 100]).map(v => [v, v ? `${v}% della variazione` : 'Nessun aggiornamento']), hint: ['commerciale', 'foresteria'].includes(st.tipo) ? 'Al massimo il 75% (art. 32 L. 392/1978).' : (C.mesiDurata(st) <= 12 && st.tipo !== 'box' ? 'Non si applica ai contratti fino a 12 mesi.' : null) }) : null,
       ]));
       // deposito e garanzie
       const dm = +st.dep.mesi || 0;
@@ -816,7 +926,7 @@ async function startContratto(stage, files = []) {
         st.gar.on ? personaUI('gar.p', st.gar.p, 'Garante') : null,
         st.gar.on ? F('gar.max', 'Importo massimo garantito €', { req: true, im: 'decimal', hint: 'Obbligatorio per legge (art. 1938 c.c.): di solito da 6 a 12 mensilità.', fmt: v => { const n = C.num(v); return isFinite(n) && n > 0 ? C.eur(n) : v; } }) : null,
       ]));
-      out.push(sezione('spese', 'Spese e utenze', [
+      if (!['box', 'fondo'].includes(st.tipo)) out.push(sezione('spese', 'Spese e utenze', [
         F('spese.oneri', 'Spese condominiali (oneri accessori)', { type: 'select', rebuild: true, opts: [['acconto', 'Acconto mensile e conguaglio annuale'], ['consuntivo', 'A consuntivo, su richiesta'], ['inclusi', 'Comprese nel canone']] }),
         st.spese.oneri === 'acconto' ? F('spese.acconto', 'Acconto mensile €', { im: 'decimal', fmt: v => { const n = C.num(v); return isFinite(n) && n > 0 ? C.eur(n) : v; } }) : null,
         F('spese.utenze', 'Utenze (luce, gas, acqua, internet)', { type: 'select', opts: [['conduttore', 'Intestate al conduttore'], ['locatore', 'Restano al locatore, con rimborso dei consumi']] }),
@@ -831,14 +941,18 @@ async function startContratto(stage, files = []) {
     // clausole facoltative
     const cl = st.cl, CL = (key, label, sub, extra = null, when = true) => when ? h('div', { class: 'ct-cl' + (cl[key].on ? ' on' : '') }, CB(`cl.${key}.on`, label, sub), cl[key].on && extra ? h('div', { class: 'ct-clx' }, extra) : null) : null;
     out.push(sezione('cl', 'Clausole facoltative (dopo i dati obbligatori)', [
-      CL('recesso', 'Recesso libero dell’inquilino', 'Oltre ai «gravi motivi» di legge, può lasciare l’immobile quando vuole con un preavviso.', F('cl.recesso.mesi', 'Preavviso (mesi)', { type: 'select', num: true, opts: (st.tipo === 'commerciale' ? [6, 9, 12] : [1, 2, 3, 4, 5, 6]).map(v => [v, String(v)]) }), loc() && st.tipo !== 'studenti'),
+      CL('recesso', 'Recesso libero dell’inquilino', 'Oltre ai «gravi motivi» di legge, può lasciare l’immobile quando vuole con un preavviso.', F('cl.recesso.mesi', 'Preavviso (mesi)', { type: 'select', num: true, opts: (['commerciale', 'foresteria'].includes(st.tipo) ? [6, 9, 12] : [1, 2, 3, 4, 5, 6]).map(v => [v, String(v)]) }), loc() && !['studenti', 'box', 'fondo'].includes(st.tipo)),
       CL('risolutiva', 'Clausola risolutiva espressa', 'Il contratto si risolve se l’inquilino non paga alcune rate (art. 1456 c.c.).', F('cl.risolutiva.rate', 'Rate non pagate', { type: 'select', num: true, opts: [1, 2, 3, 4, 5, 6].map(v => [v, String(v)]) }), loc()),
-      CL('animali', 'Animali domestici', 'Una regola chiara evita discussioni.', F('cl.animali.mode', 'Regola', { type: 'select', opts: [['consenso', 'Solo con consenso scritto'], ['si', 'Ammessi'], ['no', 'Non ammessi']] })),
-      CL('fumo', 'Divieto di fumo all’interno', ''),
+      CL('animali', 'Animali domestici', 'Una regola chiara evita discussioni.', F('cl.animali.mode', 'Regola', { type: 'select', opts: [['consenso', 'Solo con consenso scritto'], ['si', 'Ammessi'], ['no', 'Non ammessi']] }), !['box', 'fondo'].includes(st.tipo)),
+      CL('fumo', 'Divieto di fumo all’interno', '', null, !['box', 'fondo'].includes(st.tipo)),
       CL('subParz', 'Vietata anche la sublocazione parziale', 'La legge vieta solo quella totale.', null, abit()),
       CL('assic', 'Assicurazione dell’inquilino', 'Responsabilità civile e danni da incendio e acqua.'),
       CL('visite', 'Visite all’immobile con preavviso', 'Anche per mostrarlo a chi vuole comprarlo o affittarlo.', F('cl.visite.giorni', 'Preavviso (giorni)', { type: 'select', num: true, opts: [1, 2, 3, 5, 7].map(v => [v, String(v)]) })),
-      CL('migliorie', 'Lavori e migliorie solo con consenso scritto', 'Restano all’immobile senza indennità.', null, loc()),
+      CL('migliorie', 'Lavori e migliorie solo con consenso scritto', 'Restano all’immobile senza indennità.', null, loc() && st.tipo !== 'fondo'),
+      CL('esonero', 'Esonero del locatore per fatti di terzi', 'Danni causati da altri inquilini o da terzi, furti, interruzioni dei servizi non dovute al locatore.', null, loc() && st.tipo !== 'fondo'),
+      CL('bombole', 'Divieto di bombole di gas', 'Niente GPL o combustibili in recipienti mobili nell’abitazione.', null, abit() || ['foresteria', 'comodato'].includes(st.tipo)),
+      CL('clima', 'Climatizzatori e pompe di calore consentiti', 'L’inquilino può installarli a sue spese e li toglie alla riconsegna, ripristinando.', null, !['box', 'fondo'].includes(st.tipo)),
+      CL('noPrel', 'Nessuna prelazione all’inquilino', 'Né in caso di vendita né per una nuova locazione (la legge non la prevede per questi contratti).', null, ['libero', 'concordato', 'transitorio', 'studenti', 'foresteria', 'box'].includes(st.tipo)),
       CL('pec', 'Comunicazioni anche via PEC ed e-mail', 'La PEC vale come raccomandata.'),
       CL('regLoc', 'Imposte di registro e bollo tutte a carico del locatore', 'Per legge sono divise (bollo al conduttore).', null, loc() && !(abit() && st.can.cedolare)),
       CL('verbale', 'Verbale di consegna allegato', 'Letture dei contatori, chiavi e stato dell’immobile alla consegna.', [
@@ -892,7 +1006,7 @@ async function startContratto(stage, files = []) {
     status.replaceChildren(
       req.length ? h('div', { class: 'ct-sline ' + (touched.size || showAll ? 'bad' : 'todo') }, ic(touched.size || showAll ? 'alert' : 'edit', 16), h('b', {}, touched.size || showAll ? `Mancano ${plural(req.length, 'dato obbligatorio', 'dati obbligatori')}` : `Da compilare: ${plural(req.length, 'dato obbligatorio', 'dati obbligatori')}, segnati con *`), h('span', { class: 'ct-miss' }, req.slice(0, 8).map(x => h('button', { type: 'button', class: 'ct-mbtn', onclick: () => goTo(x) }, x.label)), req.length > 8 ? h('span', { class: 'muted' }, ` e altri ${req.length - 8}`) : null))
         : h('div', { class: 'ct-sline ok' }, ic('check', 16), h('b', {}, 'Dati obbligatori completi'), h('span', { class: 'muted' }, ` · ${plural(d.arts.length, 'articolo', 'articoli')}`)),
-      warn.length ? h('ul', { class: 'ct-warn' }, warn.map(w => h('li', {}, w.msg))) : null);
+      warn.length ? h('ul', { class: 'ct-warn' }, warn.map(w => h('li', {}, w.msg))) : '');   // (replaceChildren scriverebbe «null» come testo)
   }
   function goTo(x) {
     open.add(x.sec); showAll = true; rebuild();

@@ -1,4 +1,4 @@
-// «Contratto di affitto e comodato»: i sei tipi con dati completi, le regole di legge (deposito, durate, aggiornamento,
+// «Contratto di affitto e comodato»: i nove tipi con dati completi, le regole di legge (deposito, durate, aggiornamento,
 // cedolare), gli importi in lettere, la bozza con dati mancanti; poi veraPDF (PDF/UA-1) sui PDF e LibreOffice sul Word
 // (stesso testo del PDF). Il testo è controllato frase per frase sui punti che contano.
 const { chromium, APP } = require('../lib'); const fs = require('fs'), path = require('path'), os = require('os'), { execFileSync } = require('child_process');
@@ -29,6 +29,9 @@ let fail = 0; const step = (name, c, det) => { console.log(`${c ? '✓' : '✗'}
       studenti: st => { st.dur.mesi = 12; st.stud.universita = 'Università di Roma'; st.stud.corso = 'laurea in Ingegneria'; st.can.accordo.comune = 'Roma'; st.B.push({ ...C.persona(), nome: 'Paola', cognome: 'Neri', luogoN: 'Roma', cf: 'NREPLA01C41H501S', comune: 'Napoli', indirizzo: 'via Toledo 3', ...C.daCf('NREPLA01C41H501S') }); },
       commerciale: st => { st.dur.anni = 6; st.comm.attivita = 'vendita al dettaglio di libri'; st.can.iva = true; st.cl.recesso.on = true; st.cl.recesso.mesi = 6; st.imm.ape.classe = 'E'; st.imm.cat.categoria = 'C/1'; },
       comodato: st => { st.dur.termine = false; st.comod.parente = true; },
+      box: st => { st.dur.anni = 1; Object.assign(st.imm, { descr: 'box auto al piano interrato con porta basculante', mq: '15' }); st.imm.cat.categoria = 'C/6'; st.imm.ape.classe = ''; st.box.targa = 'AB123CD'; st.box.disdetta = 60; st.can.mensile = '120'; st.can.iva = true; st.cl.noPrel.on = true; },
+      foresteria: st => { st.dur.anni = 4; st.B[0] = { ...C.persona(), tipo: 'pg', den: 'Alfa Servizi S.r.l.', cf: '01234567897', comune: 'Milano', prov: 'MI', indirizzo: 'via Torino 1', lr: 'Anna Neri' }; st.can.istat = 100; st.cl.bombole.on = true; st.cl.clima.on = true; st.cl.esonero.on = true; },
+      fondo: st => { st.dur.anni = 15; st.dep.mesi = 0; st.can.mensile = '3000'; st.can.periodo = 'annuale'; st.imm.indirizzo = 'contrada Valle'; st.fondo.terreni = [{ foglio: '12', part: '34', sup: '1,5', qualita: 'seminativo', rd: '10,50', ra: '5,20' }, { foglio: '12', part: '35', sup: '0,75', qualita: 'uliveto' }]; st.fondo.coltura = 'seminativo e uliveto'; },
     };
     const ATTESI = {
       libero: ['Art. 1 – Oggetto', 'rinnovato di diritto per un periodo di quattro anni', 'euro 9.000,00 (novemila/00)', 'tre mesi prima della data del rilascio', 'fino all’importo massimo di euro 9.000,00', 'classe energetica D', 'art. 21 c.p.c.', 'artt. 1341 e 1342', 'Inventario degli arredi', 'Verbale di consegna'],
@@ -37,6 +40,9 @@ let fail = 0; const step = (name, c, det) => { console.log(`${c ? '✓' : '✗'}
       studenti: ['art. 5, commi 2 e 3', 'dodici mesi', 'si rinnova automaticamente per uguale periodo', 'Università di Roma', 'obbligati in solido'],
       commerciale: ['artt. 27 e seguenti', 'sei anni in sei anni', 'oltre IVA', 'art. 29 della legge n. 392/1978', 'diciotto mensilità', 'art. 36 legge n. 392/1978', 'art. 27, comma 7'],
       comodato: ['artt. 1803 e seguenti', 'essenzialmente gratuito', 'art. 1810 c.c.', 'figlia del comodante', 'art. 1808', 'venti giorni'],
+      box: ['CONTRATTO DI LOCAZIONE DI AUTORIMESSA', 'artt. 1571 e seguenti', 'si rinnova tacitamente di anno in anno', 'sessanta giorni prima', 'targato AB123CD', 'sostanze infiammabili', 'oltre IVA', 'non spetta alcun diritto di prelazione'],
+      foresteria: ['USO FORESTERIA', 'Alfa Servizi S.r.l.', 'propri dipendenti, collaboratori e ospiti', 'in quanto compatibili, dalle norme della legge n. 392/1978', 'nella misura del 75%', 'bombole di gas', 'pompe di calore', 'Esonero da responsabilità', 'classe energetica D'],
+      fondo: ['AFFITTO DI FONDO RUSTICO', 'legge 3 maggio 1982, n. 203', 'concede in affitto all’affittuario', 'foglio 12, particella 34, superficie ettari 1,50', 'superficie complessiva di ettari 2,25', 'quindici anni', 'art. 4 legge n. 203/1982', 'un’unica rata annuale', 'art. 21 legge n. 203/1982', 'art. 8 della legge n. 590/1965', 'sezione specializzata agraria', 'art. 46 della legge n. 203/1982', 'Il concedente', 'L’affittuario'],
     };
     const out = {};
     for (const [tipo, f] of Object.entries(TIPI)) {
@@ -63,6 +69,12 @@ let fail = 0; const step = (name, c, det) => { console.log(`${c ? '✓' : '✗'}
       cfErrato: (() => { const st = base(); st.B[0].cf = 'BNCLCU90E52L219X'; return C.controlla(st).req.some(x => /non valido/.test(x.msg)); })(),
       ibanErrato: (() => { const st = base(); st.can.iban = 'IT60X0542811101000000123457'; return C.controlla(st).req.some(x => /IBAN non valido/.test(x.msg)); })(),
       recessoComm: (() => { const st = base(); st.tipo = 'commerciale'; st.comm.attivita = 'u'; st.cl.recesso.on = true; st.cl.recesso.mesi = 3; return C.controlla(st).req.some(x => /almeno 6 mesi/.test(x.msg)); })(),
+      fondo15: rule(st => { st.tipo = 'fondo'; st.dur.anni = 6; st.fondo.terreni = [{ foglio: '1', part: '2' }]; }, /durata di quindici anni/),
+      fondoDeroga: (() => { const st = base(); st.tipo = 'fondo'; st.dur.anni = 6; st.fondo.deroga = true; st.fondo.terreni = [{ foglio: '1', part: '2' }]; const need = C.controlla(st).req.some(x => /organizzazioni/.test(x.msg)); st.fondo.org = 'Organizzazione A e Organizzazione B'; const d = C.documento(st); const T = d.arts.flatMap(a => a.paras).join(' '); return need && /durata di sei anni/.test(T) && /art\. 45 della legge n\. 203\/1982/.test(T) && d.firme.some(f => /organizzazioni/.test(f.ruolo)); })(),
+      fondoGrammatica: (() => { const st = base(); st.tipo = 'fondo'; st.fondo.terreni = [{ foglio: '1', part: '2' }]; st.B.push({ ...C.persona(), nome: 'Ugo' }); return !/\b(il|al|del|dal|dei|i) affittuar/i.test(JSON.stringify(C.documento(st))); })(),
+      boxSenzaApe: (() => { const st = base(); st.tipo = 'box'; st.imm.ape.classe = ''; return !C.controlla(st).req.some(x => /APE/.test(x.label)) && !C.documento(st).arts.some(a => a.key === 'ape'); })(),
+      registroFondo: (() => { const st = base(); st.tipo = 'fondo'; st.can.mensile = '3000'; st.dur.anni = 15; st.fondo.terreni = [{ foglio: '1', part: '2' }]; return C.adempimenti(st, 4).tasse.registro === 225; })(),
+      elisione: rule(st => { st.dur.inizio = '2027-11-11'; }, /dall’11 novembre 2027/),
       modificaArticolo: (() => { const st = base(); st.ov.oggetto = 'Testo scritto a mano.'; const d = C.documento(st); return d.arts[0].edited && d.arts[0].paras[0] === 'Testo scritto a mano.'; })(),
       togliArticolo: (() => { const st = base(); st.off.accessi = true; st.off.oggetto = true; const d = C.documento(st); return !d.arts.some(a => a.key === 'accessi') && d.arts.some(a => a.key === 'oggetto'); })(),
       personalizzata: (() => { const st = base(); st.pers.push({ titolo: 'Posto bici', testo: 'Il conduttore può usare il posto bici.', onerosa: true }); const d = C.documento(st); const a = d.arts.find(x => x.title === 'Posto bici'); return !!a && d.approv.includes(`${a.n} (Posto bici)`); })(),

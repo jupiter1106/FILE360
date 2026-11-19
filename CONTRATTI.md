@@ -29,7 +29,7 @@ Lo strumento deve quindi:
 5. lasciare la libertà di modificare ogni articolo e di aggiungerne di propri;
 6. dire cosa fare dopo la firma, con date e importi calcolati.
 
-## 2. I tipi di contratto (e perché questi sei)
+## 2. I tipi di contratto
 
 | Tipo | Norma | Durata | Note che il programma deve far rispettare |
 |---|---|---|---|
@@ -39,8 +39,30 @@ Lo strumento deve quindi:
 | **Studenti universitari** | L. 431/1998 art. 5 c. 2–3; D.M. 16/1/2017 | da 6 a 36 mesi | Conduttore iscritto a un corso universitario in un comune diverso da quello di residenza; canone secondo l'Accordo territoriale |
 | **Uso diverso (negozio, ufficio, laboratorio)** | L. 392/1978 artt. 27–42 | almeno 6 anni + 6 (9 + 9 alberghiero) | Diniego di rinnovo solo per i motivi dell'art. 29, 12 mesi prima (18); aggiornamento ISTAT al massimo il 75% (art. 32); indennità di avviamento (art. 34) e prelazione (artt. 38–40) se c'è contatto con il pubblico; cessione con l'azienda (art. 36) |
 | **Comodato d'uso gratuito di immobile** | c.c. artt. 1803–1812 | a termine o a richiesta | Gratuito per natura; restituzione anticipata per urgente e impreveduto bisogno (art. 1809), a richiesta se senza termine (art. 1810); registrazione entro 20 giorni con imposta fissa; riduzione IMU del 50% ai figli o genitori se ricorrono le condizioni (L. 208/2015 art. 1 c. 10) |
+| **Uso foresteria** | c.c. artt. 1571 ss.; L. 392/1978 in quanto compatibile | libera, rinnovo tacito per uguale durata, disdetta 6 mesi | Conduttore impresa o ente, per dipendenti, collaboratori e ospiti; l'inquadramento dipende dal caso concreto (orientamenti della giurisprudenza non uniformi): il programma lo dichiara nel contratto e consiglia la verifica di un professionista; aggiornamento ISTAT al massimo il 75% per prudenza |
+| **Box auto o posto auto** (da solo) | c.c. artt. 1571 ss. | libera, rinnovo tacito di anno in anno, disdetta con preavviso scelto (30-90 giorni) | Uso esclusivo di ricovero del veicolo, divieti tipici (sostanze infiammabili, lavaggio, sosta nelle parti comuni, duplicazione di chiavi e telecomandi), niente APE; registrazione entro 30 giorni, 2% minimo 67 € |
+| **Affitto di fondo rustico** | L. 203/1982 | almeno 15 anni (art. 1), rinnovo per uguale durata senza disdetta un anno prima (art. 4) | Durata e patti diversi solo con l'assistenza delle organizzazioni professionali agricole, che firmano (art. 45); recesso dell'affittuario con un anno di preavviso (art. 5); divieto di subaffitto (art. 21); miglioramenti artt. 16-17; prelazione del coltivatore diretto (L. 590/1965 art. 8); controversie alla sezione specializzata agraria con tentativo di conciliazione (art. 46); registro 0,50% dei canoni dell'intera durata, anche cumulativo entro febbraio |
 
-Restano fuori, di proposito, l'affitto d'azienda, gli affitti brevi turistici (meno di 30 giorni, con obblighi diversi: CIN e comunicazioni alla Questura) e i posti auto da soli. Sono casi diversi, che meritano strumenti propri.
+Restano fuori l'affitto d'azienda e gli affitti brevi turistici (meno di 30 giorni, con obblighi diversi: CIN e comunicazioni alla Questura).
+
+### Studio dei contratti reali forniti (19 novembre 2026)
+
+Un PDF di 76 pagine con 13 contratti veri di un locatore professionale (dati oscurati; nessun dato riportato qui). Cosa ne è venuto fuori:
+
+| Tipo trovato | Quanti | Struttura |
+|---|---|---|
+| Abitativo 4+4 | 8 versioni dello stesso modello | «TRA … E …», «SI CONVIENE E STIPULA QUANTO SEGUE», 22-23 articoli con titolo maiuscolo in linea, garante con firma propria, «Letto, approvato e sottoscritto» |
+| Uso foresteria | 1 | premesse (proprietà, interesse del conduttore, scopo esclusivo), oggetto «ad esclusivo uso foresteria», impianti descritti |
+| Abitativo su modello a stampa (2007) | 1 | 25 articoli senza titolo «Art. N)» |
+| Box auto | 3 | scrittura privata «CEDE IN LOCAZIONE … AUTORIMESSA PRIVATA», 1 o 4 anni con rinnovo tacito, divieti elencati, chiavi e telecomandi, lettura del contatore |
+| Uso non abitativo 6+6 | 2 | attività turistico-ricettiva o commerciale, IMU, risoluzione espressa |
+| Affitto di terreni | 2 | premesse con tabella catastale (foglio, particella, superficie, qualità, redditi), 9 e 15 anni |
+
+Campi che cambiano da un contratto all'altro: parti persone o società con legale rappresentante, più conduttori, garante; identificativi catastali (foglio, particella, subalterno, categoria, rendita; per i terreni anche superficie e qualità); impianti (riscaldamento assente o da installare, acqua con autoclave); canone annuo con rate mensili, trimestrali o annuali e importi in lettere; IVA; ISTAT 75%; giorno di scadenza; IBAN; deposito in mensilità; data dell'APE; spese di registro a metà.
+
+Clausole ricorrenti aggiunte come facoltative: climatizzatori e pompe di calore con ripristino; divieto di bombole di gas; esonero del locatore per fatti di terzi; nessuna prelazione al conduttore. Nei tipi nuovi sono già nel testo: divieti del box, chiavi e telecomandi, piccole riparazioni di serrande e basculanti; uso foresteria e responsabilità per gli occupanti; coltivazione, subaffitto, miglioramenti e prelazione nel fondo rustico.
+
+Clausole viste nei contratti reali e **non** riprese perché nulle o rischiose: rinuncia del conduttore alla prelazione legale nell'uso diverso con pubblico (art. 79 L. 392/1978), IMU a carico del conduttore come obbligo verso il Comune, esonero del locatore anche per i propri fatti.
 
 ## 3. I dati: obbligatori ed essenziali, poi i facoltativi
 
@@ -173,8 +195,8 @@ Gli importi sono indicativi e calcolati sui dati inseriti. Il promemoria dice se
 | Bozza con dati mancanti | spazi da compilare a mano, nessun dato inventato |
 | Importi in lettere (ventitré, centotto, milletré, ventunomila, un milione cinquecentomila…) | 8/8 |
 | Promemoria: registrazione entro 30 giorni dalla firma, registro 2% (180 € su 9.000 €), bollo sulle pagine vere | esatto |
-| **PDF/UA-1 con veraPDF** | 6/6 conformi |
-| **Word aperto da LibreOffice**: stesse parole del PDF | 100% in tutti e 6 i tipi |
+| **PDF/UA-1 con veraPDF** | 9/9 conformi |
+| **Word aperto da LibreOffice**: stesse parole del PDF | 100% in tutti e 9 i tipi |
 
 **Interfaccia** (4 comportamenti nella suite):
 - i dati obbligatori guidano;
