@@ -439,7 +439,7 @@ async function startRilevaAI(stage, files = []) {
       h('div', { class: 'ra-ih' }, h('span', { class: 'ra-chip ' + (S.ai || S.parte ? 'forte' : S.vicino ? '' : 'ok') }, 'stile'), h('b', {}, S.ai ? 'Scritto come scrive Claude' : S.parte ? 'Passaggi scritti come scrive Claude' : S.vicino ? 'Sotto la soglia, fascia incerta' : 'Non scritto come scrive Claude')),
       h('div', { class: 'ra-gauge', role: 'img', 'aria-label': `Punteggio di stile ${S.score.toFixed(1)}, soglia ${S.soglia.toFixed(1)}` }, h('i', { style: `left:${(pos * 100).toFixed(1)}%` }), h('u', { style: 'left:50%' })),
       h('div', { class: 'ra-gl' }, h('span', {}, 'persona'), h('span', {}, 'soglia'), h('span', {}, 'Claude')),
-      h('div', { class: 'ra-id' }, (S.quota >= 0.995 ? 'Punteggio più alto di quello di tutti i testi umani di taratura.' : `Punteggio più alto di quello del ${pct(S.quota)} dei testi umani di taratura.`) + (n > 1 ? ` Passaggi con lo stile di Claude: ${nai} su ${n} (evidenziati nel testo).` : '')),
+      h('div', { class: 'ra-id' }, (S.quota >= 0.99 ? 'Punteggio più alto di quello di oltre il 99% dei testi umani di taratura.' : `Punteggio più alto di quello del ${pct(S.quota)} dei testi umani di taratura.`) + (n > 1 ? ` Passaggi con lo stile di Claude: ${nai} su ${n} (evidenziati nel testo).` : '')),
       MIS().claude ? h('div', { class: 'ra-id ra-nota' }, `Nelle prove su testi mai visti: riconosciuti ${pct(MIS().claude)} dei testi di Claude (Haiku ${pct(MIS().haiku)}, Sonnet ${pct(MIS().sonnet)}, Opus ${pct(MIS().opus)}); falsi allarmi al massimo ${MIS().fp_max_txt} in ogni gruppo di testi umani.`) : null);
   }
   function metaEl(d) {
