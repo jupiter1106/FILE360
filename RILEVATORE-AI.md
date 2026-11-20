@@ -6,10 +6,10 @@
 
 | | Esito misurato |
 |---|---|
-| Testi di **Claude Haiku** riconosciuti | **98,1%** (269 testi) |
-| Testi di **Claude Sonnet** riconosciuti | **90,4%** (335 testi) |
-| Testi di **Claude Opus** riconosciuti | **80,3%** (366 testi) |
-| Testi scritti su richieste «da studente» («non deve sembrare AI», «deve passare i rilevatori», «scrivilo come un ragazzo di quarta») | **96,5%** |
+| Testi di **Claude Haiku** riconosciuti | **98,5%** (269 testi) |
+| Testi di **Claude Sonnet** riconosciuti | **91,0%** (335 testi) |
+| Testi di **Claude Opus** riconosciuti | **82,2%** (366 testi) |
+| Testi scritti su richieste «da studente» («non deve sembrare AI», «deve passare i rilevatori», «scrivilo come un ragazzo di quarta») | **95,3%** |
 | Falsi allarmi su testi umani **mai visti dal modello** | letteratura 0/901 · Fanpage 0/733 · temi e appunti di studenti 0/700 · tesi 1/500 · Il Post 5/707 |
 | Paragrafo di Claude dentro un testo umano | segnalato il passaggio, non il testo intero |
 | Testo umano «migliorato» o parafrasato da Claude | 10% (resta in gran parte umano: vedi limiti) |
@@ -26,7 +26,7 @@ La prima versione dello strumento mostrava solo le prove certe (impronte dei fil
 - **Testi lunghi.** Il testo si divide in passaggi di circa 180 parole, tagliati a fine frase. Il punteggio del testo è la media di quelli dei passaggi.
 - **Parità.** Le funzioni che calcolano le caratteristiche sono le stesse nel programma e nell'addestramento (`src/rilevaai.js`, usate da `tools/rilevaai_feat.js`). I punteggi del programma differiscono da quelli di Python in media di 0,04, per la riduzione dei pesi.
 
-### I testi di Claude (970, più 59 riscritture usate solo per la prova)
+### I testi di Claude (1.015, più 59 riscritture usate solo per la prova)
 Scritti per questo lavoro da Claude Haiku, Sonnet e Opus.
 - **540 sugli stessi temi di testi umani:** articoli del Post e di Fanpage, voci di Wikipedia, pagine web, con il testo umano dello stesso tema nell'addestramento. Così il modello non impara l'argomento.
 - **343 in 35 generi da studenti e professionisti:**
@@ -64,17 +64,17 @@ Scritti per questo lavoro da Claude Haiku, Sonnet e Opus.
 
 | Riconosciuti (fuori campione) | Testo intero | Solo le prime ~180 parole |
 |---|---|---|
-| Haiku | 98,1% | 97,8% |
-| Sonnet | 90,4% | 84,5% |
-| Opus | 80,3% | 76,5% |
-| Testi «umanizzati» (tutti i modelli) | 96,5% | — |
+| Haiku | 98,5% | 98,1% |
+| Sonnet | 91,0% | 85,4% |
+| Opus | 82,2% | 79,2% |
+| Testi «umanizzati» (tutti i modelli) | 95,3% | — |
 | Generi aggiunti nel terzo giro (reclami, verbali, testi tecnici…) | 69% | — |
 
 | Passaggio isolato di Claude (soglia severa) | Riconosciuto |
 |---|---|
-| Haiku | 87% |
-| Sonnet | 64% |
-| Opus | 45% |
+| Haiku | 90% |
+| Sonnet | 68% |
+| Opus | 50% |
 
 **Prova finale su testi mai visti dal modello né usati per la soglia:**
 
@@ -134,3 +134,19 @@ python3 tools/rilevaai_modello.py CARTELLA_DATI --bits=20 --curati=3 --keep=2000
 - `corpus-umano/` (umani.json, mc4/, curati.json, scuola.json, fuori.json, ws/letteratura.json).
 
 Il programma stampa tutte le misure di questo documento e scrive il modello con le soglie e le misure che lo strumento mostra.
+
+## 6. Quarto giro (20 novembre 2026): più testi di Opus, soglia più severa
+
+- **Testi nuovi.** 45 testi di Claude Opus in 30 generi, metà brevi: reclami, verbali, FAQ, testi tecnici, comunicazioni ai clienti, e-mail, domande alla PA, annunci, descrizioni di corsi, testi istituzionali, sintesi, temi, recensioni (`corpus-claude/claude2.json`).
+- **Solo addestramento.** I testi nuovi entrano solo nell'addestramento. Le misure restano sugli stessi testi di prova di prima (Haiku, Sonnet e Opus dei giri precedenti), quindi il confronto è alla pari.
+- **Due varianti provate.** La prima, con la stessa soglia, riconosceva di più (Opus 83,9%) ma portava Il Post da 0,71% a 0,99% di falsi allarmi. Scelta la seconda, con la soglia tarata a 0,18% di falsi allarmi fuori campione per gruppo: **falsi allarmi identici a prima** su tutti i testi mai visti.
+
+**Risultati della variante scelta, prima → dopo:**
+- Opus: 80,3% → 82,2%;
+- Sonnet: 90,4% → 91,0%;
+- Haiku: 98,1% → 98,5%;
+- Opus sulle prime ~180 parole: 76,5% → 79,2%;
+- passaggi isolati: in media 65% → 69%, con gli stessi 7 falsi allarmi su 88.697 passaggi umani;
+- testi «umanizzati»: 96,5% → 95,3%.
+
+**Griglia** (`test/bench/rilevaai_griglia.js`, nella suite; metodo in `VALUTAZIONE-RILEVAAI.md`): **4,55 → 4,62 su 5**.

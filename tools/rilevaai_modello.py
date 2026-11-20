@@ -50,8 +50,9 @@ for i, r in req.items():  # testo umano appaiato, stesso gruppo del testo AI sul
     if r.get('umano') and nw(r['umano']) >= 60:
         seen.add(key(r['umano']))
         docs.append(dict(text=r['umano'], y=0, grp='t' + i, src='appaiato:' + r['fonte'].split(':')[0], modello='', um=False, genere=r['genere']))
-for r in json.load(open(f'{D}/corpus-claude/claude.json')):
-    docs.append(dict(text=r['text'], y=1, grp='c' + r['id'], src='claude', modello='opus-5.5', um=r['uman'], genere='altro: ' + r['genere']))
+for cf in sorted(f for f in os.listdir(f'{D}/corpus-claude') if re.match(r'claude\d*\.json$', f)):   # testi di Claude Opus (claude.json, claude2.json…)
+    for r in json.load(open(f'{D}/corpus-claude/{cf}')):
+        docs.append(dict(text=r['text'], y=1, grp='c' + r['id'], src='claude', modello='opus-5.5', um=r['uman'], genere='altro: ' + r['genere']))
 for r in json.load(open(f'{D}/corpus-umano/umani.json')):
     if key(r['text']) in seen or nw(r['text']) < 60: continue
     docs.append(dict(text=r['text'], y=0, grp='d' + r['dom'], src='paisa', modello='', um=False, genere='web'))
