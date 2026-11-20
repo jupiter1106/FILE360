@@ -1604,6 +1604,18 @@ const SEO = (() => {
         ['I dati vengono inviati da qualche parte?', 'No: tutto avviene nel browser. La bozza resta solo su questo dispositivo, oppure la salvi tu in un file.'],
       ],
     },
+    vendite: {
+      slug: 'analisi-vendite-fatture', title: 'Analisi delle vendite dalle fatture elettroniche: mappa dei clienti e statistiche',
+      desc: 'Carica le fatture emesse (XML, P7M, ZIP del cassetto fiscale o PDF): mappa dei clienti per Comune, chi sono e che cosa comprano, andamento e stagionalità, clienti da ricontattare, prodotti comprati insieme, termini di pagamento, stima dei prossimi mesi ed Excel. Senza upload.',
+      h1: 'Analisi delle vendite', h2: 'Come analizzare le vendite partendo dalle fatture', rel: ["fatture", "excel", "f24"],
+      steps: ['Carica le fatture emesse: i file XML o P7M, lo ZIP scaricato dal cassetto fiscale o i PDF della fattura elettronica, anche tutta la cartella.', 'Guarda le scoperte, la mappa dei clienti e le schede Clienti, Prodotti, Andamento e Incassi; filtra per periodo, tipo di cliente e territorio.', 'Tocca un Comune sulla mappa per vedere chi sono i clienti e che cosa hanno comprato; scarica tutto in Excel.'],
+      faq: [
+        ['Quali dati usa?', 'Solo quelli scritti nelle fatture: cliente e sede, data, righe con prodotti, quantità e prezzi, imponibile, IVA, modalità e scadenze di pagamento. La posizione sulla mappa è quella del Comune della sede del cliente, presa da un elenco dei Comuni italiani incorporato nel programma.'],
+        ['Le fatture vengono caricate su un server?', 'No: tutto avviene nel browser, anche la mappa. Nessun dato esce dal dispositivo.'],
+        ['Che cosa scopre?', 'La concentrazione del fatturato sui primi clienti, i clienti abituali che non comprano da più tempo del loro solito, il mese migliore e il peggiore, i prodotti comprati insieme, le variazioni di prezzo, il raggio d’azione dalla sede, i termini di pagamento e una stima dei prossimi tre mesi.'],
+        ['E se carico anche le fatture di acquisto?', 'Il programma riconosce l’azienda (chi ha emesso più fatture) e analizza solo le vendite; le fatture di acquisto vengono contate ed escluse. Se nei file ci sono più aziende, si sceglie quale analizzare.'],
+      ],
+    },
     rilevaai: {
       slug: 'rilevatore-testo-ai', title: 'Rilevatore di testo AI e antiplagio: Claude, ChatGPT, Gemini, senza upload',
       desc: 'Verifica se un compito, una tesina o un documento è stato scritto con Claude (Haiku, Sonnet, Opus): modello statistico dello stile, passaggi evidenziati, prove nei file Word, PowerPoint, Excel e PDF, residui di chat, testo nascosto, passaggi identici. Tutto sul tuo dispositivo.',
@@ -1703,6 +1715,9 @@ const TOOLS = {
   contratto: { title: 'Contratto di affitto e comodato', short: 'Contratto affitto', icon: 'lease', hue: '#B45309', accept: '.pdf,.json,application/pdf,application/json', multiple: false, anyFile: true, noFile: 'Compila un nuovo contratto', noFileIcon: 'lease', noFileFirst: true, pickLabel: 'Apri una visura o una bozza',
               dzTitle: 'Il contratto pronto in pochi minuti', dzText: 'Hai la visura catastale in PDF o una bozza salvata (.json)? Trascinala qui: immobile e proprietari si compilano da soli.',
               desc: 'Contratto di locazione 4+4, 3+2 concordato, transitorio, per studenti, a uso negozio o ufficio, foresteria, box auto, affitto di terreni agricoli e comodato gratuito: compili i dati nella colonna, il contratto si scrive da solo con le clausole che scegli e ogni articolo si può modificare. PDF e Word, più il promemoria di registrazione e imposte.', start: (...a) => startContratto(...a) },
+  vendite:  { title: 'Analisi delle vendite', short: 'Vendite', icon: 'chart', hue: '#1D4ED8', accept: '.xml,.p7m,.zip,.pdf,application/zip,application/pdf,text/xml', multiple: true, anyFile: true, folder: true,
+              dzTitle: 'Trascina qui le fatture emesse', dzText: 'XML, P7M, lo ZIP del cassetto fiscale o i PDF della fattura elettronica — anche tutta la cartella. Restano sul tuo dispositivo.',
+              desc: 'Dalle fatture emesse: la mappa dei clienti per Comune, chi sono e che cosa comprano, andamento e stagionalità, clienti da ricontattare, prodotti comprati insieme, termini di pagamento e stima dei prossimi mesi. Excel con tutto.', start: (...a) => startVendite(...a) },
   qrsepa:   { title: 'QR di pagamento SEPA', short: 'QR pagamento', icon: 'qr', hue: '#0E7490', accept: '.pdf,.xml,.p7m,.zip,application/pdf,text/xml', multiple: true, anyFile: true, noFile: 'Scrivi i dati a mano', noFileIcon: 'type', dzText: 'La fattura (XML, P7M, ZIP o PDF): IBAN, importo e causale si compilano da soli',
               desc: 'Il codice QR per pagare con bonifico: inquadrato con l’app della banca compila IBAN, beneficiario, importo e causale. Dalla fattura (XML o PDF) o scrivendo i dati; in PNG, SVG o stampato sulla fattura.', start: (...a) => startQrSepa(...a) },
   conforme: { title: 'Copia conforme', short: 'Copia conforme', icon: 'stamp', hue: '#7C3AED', accept: '.pdf,application/pdf', multiple: false,
@@ -1737,7 +1752,7 @@ const TOOLS = {
 // descrizioni brevi per le schede compatte
 const SHORT_DESC = {
   estrattoconto: 'Movimenti del conto in Excel, con verifica dei saldi', f24: 'F24, CU, 730, Redditi, IRAP, IVA in Excel', visure: 'Visure camerali e catastali in dati', laboratorio: 'Referti in tabella, valori fuori intervallo evidenziati',
-  contratto: 'Locazione e comodato guidati', rilevaai: 'Prove di testo AI e passaggi copiati', qrsepa: 'Il QR per pagare con bonifico', conforme: 'Dicitura di conformità, poi la firma', misure: 'Distanze e superfici in scala', conta: 'Parole, caratteri, cartelle', tesi: 'Modello Word e controllo del PDF', vettoriale: 'Timbri e loghi in SVG e PNG trasparente',
+  vendite: 'Mappa dei clienti e statistiche dalle fatture', contratto: 'Locazione e comodato guidati', rilevaai: 'Prove di testo AI e passaggi copiati', qrsepa: 'Il QR per pagare con bonifico', conforme: 'Dicitura di conformità, poi la firma', misure: 'Distanze e superfici in scala', conta: 'Parole, caratteri, cartelle', tesi: 'Modello Word e controllo del PDF', vettoriale: 'Timbri e loghi in SVG e PNG trasparente',
   tavola: 'A0/A1 su fogli A4 o A3', officepdf: 'Word, Excel, PowerPoint e testi in PDF', filigrana: 'Scritta o logo su tutte le pagine', pdftesto: 'Testo e pagina web dal PDF', annota: 'Evidenzia, note e commenti', pdfppt: 'Una diapositiva per pagina',
   unisci: 'Più PDF e immagini in un solo documento', immagini: 'Foto e scansioni in un PDF ordinato', dividi: 'Separa pagine o intervalli in più file',
   comprimi: 'Riduci il peso mantenendo la qualità', modifica: 'Riscrivi il testo, aggiungi immagini e firme', ruota: 'Raddrizza pagine singole o tutte',
@@ -1761,7 +1776,7 @@ const GROUPS = [
   ['Pagine', ['ordina', 'ruota', 'unisci', 'dividi', 'impagina']],
   ['Converti e ottimizza', ['word', 'excel', 'officepdf', 'ocr', 'migliora', 'pdfa', 'verificapdfa', 'comprimi', 'immagini', 'immaginipdf', 'vettoriale']],
   ['Analizza e confronta', ['analisi', 'estrai', 'confronta', 'rilevaai', 'misure', 'conta']],
-  [FISCAL_GROUP, ['fatture', 'firme', 'xbrl', 'contratto'], 'Fatture elettroniche, file firmati .p7m, bilanci XBRL e contratti di affitto'],
+  [FISCAL_GROUP, ['fatture', 'vendite', 'firme', 'xbrl', 'contratto'], 'Fatture elettroniche, file firmati .p7m, bilanci XBRL e contratti di affitto'],
 ];
 /* ---------- famiglie: strumenti simili o complementari stanno in una scheda sola ----------
    In home compare solo il primo; gli altri sono a un clic sotto di lui e, dentro, nelle linguette in alto
@@ -2244,8 +2259,8 @@ function homeSearch() {
 const UNIVERSAL = ['comprimi', 'unisci', 'dividi', 'modifica', 'immagini', 'word', 'ocr', 'conta'];
 const PROFILES = [
   ['pa', 'Pubblica amministrazione', 'building', ['firme', 'conforme', 'oscura', 'pdfa', 'numeri', 'unisci'], ['Per l’albo: «Oscura» toglie i dati personali, poi «PDF/A» prepara il file per la pubblicazione e la conservazione.', '«Copia conforme» aggiunge la dicitura con l’impronta del file; poi lo firmi con «Firma».']],
-  ['contabile', 'Contabilità', 'table', ['estrattoconto', 'fatture', 'qrsepa', 'excel', 'f24'], ['«Estratto conto» porta i movimenti in Excel e verifica che i saldi tornino.', 'Dalla fattura (XML o PDF) creo il codice QR per pagarla con bonifico dall’app della banca.']],
-  ['commercialista', 'Commercialista', 'receipt', ['f24', 'fatture', 'estrattoconto', 'visure', 'analisi', 'firme', 'xbrl'], ['«F24 e dichiarazioni» legge tanti F24 insieme e fa il riepilogo per codice tributo.', 'Dalle visure catastali calcolo anche il valore ai fini IMU di ogni immobile.']],
+  ['contabile', 'Contabilità', 'table', ['estrattoconto', 'fatture', 'vendite', 'qrsepa', 'excel', 'f24'], ['«Estratto conto» porta i movimenti in Excel e verifica che i saldi tornino.', 'Dalla fattura (XML o PDF) creo il codice QR per pagarla con bonifico dall’app della banca.']],
+  ['commercialista', 'Commercialista', 'receipt', ['f24', 'fatture', 'vendite', 'estrattoconto', 'visure', 'analisi', 'firme', 'xbrl'], ['«F24 e dichiarazioni» legge tanti F24 insieme e fa il riepilogo per codice tributo.', 'Dalle visure catastali calcolo anche il valore ai fini IMU di ogni immobile.']],
   ['lavoro', 'Consulente del lavoro', 'user', ['f24', 'proteggi', 'oscura', 'firme', 'moduli'], ['«Oscura» toglie IBAN, codici fiscali e altri dati personali prima di inoltrare un documento.', '«Proteggi» mette una password diversa a ogni cedolino prima dell’invio.']],
   ['notaio', 'Notaio', 'seal', ['conforme', 'visure', 'firme', 'oscura', 'confronta', 'migliora'], ['«Copia conforme» con la formula notarile; «Firme» verifica i .p7m che ricevi ed estrae il PDF.', '«Confronta» trova ogni parola cambiata tra due bozze dell’atto.']],
   ['avvocato', 'Avvocato', 'sign', ['conforme', 'firme', 'unisci', 'numeri', 'confronta', 'oscura', 'pdfa'], ['Attestazione di conformità per il deposito: «Copia conforme»; «Firme» verifica le firme dei .p7m ricevuti.', 'Allegati numerati con «Numeri di pagina», atti uniti con «Unisci».']],

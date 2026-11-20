@@ -1264,6 +1264,30 @@ test('Organizza: ogni pagina ha «Aggiungi una pagina bianca dopo questa»; il P
     ok(page.errs.length === 0, page.errs.join(' | '));
   }
 });
+test('Analisi delle vendite: dallo ZIP le scoperte, la mappa e i clienti; un Comune dice chi sono e che cosa hanno comprato; il filtro cambia i numeri; Excel', async b => {
+  const { page } = await open(b, 'desk1440'); await openTool(page, 'vendite', ['vendite.zip']); await page.waitForSelector('.vd-kpis', { timeout: 60000 });
+  const t = await page.locator('.vd-body').innerText();
+  ok(/2\.449\.546/.test(t) && /da 3 clienti/.test(t) && /non compra da/.test(t) && /si comprano insieme/.test(t), 'panoramica o scoperte mancanti: ' + t.slice(0, 200));
+  await page.locator('.vd-tab', { hasText: 'Mappa' }).click(); await page.locator('.vd-dot').first().click(); await page.waitForTimeout(300);
+  const side = await page.locator('.vd-side').innerText();
+  ok(/Milano/.test(side) && /Rossi Impianti/.test(side) && /fatture/.test(side), 'il Comune non mostra i clienti: ' + side.slice(0, 160));
+  await page.locator('.vd-side button', { hasText: 'Solo questo Comune' }).click(); await page.waitForTimeout(300);
+  ok(await page.locator('.vd-chipf', { hasText: 'Milano' }).count() === 1, 'il filtro del Comune non compare');
+  await page.locator('.vd-chipf', { hasText: 'Milano' }).click(); await page.waitForTimeout(200);
+  await page.locator('.vd-tab', { hasText: 'Clienti' }).click(); await page.locator('.vd-segb', { hasText: 'da recuperare' }).click();
+  ok(/Verdi Costruzioni/.test(await page.locator('.vd-t').innerText()), 'il cliente dormiente non è tra quelli da recuperare');
+  await runTo(page); ok(/\.xlsx/.test(await page.locator('.modal.res').innerText()), 'nessun Excel');
+  ok(page.errs.length === 0, page.errs.join(' | '));
+});
+test('Analisi delle vendite: insieme a fatture di altre aziende e a PDF analizza solo le vendite dell’azienda; con soli file non validi lo dice', async b => {
+  const { page } = await open(b, 'desk1280'); await openTool(page, 'vendite', ['vendite.zip', 'IT01234567890_FPR01.xml', 'fatture-multiple.pdf']); await page.waitForSelector('.vd-kpis', { timeout: 60000 });
+  const side = await page.locator('.vd-side').innerText();
+  ok(/Alfa Forniture/.test(side) && /465/.test(side), 'non riconosce l’azienda o conta fatture non sue: ' + side.slice(0, 200));
+  ok(await page.locator('.vd-side select').count() === 1, 'manca la scelta dell’azienda con più emittenti');
+  ok(page.errs.length === 0, page.errs.join(' | '));
+  const p2 = (await open(b, 'desk1280')).page; await openTool(p2, 'vendite', ['rotto.pdf']); await p2.waitForSelector('.vd-empty, .toast', { timeout: 60000 });
+  ok(/Nessuna fattura/.test(await p2.locator('.tool').innerText()), 'nessun messaggio per i file non validi');
+});
 (async () => {
   const only = process.argv[2]; const browser = await chromium.launch(); let fail = 0;
   for (const [name, fn] of T) { if (only && !name.includes(only)) continue; const t0 = Date.now(); try { await fn(browser); await require('../lib').closeAll(); console.log('  ✓', name, `(${Date.now() - t0} ms)`); } catch (e) { await require('../lib').closeAll(); fail++; console.log('  ✗', name, '\n      ', String(e.message).split('\n')[0]); } for (const c of browser.contexts()) await c.close(); }

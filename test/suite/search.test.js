@@ -28,6 +28,7 @@ const Q = [
   ['movimenti del conto in excel', 'estrattoconto'], ['codici tributo f24', 'f24'], ['visura camerale', 'visure'],
   ['esami del sangue', 'laboratorio'], ['qr code per bonifico', 'qrsepa'], ['copia conforme all originale', 'conforme'],
   ['testo scritto con chatgpt', 'rilevaai'], ['compito copiato', 'rilevaai'],
+  ['mappa dei clienti', 'vendite'], ['analisi del fatturato dalle fatture', 'vendite'], ['statistiche vendite', 'vendite'], ['clienti che non comprano più', 'vendite'],
   ['contratto di affitto', 'contratto'], ['comodato a mio figlio', 'contratto'], ['affitto studenti', 'contratto'],
   ['misurare una planimetria', 'misure'], ['contare le parole', 'conta'], ['timbro con sfondo trasparente', 'vettoriale'],
 ];
@@ -54,7 +55,7 @@ const FRESH = [
   ['dati catastali di un immobile', 'visure'], ['importi dei versamenti f24', 'f24'],
 ];
 (async () => {
-  if (Q.length !== 65) throw new Error('le domande devono essere 65: ' + Q.length);
+  if (Q.length !== 69) throw new Error('le domande devono essere 69: ' + Q.length);
   const b = await chromium.launch(); const p = await b.newPage();
   await p.goto(APP); await p.waitForSelector('.intent, .hm-tool, .tool-card');
   const res = await p.evaluate(Q => Q.map(([q, want]) => { const r = Cmd.rank(q); return { q, want, got: r[0] || '-', pos: r.indexOf(want) + 1 }; }), Q);
