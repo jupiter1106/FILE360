@@ -1678,6 +1678,8 @@ html:not([data-cloud="on"]) .cloud-btn{display:none !important}
 .ct-ph{display:flex;align-items:center;gap:var(--s-2);flex-wrap:wrap}
 .ct-ph > b{font:600 13px/18px var(--font);margin-right:auto}
 .ct-x{margin-left:auto}
+.ct-ph > .seg:first-child{flex:1;display:grid;grid-template-columns:1fr 1fr}
+.ct-ph > .seg button{white-space:nowrap}
 .ct-row{display:flex;gap:var(--s-2);align-items:flex-start;flex-wrap:wrap}
 .ct-f{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1 1 100%}
 .ct-row > .ct-f{flex:1 1 0}
@@ -1693,12 +1695,40 @@ html:not([data-cloud="on"]) .cloud-btn{display:none !important}
 .ct-e:empty{display:none}
 .ct-note{font:500 13px/18px var(--font);color:var(--ink-2);padding:var(--s-2) var(--s-3);border-radius:var(--r-xs);background:var(--surface-2)}
 .ct-group{font:600 12px/16px var(--font);color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:var(--s-1)}
-.ct-types{display:flex;flex-direction:column;gap:var(--s-1)}
-.ct-type{display:flex;gap:var(--s-2);align-items:flex-start;padding:var(--s-2) var(--s-3);border:1px solid var(--line);border-radius:var(--r-sm);cursor:pointer}
-.ct-type > span{display:flex;flex-direction:column;gap:2px}
-.ct-type b{font:600 14px/20px var(--font)}
-.ct-type input{margin-top:3px;accent-color:var(--accent)}
-.ct-type.on{border-color:var(--accent-line);background:var(--accent-soft)}
+.ct-types{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+/* telefono: i tipi in una riga che scorre di lato (il primo dato da scrivere resta nel primo schermo) */
+@media (max-width:640px){.ct-card{padding:var(--s-2)}.ct-body{gap:var(--s-2)}}
+@media (max-width:640px){.ct-types{display:flex;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:none;margin:0 calc(-1 * var(--s-3));padding:2px var(--s-3) 4px}.ct-types::-webkit-scrollbar{display:none}.ct-types .ct-type{flex:0 0 auto;scroll-snap-align:start;white-space:nowrap}}
+.ct-type{position:relative;display:flex;align-items:center;gap:var(--s-2);min-height:44px;padding:6px var(--s-2);border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface);cursor:pointer;font:600 13px/18px var(--font);color:var(--ink);transition:border-color .15s,background-color .15s}
+.ct-type .ic{color:var(--muted);flex:none}
+.ct-type:hover{border-color:var(--accent-line)}
+.ct-type input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer}
+.ct-type:has(input:focus-visible){outline:2px solid var(--focus);outline-offset:2px}
+.ct-type.on{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.ct-type.on .ic{color:var(--accent)}
+.ct-tdesc{margin:0;font:400 13px/18px var(--font);color:var(--ink-2)}
+.ct-tdesc .ct-gbtn{font:600 13px/18px var(--font);min-height:24px}
+.ct-tdesc b{font-weight:600;color:var(--ink)}
+.ct-guida{display:flex;flex-direction:column;gap:var(--s-2);padding:var(--s-3);border:1px solid var(--accent-line);border-radius:var(--r-sm);background:var(--surface-2)}
+.ct-gs{font:400 12px/16px var(--font);color:var(--muted)}
+.ct-gopts{display:flex;flex-direction:column;gap:6px}
+.ct-gopt{min-height:44px;padding:var(--s-2) var(--s-3);border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--surface);color:var(--ink);font:600 14px/20px var(--font);text-align:left;cursor:pointer}
+.ct-gopt:hover{border-color:var(--accent);background:var(--accent-soft)}
+.ct-gr{display:flex;gap:var(--s-2);align-items:flex-start;color:var(--accent)}
+.ct-gr b{display:block;font:600 14px/20px var(--font);color:var(--ink)}
+.ct-guida .ct-gopt + .btn,.ct-guida > .btn{align-self:flex-start}
+.ct-prog{display:flex;align-items:center;gap:var(--s-2);min-width:0;font:600 13px/18px var(--font);color:var(--ink-2)}
+.ct-prog-bar{flex:0 0 120px;height:6px;border-radius:999px;background:var(--surface-3);overflow:hidden}
+.ct-prog-bar i{display:block;height:100%;width:0;border-radius:999px;background:var(--accent);transition:width .25s}
+.ct-prog.ok{color:var(--ok)}
+.ct-prog.ok .ct-prog-bar i{background:var(--ok)}
+.ct-e.warn{color:var(--warn)}
+@keyframes ct-flash{from{background:var(--accent-soft)}to{background:transparent}}
+.ct-flash{animation:ct-flash 1.2s ease-out;border-radius:var(--r-xs)}
+@media (prefers-reduced-motion:reduce){.ct-flash{animation:none}}
+.ct-vista{display:none}
+/* al lavoro sul contratto la descrizione dello strumento non serve più (come negli strumenti con il documento aperto) */
+.tool:has(.ws.ct-ws) > .toolhead p{display:none}
 .ct-cl{border-bottom:1px solid var(--line);padding-bottom:var(--s-2)}
 .ct-cl:last-child{border-bottom:0}
 .ct-clx{display:flex;flex-direction:column;gap:var(--s-2);margin:var(--s-2) 0 0 28px}
@@ -1737,7 +1767,15 @@ html:not([data-cloud="on"]) .cloud-btn{display:none !important}
 .paper-art:hover .paper-acts,.paper-art:focus-within .paper-acts,.paper-art.editing .paper-acts{opacity:1}
 @media (hover:none){.paper-acts{opacity:1}}
 .paper-art.editing .paper-acts{margin:var(--s-2) 0 0;justify-content:flex-end}
-.paper-ph{background:var(--warn-soft);color:var(--gold-ink);border-radius:4px;padding:0 4px;font:600 13px/1.4 var(--font)}
+.paper-blk{margin-bottom:6px}
+.paper-hrow-s{margin:0;min-height:0;position:absolute;top:2px;right:8px;z-index:1}
+.paper-ti{width:100%;font:700 15px/1.4 Georgia,'Times New Roman',serif}
+.ct-der{font:600 12px/16px var(--font);margin-left:2px}
+.paper-ph{background:var(--warn-soft);color:var(--gold-ink);border-radius:4px;padding:0 4px;font:600 13px/1.4 var(--font);cursor:pointer}
+.paper-ph:hover{box-shadow:inset 0 -2px 0 var(--gold-ink)}
+.paper-ph:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+/* la carta resta bianca anche nel tema scuro: i controlli sopra usano i colori del tema chiaro */
+.paper.ct-paper{--ink:oklch(.2 .05 288);--ink-2:oklch(.36 .04 288);--muted:oklch(.49 .035 290);--surface:#fff;--surface-2:oklch(.95 .016 295);--line:oklch(.9 .022 295);--line-2:oklch(.845 .028 295);--accent:oklch(.5 .27 283);--accent-soft:oklch(.945 .04 290);--accent-line:oklch(.84 .09 292);--warn:oklch(.5 .11 70);--warn-soft:oklch(.955 .045 85);--gold-ink:oklch(.5 .11 70);--focus:oklch(.56 .22 4);color-scheme:light}
 .paper-ta{width:100%;font:400 14px/1.5 Georgia,'Times New Roman',serif;margin-top:6px}
 .paper-ap{font-size:14px}
 .paper-sign{display:grid;grid-template-columns:1fr 1fr;gap:28px 40px;margin:24px 0 18px}
@@ -1745,7 +1783,23 @@ html:not([data-cloud="on"]) .cloud-btn{display:none !important}
 .paper-n{font-size:13px;margin-top:4px}
 @media (max-width:620px){.ct-paper{padding:28px 20px;font-size:14px}.paper-sign{grid-template-columns:1fr}}
 .ct-sline.todo{background:var(--accent-soft);border-color:var(--accent-line)}
-@media (max-width:900px){.ws.ct-ws > .side{order:-1}.ct-tb .tb-title{display:none}.ct-miss .ct-mbtn:nth-child(n+5){display:none}}
+@media (max-width:900px){.ws.ct-ws > .side{order:-1}.ct-miss .ct-mbtn:nth-child(n+5){display:none}
+  /* telefono e tablet: «Dati» e «Anteprima» come schede; la barra di «Scarica» è piena (niente testo che traspare) */
+  .ws.ct-ws > .ct-vista{display:flex;order:-2;position:sticky;top:0;z-index:6;gap:4px;padding:var(--s-2) var(--s-3);background:var(--surface);border-bottom:1px solid var(--line)}
+  .ct-vb{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;border:1px solid var(--line-2);border-radius:999px;background:var(--surface);color:var(--ink-2);font:600 14px/20px var(--font);cursor:pointer}
+  .ct-vb[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+  .ct-vn{font:500 12px/16px var(--font);color:var(--muted)}
+  .ws.ct-ws[data-vista="dati"] > .ws-main{display:none}
+  .ws.ct-ws[data-vista="anteprima"] > .side > .side-scroll{display:none}
+  .ws.ct-ws[data-vista="anteprima"] > .side{border-top:0}
+  .ws.ct-ws .side-foot{background:var(--surface);backdrop-filter:none}
+  .ws.ct-ws .ct-foot{display:none}
+  /* nell'anteprima del telefono il contratto viene subito: l'avanzamento è già nella scheda «Dati», i dati mancanti si toccano sulla carta */
+  .ct-tb .ct-prog{display:none}.ct-tba{margin-left:auto}
+  .ct-status .ct-miss,.ct-status .ct-sline.todo{display:none}
+  .ws.ct-ws .ct-tb{min-height:0;margin-bottom:0}
+  .ct-status:not(:has(> :not(.todo))){display:none}
+  .ct-main{gap:var(--s-2)}.ct-legal{font-size:12px}}
 
 /* Testo scritto con l'AI? */
 .ws.ra-ws{grid-template-columns:minmax(0,1fr) 400px}

@@ -1700,8 +1700,8 @@ const TOOLS = {
   rilevaai: { title: 'Testo scritto con l’AI?', short: 'Rileva AI', icon: 'aidetect', hue: '#6941C6', accept: '.docx,.docm,.dotx,.pptx,.pptm,.xlsx,.xlsm,.odt,.odp,.ods,.pdf,.txt,.md,.html,.htm,.rtf,.csv', multiple: true, anyFile: true, noFile: 'Incolla o scrivi un testo', noFileIcon: 'type',
               dzText: 'Word, PowerPoint, Excel, PDF, OpenDocument o testo — anche tanti file insieme (per esempio i compiti di una classe)',
               desc: 'Riconosce i testi scritti da Claude (Haiku, Sonnet, Opus) con un modello statistico dello stile, calcolato sul dispositivo, ed evidenzia i passaggi. Cerca anche le prove certe: impronte dei programmi con cui l’AI crea i file, nomi degli assistenti nei metadati, caratteri delle chat, residui della conversazione, testo nascosto. Confronta i testi tra loro: passaggi identici evidenziati.', start: (...a) => startRilevaAI(...a) },
-  contratto: { title: 'Contratto di affitto e comodato', short: 'Contratto affitto', icon: 'lease', hue: '#B45309', accept: '.pdf,.json,application/pdf,application/json', multiple: false, anyFile: true, noFile: 'Compila un nuovo contratto', noFileIcon: 'lease',
-              dzText: 'Facoltativo: la visura catastale in PDF (compila immobile e proprietari) o una bozza salvata (.json)',
+  contratto: { title: 'Contratto di affitto e comodato', short: 'Contratto affitto', icon: 'lease', hue: '#B45309', accept: '.pdf,.json,application/pdf,application/json', multiple: false, anyFile: true, noFile: 'Compila un nuovo contratto', noFileIcon: 'lease', noFileFirst: true, pickLabel: 'Apri una visura o una bozza',
+              dzTitle: 'Il contratto pronto in pochi minuti', dzText: 'Hai la visura catastale in PDF o una bozza salvata (.json)? Trascinala qui: immobile e proprietari si compilano da soli.',
               desc: 'Contratto di locazione 4+4, 3+2 concordato, transitorio, per studenti, a uso negozio o ufficio, foresteria, box auto, affitto di terreni agricoli e comodato gratuito: compili i dati nella colonna, il contratto si scrive da solo con le clausole che scegli e ogni articolo si può modificare. PDF e Word, più il promemoria di registrazione e imposte.', start: (...a) => startContratto(...a) },
   qrsepa:   { title: 'QR di pagamento SEPA', short: 'QR pagamento', icon: 'qr', hue: '#0E7490', accept: '.pdf,.xml,.p7m,.zip,application/pdf,text/xml', multiple: true, anyFile: true, noFile: 'Scrivi i dati a mano', noFileIcon: 'type', dzText: 'La fattura (XML, P7M, ZIP o PDF): IBAN, importo e causale si compilano da soli',
               desc: 'Il codice QR per pagare con bonifico: inquadrato con l’app della banca compila IBAN, beneficiario, importo e causale. Dalla fattura (XML o PDF) o scrivendo i dati; in PNG, SVG o stampato sulla fattura.', start: (...a) => startQrSepa(...a) },
@@ -2539,16 +2539,18 @@ function dropzone(t, onFiles) {
     ondragleave: () => dz.classList.remove('over'),
     ondrop: async e => { e.preventDefault(); dz.classList.remove('over'); const f = acceptFiles(t, t.folder && typeof filesFromDrop === 'function' ? await filesFromDrop(e.dataTransfer) : e.dataTransfer.files); if (f.length) onFiles(f); } },
     h('div', { class: 'dz-ic' }, ic('upload', 34)),
-    h('h2', { class: 'dz-t' }, h('span', { class: 'dz-mouse' }, t.pdfIn === false ? 'Trascina qui le tue foto' : t.multiple ? 'Trascina qui i tuoi file' : 'Trascina qui il tuo file'),
+    t.dzTitle ? h('h2', { class: 'dz-t' }, t.dzTitle) : h('h2', { class: 'dz-t' }, h('span', { class: 'dz-mouse' }, t.pdfIn === false ? 'Trascina qui le tue foto' : t.multiple ? 'Trascina qui i tuoi file' : 'Trascina qui il tuo file'),
       h('span', { class: 'dz-touch' }, t.pdfIn === false ? 'Scegli o scatta le foto' : t.multiple ? 'Scegli i file dal telefono' : 'Scegli il file dal telefono')),
     h('p', {}, t.dzText ? t.dzText : t.anyFile ? 'File firmato (.p7m, .tsd, .m7m) o PDF con firma digitale' : t.pdfIn === false ? 'JPG, PNG, HEIC, TIFF, WebP, GIF, BMP' : /image/.test(t.accept) ? 'PDF o immagini (JPG, PNG, HEIC…)' : 'Documento PDF'),
     t.folder && CAN_PICK_DIR ? h('div', { class: 'row dz-btns' }, h('button', { type: 'button', class: 'btn primary dz-pick' }, ic('file', 18), 'Scegli i file'),
       h('button', { class: 'btn', onclick: e => { e.stopPropagation(); dirInput.click(); } }, ic('layers', 18), 'Cartella'))
+      // senza file è la strada principale (es. il contratto da compilare): quel pulsante viene prima ed è il principale
+      : t.noFileFirst ? h('div', { class: 'row dz-btns' }, h('button', { type: 'button', class: 'btn primary dz-nofile', onclick: e => { e.stopPropagation(); onFiles([]); } }, ic(t.noFileIcon || 'type', 18), t.noFile), h('button', { type: 'button', class: 'btn dz-pick' }, ic('file', 18), t.pickLabel || 'Scegli il file'))
       : h('button', { type: 'button', class: 'btn primary dz-pick' }, ic('file', 18), t.multiple ? 'Scegli i file' : 'Scegli il file'),
     // al telefono: foto del documento direttamente dalla fotocamera (poi raddrizzata e pulita dallo strumento)
     t.pdfIn === false || /image/.test(t.accept || '') ? cameraButton(f => { const ok = acceptFiles(t, f); if (ok.length) onFiles(ok); }, { label: t.pdfIn === false ? 'Scatta una foto' : 'Fotografa il documento' }) : null,
     typeof Cloud !== 'undefined' ? h('button', { class: 'btn sm ghost dz-cloud cloud-btn', title: 'Apri dal cloud', onclick: async e => { e.stopPropagation(); const f = await Cloud.pick({ multiple: !!t.multiple }); if (f?.length) { const ok = acceptFiles(t, f); if (ok.length) onFiles(ok); } } }, ic('cloud', 15), 'Apri dal cloud') : null,
-    t.noFile ? h('button', { type: 'button', class: 'btn dz-nofile', onclick: e => { e.stopPropagation(); onFiles([]); } }, ic(t.noFileIcon || 'type', 18), t.noFile) : null,
+    t.noFile && !t.noFileFirst ? h('button', { type: 'button', class: 'btn dz-nofile', onclick: e => { e.stopPropagation(); onFiles([]); } }, ic(t.noFileIcon || 'type', 18), t.noFile) : null,
     h('div', { class: 'dz-note' }, ic('shield', 15), IS_SITE ? (t.multiple ? 'I file vengono elaborati nel browser, senza caricarli su un server' : 'Il file viene elaborato nel browser, senza caricarlo su un server') : 'Il file viene elaborato solo sul tuo dispositivo, senza caricamenti online'),
     input, dirInput);
   const wrap = h('div', { class: 'dz-wrap' }, dz);

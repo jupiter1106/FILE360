@@ -21,6 +21,10 @@ const Contratti = (() => {
     comodato: { label: 'Comodato d’uso gratuito', desc: 'L’immobile si dà in uso senza canone, per esempio a un figlio.', titolo: 'CONTRATTO DI COMODATO D’USO GRATUITO DI IMMOBILE', sotto: 'ai sensi degli artt. 1803 e seguenti del codice civile' },
   };
   const isLoc = st => st.tipo !== 'comodato';
+  // genere delle parti: al femminile quando tutte le persone di quel lato sono donne (persone fisiche con «Sig.ra»);
+  // con più persone di genere diverso, o con una società, resta il maschile (come vuole la grammatica)
+  const fem = list => list.length > 0 && list.every(p => p.tipo !== 'pg' && p.sesso === 'F');
+  const pron = list => list.length > 1 ? 'loro' : fem(list) ? 'lei' : 'lui';
   const isAbit = st => !!TIPI[st.tipo]?.abit;
   const R = st => st.tipo === 'fondo' ? { A: 'concedente', B: 'affittuario', As: 'Concedente', Bs: 'Affittuario', Ap: 'concedenti', Bp: 'affittuari' } : st.tipo === 'comodato' ? { A: 'comodante', B: 'comodatario', As: 'Comodante', Bs: 'Comodatario', Ap: 'comodanti', Bp: 'comodatari' } : { A: 'locatore', B: 'conduttore', As: 'Locatore', Bs: 'Conduttore', Ap: 'locatori', Bp: 'conduttori' };
 
@@ -42,7 +46,8 @@ const Contratti = (() => {
     fondo: { terreni: [], deroga: false, org: '', coltivatore: true, coltura: '' },
     comod: { uso: 'abitazione del comodatario e della sua famiglia', parente: false, rel: 'figlio', spCond: 'comodatario', spReg: 'comodatario' },
     cl: { recesso: { on: false, mesi: 3 }, animali: { on: false, mode: 'consenso' }, fumo: { on: false }, subParz: { on: false }, assic: { on: false }, risolutiva: { on: false, rate: 2 }, visite: { on: true, giorni: 3 }, migliorie: { on: true }, pec: { on: false }, regLoc: { on: false }, verbale: { on: false, data: '', luce: '', gas: '', acqua: '', chiavi: '', note: '' }, esonero: { on: false }, bombole: { on: false }, clima: { on: false }, noPrel: { on: false } },
-    pers: [], ov: {}, off: {},
+    pers: [], ov: {}, ovT: {}, off: {},
+    der: {},   // valori fuori dai limiti di legge scelti consapevolmente: durata, deposito, istat, recesso
     firma: { luogo: '', data: isoToday() },
   });
   // una bozza vecchia o incompleta torna una bozza completa (i campi nuovi prendono il valore di partenza)
@@ -72,7 +77,31 @@ const Contratti = (() => {
     let s = 0; for (let i = 0; i < 15; i++) { const c = cf[i]; s += i % 2 === 0 ? ODD[c] : /\d/.test(c) ? +c : c.charCodeAt(0) - 65; }
     return String.fromCharCode(65 + (s % 26)) === cf[15];
   }
-  // dal codice fiscale: sesso e data di nascita (l'anno a due cifre: il secolo che dà un'età fra 16 e 116 anni)
+  /* comuni italiani (elenco ISTAT in comuni-it.js): codice catastale → Comune e provincia, Comune → provincia, suggerimenti */
+  const Comuni = (() => {
+    let byC = null, byN = null, list = null, sig = null;
+    const key = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z]/g, '');
+    const load = () => {
+      if (byC) return; byC = new Map(); byN = new Map(); list = [];
+      const src = typeof COMUNI_IT !== 'undefined' ? COMUNI_IT : null;
+      sig = new Set(String(src?.sigle || '').split(/\s+/).filter(Boolean));
+      for (const e of String(src?.cc || '').split('|')) {
+        if (e.length < 7) continue;
+        const o = { c: e.slice(0, 4), s: e.slice(4, 6), n: e.slice(6), k: key(e.slice(6)) };
+        byC.set(o.c, o); if (!byN.has(o.k)) byN.set(o.k, []); byN.get(o.k).push(o); list.push(o);
+      }
+    };
+    return {
+      pronti: () => (load(), list.length > 0),
+      daCodice: c => (load(), byC.get(String(c || '').toUpperCase()) || null),
+      daNome: n => (load(), byN.get(key(n)) || []),
+      sigla: s => (load(), !sig.size || sig.has(String(s || '').toUpperCase())),
+      // prima i nomi che iniziano così, poi quelli che contengono la parola
+      cerca: (q, max = 8) => { load(); const k = key(q); if (k.length < 2) return []; const a = [], b = []; for (const o of list) { if (o.k.startsWith(k)) a.push(o); else if (b.length < max && o.k.includes(k)) b.push(o); } return [...a.sort((x, y) => x.k.length - y.k.length), ...b].slice(0, max); },
+    };
+  })();
+  // dal codice fiscale: sesso, data di nascita (l'anno a due cifre: il secolo che dà un'età fra 16 e 116 anni) e, se il
+  // codice catastale è di un Comune dell'elenco ISTAT, luogo e provincia di nascita (i Comuni soppressi e gli Stati esteri restano da scrivere)
   function daCf(cf) {
     cf = String(cf || '').toUpperCase().replace(/\s/g, ''); if (!cfOk(cf) || /^\d/.test(cf)) return null;
     const dig = s => [...s].map(c => /\d/.test(c) ? c : String(OMO[c])).join('');
@@ -80,7 +109,10 @@ const Contratti = (() => {
     if (!mm) return null;
     const sesso = dd > 40 ? 'F' : 'M'; if (dd > 40) dd -= 40;
     const now = new Date().getFullYear(); let y = 2000 + yy; if (now - y < 16) y -= 100;
-    return { sesso, dataN: `${y}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}` };
+    const out = { sesso, dataN: `${y}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}` };
+    const luogo = cf[11] === 'Z' ? null : Comuni.daCodice(cf[11] + dig(cf.slice(12, 15)));
+    if (luogo) { out.luogoN = luogo.n; out.provN = luogo.s; }
+    return out;
   }
   const IBAN_LEN = { IT: 27, SM: 27, VA: 22, DE: 22, FR: 27, ES: 24, AT: 20, BE: 16, CH: 21, GB: 22, IE: 22, LU: 20, NL: 18, PT: 25, MT: 31, SI: 19, HR: 21, GR: 27, PL: 28, RO: 24 };
   function ibanOk(v) {
@@ -143,15 +175,24 @@ const Contratti = (() => {
   // durata in mesi del contratto (i tipi «ad anni» la chiedono in anni)
   function mesiDurata(st) {
     const T = TIPI[st.tipo];
-    if (T.anni) { const lo = anniMinimi(st); return Math.max(lo, Math.min(T.anni[1], Math.round(+st.dur.anni || lo))) * 12; }
-    if (T.mesi) return Math.max(T.mesi[0], Math.min(T.mesi[1], Math.round(+st.dur.mesi || T.mesi[0])));
+    const libera = !!st.der?.durata;
+    if (T.anni) { const lo = anniMinimi(st); return (libera ? Math.max(1, Math.min(99, Math.round(+st.dur.anni || lo))) : Math.max(lo, Math.min(T.anni[1], Math.round(+st.dur.anni || lo)))) * 12; }
+    if (T.mesi) return libera ? Math.max(1, Math.min(600, Math.round(+st.dur.mesi || T.mesi[0]))) : Math.max(T.mesi[0], Math.min(T.mesi[1], Math.round(+st.dur.mesi || T.mesi[0])));
     return null;
   }
 
   /* ---------- controllo dei dati: obbligatori (bloccano il contratto definitivo) e avvisi ---------- */
   function controlla(st) {
-    const req = [], warn = [];
-    const need = (sec, path, label, ok, msg) => { if (!ok) req.push({ sec, path, label, msg: msg || `Manca: ${label}` }); };
+    const req = [], warn = []; let tot = 0;
+    const need = (sec, path, label, ok, msg) => { tot++; if (!ok) req.push({ sec, path, label, msg: msg || `Manca: ${label}`, need: true }); };
+    // dati scritti male: avviso accanto al campo (non blocca il contratto)
+    const fmt = (sec, path, v, ok, msg) => { if (String(v ?? '').trim() && !ok) warn.push({ sec, path, msg }); };
+    const contatti = (sec, P, p) => {
+      fmt(sec, P + 'cap', p.cap, /^\d{5}$/.test(String(p.cap).trim()), 'Il CAP ha 5 cifre');
+      fmt(sec, P + 'prov', p.prov, Comuni.sigla(p.prov), 'Sigla di provincia inesistente: per esempio RM, MI, NA');
+      for (const f of ['email', 'pec']) fmt(sec, P + f, p[f], /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(p[f]).trim()), 'Indirizzo e-mail incompleto: per esempio nome@dominio.it');
+      fmt(sec, P + 'tel', p.tel, /\d{6,}/.test(String(p.tel).replace(/[\s./-]/g, '')), 'Il numero di telefono ha almeno 6 cifre');
+    };
     const T = TIPI[st.tipo], r = R(st);
     const persone = (sec, list, ruolo) => list.forEach((p, i) => {
       const P = `${sec}.${i}.`, n = list.length > 1 ? ` (${ruolo} ${i + 1})` : ` (${ruolo})`;
@@ -163,13 +204,21 @@ const Contratti = (() => {
         if (p.cf.trim() && !cfOk(p.cf)) req.push({ sec, path: P + 'cf', label: 'codice fiscale' + n, msg: `Codice fiscale non valido${n}: controlla le cifre` });
         if (p.piva.trim() && !pivaOk(p.piva)) req.push({ sec, path: P + 'piva', label: 'partita IVA' + n, msg: `Partita IVA non valida${n}` });
         need(sec, P + 'lr', 'legale rappresentante' + n, p.lr.trim());
+        if (p.lrCf.trim() && !cfOk(p.lrCf)) warn.push({ sec, path: P + 'lrCf', msg: 'Codice fiscale del rappresentante non valido: controlla le lettere e le cifre' });
+        contatti(sec, P, p);
       } else {
         need(sec, P + 'nome', 'nome' + n, p.nome.trim()); need(sec, P + 'cognome', 'cognome' + n, p.cognome.trim());
         need(sec, P + 'luogoN', 'luogo di nascita' + n, p.luogoN.trim()); need(sec, P + 'dataN', 'data di nascita' + n, parseIso(p.dataN));
         need(sec, P + 'cf', 'codice fiscale' + n, p.cf.trim());
         if (p.cf.trim() && !cfOk(p.cf)) req.push({ sec, path: P + 'cf', label: 'codice fiscale' + n, msg: `Codice fiscale non valido${n}: controlla le lettere e le cifre` });
-        else if (p.cf.trim() && p.dataN) { const d = daCf(p.cf); if (d && d.dataN.slice(5) !== p.dataN.slice(5)) warn.push({ sec, msg: `Il codice fiscale${n} non corrisponde al giorno e mese di nascita indicati: controlla.` }); }
+        else if (p.cf.trim()) {
+          const d = daCf(p.cf);
+          if (d && p.dataN && d.dataN.slice(5) !== p.dataN.slice(5)) warn.push({ sec, path: P + 'dataN', msg: `Il codice fiscale${n} non corrisponde al giorno e mese di nascita indicati: controlla.` });
+          if (d && d.luogoN && p.luogoN.trim() && !Comuni.daNome(p.luogoN).some(c => c.n === d.luogoN)) warn.push({ sec, path: P + 'luogoN', msg: `Il codice fiscale indica la nascita a ${d.luogoN} (${d.provN}): controlla.` });
+        }
         need(sec, P + 'comune', 'comune di residenza' + n, p.comune.trim()); need(sec, P + 'indirizzo', 'indirizzo di residenza' + n, p.indirizzo.trim());
+        fmt(sec, P + 'provN', p.provN, Comuni.sigla(p.provN) || /^EE$/i.test(p.provN.trim()), 'Sigla di provincia inesistente (per l’estero: EE)');
+        contatti(sec, P, p);
       }
     });
     persone('A', st.A, r.A); persone('B', st.B, r.B);
@@ -181,12 +230,14 @@ const Contratti = (() => {
       need('dep', 'gar.max', 'importo massimo garantito (art. 1938 c.c.)', num(st.gar.max) > 0);
     }
     const I = st.imm;
+    fmt('imm', 'imm.prov', I.prov, Comuni.sigla(I.prov), 'Sigla di provincia inesistente: per esempio RM, MI, NA');
+    fmt('imm', 'imm.cap', I.cap, /^\d{5}$/.test(String(I.cap).trim()), 'Il CAP ha 5 cifre');
     need('imm', 'imm.comune', st.tipo === 'fondo' ? 'Comune in cui si trovano i terreni' : 'Comune dell’immobile', I.comune.trim());
     if (st.tipo === 'fondo') {
       // terreni: almeno uno, con foglio e particella del Catasto Terreni
       const tr = st.fondo.terreni;
       need('imm', 'fondo.terreni', 'almeno un terreno (foglio e particella)', tr.length);
-      tr.forEach((x, i) => { need('imm', `fondo.terreni.${i}.foglio`, `foglio del terreno ${i + 1}`, String(x.foglio || '').trim()); need('imm', `fondo.terreni.${i}.part`, `particella del terreno ${i + 1}`, String(x.part || '').trim()); });
+      tr.forEach((x, i) => { need('imm', `fondo.terreni.${i}.foglio`, `foglio del terreno ${i + 1}`, String(x.foglio || '').trim()); need('imm', `fondo.terreni.${i}.part`, `particella del terreno ${i + 1}`, String(x.part || '').trim()); fmt('imm', `fondo.terreni.${i}.foglio`, x.foglio, /\d/.test(String(x.foglio)), 'Il foglio è un numero (lo trovi nella visura)'); fmt('imm', `fondo.terreni.${i}.sup`, x.sup, haNum(x.sup) > 0, 'Superficie in ettari, per esempio 1,2500'); });
       if (+st.dur.anni < 15 && !st.fondo.deroga) warn.push({ sec: 'dur', msg: 'Senza l’assistenza delle organizzazioni agricole la durata è di almeno 15 anni (art. 1 L. 203/1982): il contratto usa 15 anni.' });
       if (st.fondo.deroga) need('dur', 'fondo.org', 'organizzazioni professionali agricole che assistono le parti', st.fondo.org.trim(), 'Per i patti in deroga servono le organizzazioni professionali agricole che assistono le parti (art. 45 L. 203/1982)');
     } else {
@@ -194,9 +245,12 @@ const Contratti = (() => {
       need('imm', 'imm.descr', 'descrizione dell’immobile', I.descr.trim());
       need('imm', 'imm.cat.foglio', 'foglio catastale', I.cat.foglio.trim()); need('imm', 'imm.cat.part', 'particella catastale', I.cat.part.trim());
       need('imm', 'imm.cat.categoria', 'categoria catastale', I.cat.categoria.trim());
-      if (I.cat.categoria.trim() && !/^[A-F]\/?\d{1,2}$/i.test(I.cat.categoria.trim())) warn.push({ sec: 'imm', msg: 'Categoria catastale insolita: di solito è come A/2, A/3, C/1, C/6.' });
-      else if (st.tipo === 'box' && I.cat.categoria.trim() && !/^C\/?[67]$/i.test(I.cat.categoria.trim())) warn.push({ sec: 'imm', msg: 'Un box o un posto auto è di solito in categoria C/6 (o C/7 se coperto ma aperto): controlla la visura.' });
-      if (!I.cat.sub.trim()) warn.push({ sec: 'imm', msg: 'Subalterno non indicato: quasi tutti gli appartamenti ne hanno uno (è nella visura).' });
+      if (I.cat.categoria.trim() && !/^[A-F]\/?\d{1,2}$/i.test(I.cat.categoria.trim())) warn.push({ sec: 'imm', path: 'imm.cat.categoria', msg: 'Categoria catastale insolita: di solito è come A/2, A/3, C/1, C/6.' });
+      else if (st.tipo === 'box' && I.cat.categoria.trim() && !/^C\/?[67]$/i.test(I.cat.categoria.trim())) warn.push({ sec: 'imm', path: 'imm.cat.categoria', msg: 'Un box o un posto auto è di solito in categoria C/6 (o C/7 se coperto ma aperto): controlla la visura.' });
+      fmt('imm', 'imm.cat.foglio', I.cat.foglio, /\d/.test(I.cat.foglio), 'Il foglio è un numero (lo trovi nella visura)');
+      fmt('imm', 'imm.cat.rendita', I.cat.rendita, num(I.cat.rendita) > 0, 'Rendita in euro, per esempio 523,58');
+      fmt('imm', 'imm.mq', I.mq, num(I.mq) > 0, 'Superficie in metri quadrati, per esempio 75');
+      if (!I.cat.sub.trim() && I.cat.foglio.trim() && I.cat.part.trim()) warn.push({ sec: 'imm', path: 'imm.cat.sub', msg: 'Subalterno non indicato: quasi tutti gli appartamenti ne hanno uno (è nella visura).' });
     }
     // APE: non per box, posti auto e terreni (casi esclusi dall'obbligo)
     if (isLoc(st) && !['box', 'fondo'].includes(st.tipo)) need('imm', 'imm.ape.classe', 'classe energetica (APE)', I.ape.classe);
@@ -208,8 +262,10 @@ const Contratti = (() => {
       need('dur', 'dur.fine', 'data di fine del comodato', parseIso(st.dur.fine));
       if (parseIso(st.dur.fine) && parseIso(st.dur.inizio) && st.dur.fine <= st.dur.inizio) req.push({ sec: 'dur', path: 'dur.fine', label: 'data di fine', msg: 'La fine del comodato deve venire dopo l’inizio' });
     }
-    if (T.anni && +st.dur.anni < anniMinimi(st)) warn.push({ sec: 'dur', msg: `La durata minima di legge è ${anniMinimi(st)} anni: il contratto usa ${anniMinimi(st)} anni.` });
-    if (T.mesi && (+st.dur.mesi < T.mesi[0] || +st.dur.mesi > T.mesi[1])) warn.push({ sec: 'dur', msg: `Per questo tipo la durata va da ${T.mesi[0]} a ${T.mesi[1]} mesi: il contratto usa ${mesiDurata(st)} mesi.` });
+    // valori fuori dai limiti di legge: il contratto usa quelli di legge, a meno che chi compila non scelga consapevolmente il proprio
+    const D = st.der || {}, deroga = (key, path, sec, fuori, legale, scelto, effetto) => { if (!fuori) return; warn.push(D[key] ? { sec, path, der: key, on: true, msg: `Valore scelto da te, fuori dai limiti di legge (${legale}): ${effetto}` } : { sec, path, der: key, msg: `Fuori dai limiti di legge (${legale}): il contratto usa il valore di legge.`, scelto }); };
+    if (T.anni && +st.dur.anni && +st.dur.anni < anniMinimi(st)) deroga('durata', 'dur.anni', 'dur', true, `almeno ${anniMinimi(st)} anni`, `${+st.dur.anni} ${+st.dur.anni === 1 ? 'anno' : 'anni'}`, 'in caso di contestazione si applica la durata di legge.');
+    if (T.mesi && +st.dur.mesi && (+st.dur.mesi < T.mesi[0] || +st.dur.mesi > T.mesi[1])) deroga('durata', 'dur.mesi', 'dur', true, `da ${T.mesi[0]} a ${T.mesi[1]} mesi`, `${+st.dur.mesi} mesi`, st.tipo === 'transitorio' ? 'oltre 18 mesi il contratto può essere ricondotto al 4+4.' : 'in caso di contestazione si applica la durata di legge.');
     if (st.tipo === 'transitorio') {
       need('dur', 'trans.esigenza', 'esigenza transitoria', st.trans.esigenza.trim());
       need('dur', 'trans.doc', 'documento che prova l’esigenza', st.trans.doc.trim());
@@ -218,7 +274,7 @@ const Contratti = (() => {
     if (st.tipo === 'commerciale') need('imm', 'comm.attivita', 'attività che si svolgerà nei locali', st.comm.attivita.trim());
     // canone
     if (isLoc(st)) {
-      need('can', 'can.mensile', st.tipo === 'fondo' ? 'canone annuo' : 'canone mensile', num(st.can.mensile) > 0);
+      need('can', 'can.mensile', st.tipo === 'fondo' ? 'canone annuo' : 'canone mensile', num(st.can.mensile) > 0, String(st.can.mensile).trim() ? 'Scrivi il canone in cifre, per esempio 750' : null);
       if (st.can.modo === 'bonifico') {
         need('can', 'can.iban', 'IBAN per il bonifico', st.can.iban.trim());
         if (st.can.iban.trim() && !ibanOk(st.can.iban)) req.push({ sec: 'can', path: 'can.iban', label: 'IBAN', msg: 'IBAN non valido: controlla le cifre' });
@@ -228,11 +284,16 @@ const Contratti = (() => {
       if (st.tipo === 'concordato' && st.can.accordo.assistenza === 'assistito') need('can', 'can.accordo.org', 'organizzazioni che assistono le parti', st.can.accordo.org.trim());
       if (st.can.cedolare && st.A.some(p => p.tipo === 'pg')) req.push({ sec: 'can', path: 'can.cedolare', label: 'cedolare secca', msg: 'La cedolare secca è solo per i locatori persone fisiche: togli la scelta' });
       if (st.tipo === 'concordato' || st.tipo === 'studenti' || (st.tipo === 'transitorio' && st.can.accordo.comune.trim())) warn.push({ sec: 'can', msg: 'Verifica che il canone rientri nei valori minimo e massimo dell’Accordo territoriale per la zona dell’immobile: il programma non li conosce.' });
-      if (!['fondo', 'box'].includes(st.tipo) && st.spese.oneri === 'acconto' && !(num(st.spese.acconto) > 0)) warn.push({ sec: 'spese', msg: 'Acconto spese non indicato: scrivi l’importo mensile o scegli «a consuntivo».' });
+      if (!['fondo', 'box'].includes(st.tipo) && st.spese.oneri === 'acconto' && !(num(st.spese.acconto) > 0)) warn.push({ sec: 'spese', path: 'spese.acconto', msg: 'Acconto spese non indicato: scrivi l’importo mensile o scegli «a consuntivo».' });
     }
     if (st.cl.recesso.on && isLoc(st)) {
       const m = +st.cl.recesso.mesi;
-      if (st.tipo === 'commerciale' && m < 6) req.push({ sec: 'cl', path: 'cl.recesso.mesi', label: 'preavviso del recesso', msg: 'Nell’uso diverso il preavviso per il recesso è di almeno 6 mesi (art. 27 L. 392/1978)' });
+      deroga('recesso', 'cl.recesso.mesi', 'cl', st.tipo === 'commerciale' && m < 6, 'almeno 6 mesi nell’uso diverso, art. 27 L. 392/1978', `${m} mesi`, 'il patto può essere contestato e sostituito dal preavviso di legge.');
+    }
+    if (isLoc(st)) {
+      const dm = Math.round(+st.dep.mesi || 0);
+      deroga('deposito', 'dep.mesi', 'dep', dm > 3, 'al massimo 3 mensilità, art. 11 L. 392/1978', `${dm} mensilità`, 'il patto è nullo per la parte oltre le 3 mensilità e l’inquilino può chiederla indietro.');
+      deroga('istat', 'can.istat', 'can', ['commerciale', 'foresteria'].includes(st.tipo) && +st.can.istat > 75, 'al massimo il 75% della variazione, art. 32 L. 392/1978', `${+st.can.istat}%`, 'la parte oltre il 75% può essere contestata.');
     }
     if (st.cl.pec.on && ![...st.A, ...st.B].some(p => (p.pec || p.email).trim())) warn.push({ sec: 'cl', msg: 'Comunicazioni via PEC o e-mail: scrivi gli indirizzi delle parti.' });
     need('firma', 'firma.luogo', 'luogo della firma', st.firma.luogo.trim()); need('firma', 'firma.data', 'data della firma', parseIso(st.firma.data));
@@ -240,46 +301,49 @@ const Contratti = (() => {
     // locazione: 30 giorni dalla firma o dalla decorrenza se precedente (art. 17 D.P.R. 131/1986); comodato: 20 giorni dalla firma
     const base = isLoc(st) ? [st.firma.data, st.dur.inizio].filter(parseIso).sort()[0] : (parseIso(st.firma.data) ? st.firma.data : null);
     if (base) { const lim = piuGiorni(base, isLoc(st) ? 30 : 20); if (lim < isoToday()) warn.push({ sec: 'firma', msg: `La registrazione andava fatta entro il ${dataEstesa(lim)}: registra il prima possibile (ravvedimento operoso).` }); }
-    return { req, warn };
+    return { req, warn, tot };
   }
 
   /* ---------- testo ----------
      I dati mancanti diventano segnaposto ⟦etichetta⟧: evidenziati nell'anteprima, spazi da compilare a mano nella
      bozza stampata. **testo** = grassetto. Ogni articolo: { key, title, paras, onerous (approvazione specifica
      artt. 1341–1342 c.c.), fixed (non si può togliere) }. */
-  const PH = l => `⟦${l}⟧`;
-  const val = (v, l) => { const x = String(v ?? '').trim(); return x || PH(l); };
+  // il segnaposto porta con sé il campo da compilare (⟦etichetta§percorso⟧): un clic nell'anteprima ci porta
+  const PH = (l, k) => `⟦${l}${k ? '§' + k : ''}⟧`;
+  const val = (v, l, k) => { const x = String(v ?? '').trim(); return x || PH(l, k); };
+  let KP = new WeakMap();   // persona → percorso nei dati («A.0», «B.1», «gar.p»), preparato da documento()
+  const pk = (p, f) => { const b = KP.get(p); return b ? `${b}.${f}` : ''; };
   const prov = p => p ? ` (${String(p).trim().toUpperCase()})` : '';
   function chi(p) {
     if (p.tipo === 'pg') {
       const piva = p.piva.trim() && p.piva.replace(/\s/g, '') !== p.cf.replace(/\s/g, '') ? ` e partita IVA ${p.piva.trim()}` : '';
-      return `**${val(p.den, 'denominazione')}**, con sede in ${val(p.comune, 'comune della sede')}${prov(p.prov)}, ${val(p.indirizzo, 'indirizzo della sede')}${p.cap ? `, CAP ${p.cap}` : ''}, codice fiscale ${val(p.cf.toUpperCase(), 'codice fiscale')}${piva}, in persona del ${p.lrRuolo.trim() || 'legale rappresentante'} ${val(p.lr, 'nome del legale rappresentante')}${p.lrCf.trim() ? `, codice fiscale ${p.lrCf.trim().toUpperCase()}` : ''}`;
+      return `**${val(p.den, 'denominazione', pk(p, 'den'))}**, con sede in ${val(p.comune, 'comune della sede', pk(p, 'comune'))}${prov(p.prov)}, ${val(p.indirizzo, 'indirizzo della sede', pk(p, 'indirizzo'))}${p.cap ? `, CAP ${p.cap}` : ''}, codice fiscale ${val(p.cf.toUpperCase(), 'codice fiscale', pk(p, 'cf'))}${piva}, in persona del ${p.lrRuolo.trim() || 'legale rappresentante'} ${val(p.lr, 'nome del legale rappresentante', pk(p, 'lr'))}${p.lrCf.trim() ? `, codice fiscale ${p.lrCf.trim().toUpperCase()}` : ''}`;
     }
     const f = p.sesso === 'F', m = p.sesso === 'M';
-    return `${f ? 'la sig.ra' : m ? 'il sig.' : 'il/la sig./sig.ra'} **${val(p.nome, 'nome')} ${val(p.cognome, 'cognome')}**, ${f ? 'nata' : m ? 'nato' : 'nato/a'} a ${val(p.luogoN, 'luogo di nascita')}${prov(p.provN)} il ${p.dataN ? dataEstesa(p.dataN) : PH('data di nascita')}, codice fiscale ${val(p.cf.toUpperCase(), 'codice fiscale')}, residente in ${val(p.comune, 'comune di residenza')}${prov(p.prov)}, ${val(p.indirizzo, 'indirizzo')}${p.cap ? `, CAP ${p.cap}` : ''}`;
+    return `${f ? 'la sig.ra' : m ? 'il sig.' : 'il/la sig./sig.ra'} **${val(p.nome, 'nome', pk(p, 'nome'))} ${val(p.cognome, 'cognome', pk(p, 'cognome'))}**, ${f ? 'nata' : m ? 'nato' : 'nato/a'} a ${val(p.luogoN, 'luogo di nascita', pk(p, 'luogoN'))}${prov(p.provN)} il ${p.dataN ? dataEstesa(p.dataN) : PH('data di nascita', pk(p, 'dataN'))}, codice fiscale ${val(p.cf.toUpperCase(), 'codice fiscale', pk(p, 'cf'))}, residente in ${val(p.comune, 'comune di residenza', pk(p, 'comune'))}${prov(p.prov)}, ${val(p.indirizzo, 'indirizzo', pk(p, 'indirizzo'))}${p.cap ? `, CAP ${p.cap}` : ''}`;
   }
-  const nomeBreve = p => p.tipo === 'pg' ? (p.den.trim() || PH('denominazione')) : `${p.nome.trim() || PH('nome')} ${p.cognome.trim() || PH('cognome')}`;
+  const nomeBreve = p => p.tipo === 'pg' ? (p.den.trim() || PH('denominazione', pk(p, 'den'))) : `${p.nome.trim() || PH('nome', pk(p, 'nome'))} ${p.cognome.trim() || PH('cognome', pk(p, 'cognome'))}`;
   const elenco = a => a.length <= 1 ? (a[0] || '') : a.slice(0, -1).join(', ') + ' e ' + a[a.length - 1];
   function immobile(st, comp = true) {
     const I = st.imm, pos = [I.scala.trim() && `scala ${I.scala.trim()}`, I.piano.trim() && `piano ${I.piano.trim()}`, I.interno.trim() && `interno ${I.interno.trim()}`].filter(Boolean).join(', ');
     const arr = ['commerciale', 'box', 'fondo'].includes(st.tipo) ? '' : I.arredo === 'si' ? ', arredata come da inventario allegato' : I.arredo === 'parz' ? ', parzialmente arredata come da inventario allegato' : ', non arredata';
-    return `l’unità immobiliare sita in ${val(I.comune, 'Comune')}${prov(I.prov)}, ${val(I.indirizzo, 'indirizzo e numero civico')}${pos ? `, ${pos}` : ''}${comp ? `, composta da ${val(I.descr, 'descrizione: vani e accessori')}` : ''}${num(I.mq) > 0 ? `, della superficie di circa ${String(I.mq).trim()} m²` : ''}${arr}`;
+    return `l’unità immobiliare sita in ${val(I.comune, 'Comune', 'imm.comune')}${prov(I.prov)}, ${val(I.indirizzo, 'indirizzo e numero civico', 'imm.indirizzo')}${pos ? `, ${pos}` : ''}${comp ? `, composta da ${val(I.descr, 'descrizione: vani e accessori', 'imm.descr')}` : ''}${num(I.mq) > 0 ? `, della superficie di circa ${String(I.mq).trim()} m²` : ''}${arr}`;
   }
-  const catasto = c => `foglio ${val(c.foglio, 'foglio')}, particella ${val(c.part, 'particella')}${c.sub.trim() ? `, subalterno ${c.sub.trim()}` : ''}, categoria ${val(c.categoria.toUpperCase(), 'categoria')}${c.classe.trim() ? `, classe ${c.classe.trim()}` : ''}${num(c.rendita) > 0 ? `, rendita catastale euro ${eur(num(c.rendita))}` : ''}`;
+  const catasto = (c, b = 'imm.cat') => `foglio ${val(c.foglio, 'foglio', b + '.foglio')}, particella ${val(c.part, 'particella', b + '.part')}${c.sub.trim() ? `, subalterno ${c.sub.trim()}` : ''}, categoria ${val(c.categoria.toUpperCase(), 'categoria', b + '.categoria')}${c.classe.trim() ? `, classe ${c.classe.trim()}` : ''}${num(c.rendita) > 0 ? `, rendita catastale euro ${eur(num(c.rendita))}` : ''}`;
   function pertinenze(st) {
     const P = st.imm.pert.filter(x => x.tipo || x.descr);
     if (!P.length) return '';
-    return P.map(x => `${x.tipo || 'pertinenza'}${x.descr.trim() ? ` (${x.descr.trim()})` : ''}${x.foglio.trim() || x.part.trim() ? `, identificata al Catasto Fabbricati al foglio ${val(x.foglio, 'foglio')}, particella ${val(x.part, 'particella')}${x.sub.trim() ? `, subalterno ${x.sub.trim()}` : ''}${x.categoria.trim() ? `, categoria ${x.categoria.trim().toUpperCase()}` : ''}${num(x.rendita) > 0 ? `, rendita euro ${eur(num(x.rendita))}` : ''}` : ''}`).join('; ');
+    return P.map(x => { const i = st.imm.pert.indexOf(x); return `${x.tipo || 'pertinenza'}${x.descr.trim() ? ` (${x.descr.trim()})` : ''}${x.foglio.trim() || x.part.trim() ? `, identificata al Catasto Fabbricati al foglio ${val(x.foglio, 'foglio', `imm.pert.${i}.foglio`)}, particella ${val(x.part, 'particella', `imm.pert.${i}.part`)}${x.sub.trim() ? `, subalterno ${x.sub.trim()}` : ''}${x.categoria.trim() ? `, categoria ${x.categoria.trim().toUpperCase()}` : ''}${num(x.rendita) > 0 ? `, rendita euro ${eur(num(x.rendita))}` : ''}` : ''}`; }).join('; ');
   }
   // terreni del fondo rustico (Catasto Terreni): foglio, particella, superficie, qualità, redditi
   // ettari: la virgola è sempre il separatore dei decimali («1,5000» è un ettaro e mezzo); con il solo punto, il punto
   const haNum = v => { const t = String(v ?? '').replace(/\s/g, ''); if (!t) return NaN; return +(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t); };
   const ha = v => { const n = haNum(v); return isFinite(n) && n > 0 ? n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) : ''; };
   function terreni(st) {
-    const T = st.fondo.terreni; if (!T.length) return PH('terreni: foglio, particella e superficie');
-    const one = x => `foglio ${val(x.foglio, 'foglio')}, particella ${val(x.part, 'particella')}${ha(x.sup) ? `, superficie ettari ${ha(x.sup)}` : ''}${String(x.qualita || '').trim() ? `, qualità ${String(x.qualita).trim()}` : ''}${num(x.rd) > 0 ? `, reddito dominicale euro ${eur(num(x.rd))}` : ''}${num(x.ra) > 0 ? `, reddito agrario euro ${eur(num(x.ra))}` : ''}`;
+    const T = st.fondo.terreni; if (!T.length) return PH('terreni: foglio, particella e superficie', 'fondo.terreni');
+    const one = (x, i) => `foglio ${val(x.foglio, 'foglio', `fondo.terreni.${i}.foglio`)}, particella ${val(x.part, 'particella', `fondo.terreni.${i}.part`)}${ha(x.sup) ? `, superficie ettari ${ha(x.sup)}` : ''}${String(x.qualita || '').trim() ? `, qualità ${String(x.qualita).trim()}` : ''}${num(x.rd) > 0 ? `, reddito dominicale euro ${eur(num(x.rd))}` : ''}${num(x.ra) > 0 ? `, reddito agrario euro ${eur(num(x.ra))}` : ''}`;
     const tot = T.reduce((a, x) => a + (haNum(x.sup) > 0 ? haNum(x.sup) : 0), 0);
-    return T.map(one).join('; ') + (T.length > 1 && tot > 0 ? `; per una superficie complessiva di ettari ${ha(tot)}` : '');
+    return T.map((x, i) => one(x, i)).join('; ') + (T.length > 1 && tot > 0 ? `; per una superficie complessiva di ettari ${ha(tot)}` : '');
   }
   const ARTICOLO = (key, title, paras, o = {}) => ({ key, title, paras: paras.filter(Boolean), ...o });
   // «un mese», «una mensilità», «tre mesi»
@@ -289,20 +353,21 @@ const Contratti = (() => {
     const T = TIPI[st.tipo], r = R(st), A = r.A, B = r.B, out = [];
     const loc = isLoc(st), abit = isAbit(st), comm = st.tipo === 'commerciale';
     const mesi = mesiDurata(st), ini = st.dur.inizio, fine = mesi ? fineDurata(ini, mesi) : st.dur.fine;
-    const dIni = ini ? dataEstesa(ini) : PH('data di inizio'), dFine = fine && parseIso(ini) ? dataEstesa(fine) : PH('data di fine');
+    const dIni = ini ? dataEstesa(ini) : PH('data di inizio', 'dur.inizio'), dFine = fine && parseIso(ini) ? dataEstesa(fine) : PH('data di fine', 'dur.inizio');
     const annuo = annuoDi(st) > 0 ? annuoDi(st) : NaN, can = annuo / 12;
-    const canTxt = v => isFinite(v) && v > 0 ? importo(v) : `euro ${PH('importo')}`;
-    const multiB = st.B.length > 1;
+    const canTxt = v => isFinite(v) && v > 0 ? importo(v) : `euro ${PH('importo', 'can.mensile')}`;
+    const multiB = st.B.length > 1, D = st.der || {};
+    const luiA = pron(st.A), luiB = pron(st.B);
 
     /* oggetto */
     const fondo = st.tipo === 'fondo', box = st.tipo === 'box', fores = st.tipo === 'foresteria';
-    const ogg = fondo ? [`Il ${A} concede in affitto all’${B}, che accetta, i terreni agricoli siti nel Comune di ${val(st.imm.comune, 'Comune')}${prov(st.imm.prov)}${st.imm.indirizzo.trim() ? `, località ${st.imm.indirizzo.trim()}` : ''}, nello stato di fatto e di diritto in cui si trovano, censiti al Catasto Terreni del medesimo Comune come segue: ${terreni(st)}.`,
+    const ogg = fondo ? [`Il ${A} concede in affitto all’${B}, che accetta, i terreni agricoli siti nel Comune di ${val(st.imm.comune, 'Comune', 'imm.comune')}${prov(st.imm.prov)}${st.imm.indirizzo.trim() ? `, località ${st.imm.indirizzo.trim()}` : ''}, nello stato di fatto e di diritto in cui si trovano, censiti al Catasto Terreni del medesimo Comune come segue: ${terreni(st)}.`,
       `I terreni sono concessi a corpo e non a misura, con le relative servitù attive e passive.`]
       : [`Il ${A} concede ${loc ? 'in locazione' : 'in comodato d’uso gratuito'} al ${B}, che accetta, ${immobile(st)}.`,
-      `L’unità immobiliare è identificata al Catasto Fabbricati del Comune di ${val(st.imm.comune, 'Comune')}${st.imm.cat.sez.trim() ? `, sezione ${st.imm.cat.sez.trim()}` : ''}, al ${catasto(st.imm.cat)}.`];
+      `L’unità immobiliare è identificata al Catasto Fabbricati del Comune di ${val(st.imm.comune, 'Comune', 'imm.comune')}${st.imm.cat.sez.trim() ? `, sezione ${st.imm.cat.sez.trim()}` : ''}, al ${catasto(st.imm.cat)}.`];
     if (box) ogg.push(`Le parti comuni dell’edificio e gli spazi di manovra non sono oggetto della locazione: il ${B} ne usa soltanto per accedere all’autorimessa.`);
     const pz = pertinenze(st); if (pz) ogg.push(`Sono comprese ${loc ? 'nella locazione' : 'nel comodato'} le seguenti pertinenze: ${pz}.`);
-    if (comm) ogg.push(`L’unità immobiliare è locata per l’esercizio della seguente attività: ${val(st.comm.attivita, 'attività')}. Il ${B} dichiara che l’attività ${st.comm.pubblico ? 'comporta' : 'non comporta'} contatti diretti con il pubblico degli utenti e dei consumatori.`);
+    if (comm) ogg.push(`L’unità immobiliare è locata per l’esercizio della seguente attività: ${val(st.comm.attivita, 'attività', 'comm.attivita')}. Il ${B} dichiara che l’attività ${st.comm.pubblico ? 'comporta' : 'non comporta'} contatti diretti con il pubblico degli utenti e dei consumatori.`);
     out.push(ARTICOLO('oggetto', 'Oggetto', ogg, { fixed: true }));
 
     if (st.tipo === 'comodato') return out.concat(comodato(st, r, dIni, dFine));
@@ -310,36 +375,36 @@ const Contratti = (() => {
     /* durata */
     const dur = [];
     if (st.tipo === 'libero') {
-      dur.push(`Il contratto è stipulato per la durata di ${lettere(mesi / 12)} anni, dal ${dIni} al ${dFine}. Alla prima scadenza il contratto è rinnovato di diritto per un periodo di quattro anni, fatta salva la facoltà di disdetta del ${A} che intenda adibire l’immobile agli usi o effettuare su di esso le opere di cui all’art. 3 della legge n. 431/1998, ovvero vendere l’immobile alle condizioni e con le modalità previste dal medesimo articolo; la disdetta, che deve indicare il motivo, va comunicata al ${B} con lettera raccomandata almeno sei mesi prima della scadenza.`);
+      dur.push(`Il contratto è stipulato per la durata di ${qta(mesi / 12, 'anno', 'anni')}, dal ${dIni} al ${dFine}. Alla prima scadenza il contratto è rinnovato di diritto per un periodo di quattro anni, fatta salva la facoltà di disdetta del ${A} che intenda adibire l’immobile agli usi o effettuare su di esso le opere di cui all’art. 3 della legge n. 431/1998, ovvero vendere l’immobile alle condizioni e con le modalità previste dal medesimo articolo; la disdetta, che deve indicare il motivo, va comunicata al ${B} con lettera raccomandata almeno sei mesi prima della scadenza.`);
       dur.push(`Alla scadenza del periodo di rinnovo ciascuna parte ha diritto di attivare la procedura per il rinnovo a nuove condizioni o per la rinuncia al rinnovo, comunicando la propria intenzione all’altra con lettera raccomandata almeno sei mesi prima della scadenza. La parte interpellata deve rispondere con lettera raccomandata entro sessanta giorni dal ricevimento; in mancanza di risposta o di accordo il contratto si intende scaduto alla data di cessazione della locazione. In mancanza della comunicazione il contratto è rinnovato tacitamente alle medesime condizioni (art. 2, comma 1, legge n. 431/1998).`);
     } else if (st.tipo === 'concordato') {
-      dur.push(`Il contratto è stipulato per la durata di ${lettere(mesi / 12)} anni, dal ${dIni} al ${dFine}. Alla prima scadenza, ove le parti non concordino sul rinnovo, il contratto è prorogato di diritto per due anni, fatta salva la facoltà di disdetta del ${A} che intenda adibire l’immobile agli usi o effettuare su di esso le opere di cui all’art. 3 della legge n. 431/1998, ovvero vendere l’immobile alle condizioni e con le modalità ivi previste; la disdetta va comunicata con lettera raccomandata almeno sei mesi prima della scadenza.`);
+      dur.push(`Il contratto è stipulato per la durata di ${qta(mesi / 12, 'anno', 'anni')}, dal ${dIni} al ${dFine}. Alla prima scadenza, ove le parti non concordino sul rinnovo, il contratto è prorogato di diritto per due anni, fatta salva la facoltà di disdetta del ${A} che intenda adibire l’immobile agli usi o effettuare su di esso le opere di cui all’art. 3 della legge n. 431/1998, ovvero vendere l’immobile alle condizioni e con le modalità ivi previste; la disdetta va comunicata con lettera raccomandata almeno sei mesi prima della scadenza.`);
       dur.push(`Alla scadenza del periodo di proroga biennale ciascuna parte ha diritto di attivare la procedura per il rinnovo a nuove condizioni o per la rinuncia al rinnovo, comunicando la propria intenzione con lettera raccomandata da inviare all’altra parte almeno sei mesi prima della scadenza. In mancanza della comunicazione il contratto è rinnovato tacitamente alle medesime condizioni (art. 2, comma 5, legge n. 431/1998).`);
     } else if (st.tipo === 'transitorio') {
       dur.push(`Il contratto è stipulato per la durata di ${qta(mesi, 'mese', 'mesi')}, dal ${dIni} al ${dFine}, data in cui cessa senza bisogno di disdetta e il ${B} rilascia l’immobile libero da persone e cose.`);
       const del = st.trans.chi === 'locatore' ? `del ${A}` : `del ${B}`;
-      dur.push(`Le parti concordano che la presente locazione ha natura transitoria per la seguente esigenza ${del}: ${val(st.trans.esigenza, 'esigenza transitoria')}. L’esigenza è provata dalla seguente documentazione, allegata al contratto: ${val(st.trans.doc, 'documento')}.`);
+      dur.push(`Le parti concordano che la presente locazione ha natura transitoria per la seguente esigenza ${del}: ${val(st.trans.esigenza, 'esigenza transitoria', 'trans.esigenza')}. L’esigenza è provata dalla seguente documentazione, allegata al contratto: ${val(st.trans.doc, 'documento', 'trans.doc')}.`);
       if (st.trans.chi === 'locatore') dur.push(`Il ${A} ha l’onere di confermare il verificarsi dell’esigenza transitoria con lettera raccomandata da inviare al ${B} prima della scadenza. In mancanza della conferma, o se l’esigenza viene meno, il contratto è ricondotto alla durata prevista dall’art. 2, comma 1, della legge n. 431/1998.`);
       else dur.push(`Se l’esigenza transitoria del ${B} viene meno o non è provata, il contratto è ricondotto alla durata prevista dall’art. 2, comma 1, della legge n. 431/1998.`);
     } else if (st.tipo === 'studenti') {
-      dur.push(`Il contratto è stipulato per la durata di ${lettere(mesi)} mesi, dal ${dIni} al ${dFine}. Alla scadenza il contratto si rinnova automaticamente per uguale periodo, salvo disdetta del ${B} da comunicarsi al ${A} con lettera raccomandata almeno un mese e non oltre tre mesi prima della scadenza.`);
-      dur.push(`Il contratto è stipulato in considerazione della condizione di studente universitario del ${B}, iscritto al corso di ${val(st.stud.corso, 'corso di studi')} presso ${val(st.stud.universita, 'università')}, con sede in un comune diverso da quello di residenza.`);
+      dur.push(`Il contratto è stipulato per la durata di ${qta(mesi, 'mese', 'mesi')}, dal ${dIni} al ${dFine}. Alla scadenza il contratto si rinnova automaticamente per uguale periodo, salvo disdetta del ${B} da comunicarsi al ${A} con lettera raccomandata almeno un mese e non oltre tre mesi prima della scadenza.`);
+      dur.push(`Il contratto è stipulato in considerazione della condizione di studente universitario del ${B}, iscritto al corso di ${val(st.stud.corso, 'corso di studi', 'stud.corso')} presso ${val(st.stud.universita, 'università', 'stud.universita')}, con sede in un comune diverso da quello di residenza.`);
     } else if (box) {
-      const g = Math.max(15, +st.box.disdetta || 30);
+      const g = Math.max(1, +st.box.disdetta || 30);
       dur.push(`La locazione ha la durata di ${qta(mesi / 12, 'anno', 'anni')}, dal ${dIni} al ${dFine}. Alla scadenza il contratto si rinnova tacitamente di anno in anno alle stesse condizioni, se nessuna delle parti comunica all’altra disdetta con lettera raccomandata o posta elettronica certificata almeno ${lettere(g)} giorni prima della scadenza.`);
     } else if (fores) {
       dur.push(`La locazione ha la durata di ${qta(mesi / 12, 'anno', 'anni')}, dal ${dIni} al ${dFine}, e si rinnova tacitamente per un periodo di uguale durata se nessuna delle parti comunica all’altra disdetta con lettera raccomandata almeno sei mesi prima della scadenza.`);
-      dur.push(`Le parti danno atto che il ${B} è un’impresa e che l’immobile è destinato a soddisfare esigenze abitative temporanee di ${val(st.fores.destinatari, 'destinatari')}, e convengono che la locazione è regolata dagli artt. 1571 e seguenti del codice civile e, in quanto compatibili, dalle norme della legge n. 392/1978.`);
+      dur.push(`Le parti danno atto che il ${B} è un’impresa e che l’immobile è destinato a soddisfare esigenze abitative temporanee di ${val(st.fores.destinatari, 'destinatari', 'fores.destinatari')}, e convengono che la locazione è regolata dagli artt. 1571 e seguenti del codice civile e, in quanto compatibili, dalle norme della legge n. 392/1978.`);
     } else if (fondo) {
       if (st.fondo.deroga) {
         dur.push(`L’affitto ha la durata di ${qta(mesi / 12, 'anno', 'anni')}, dal ${dIni} al ${dFine}, data in cui cessa senza bisogno di disdetta; l’${B} rilascia i terreni liberi da persone e cose, fatti salvi i frutti pendenti della coltura in corso.`);
-        dur.push(`Le parti, assistite dalle rispettive organizzazioni professionali agricole maggiormente rappresentative a livello nazionale (${val(st.fondo.org, 'organizzazioni')}), i cui rappresentanti sottoscrivono il contratto, stipulano il presente accordo anche in deroga alle norme vigenti in materia di contratti agrari, ai sensi dell’art. 45 della legge n. 203/1982.`);
+        dur.push(`Le parti, assistite dalle rispettive organizzazioni professionali agricole maggiormente rappresentative a livello nazionale (${val(st.fondo.org, 'organizzazioni', 'fondo.org')}), i cui rappresentanti sottoscrivono il contratto, stipulano il presente accordo anche in deroga alle norme vigenti in materia di contratti agrari, ai sensi dell’art. 45 della legge n. 203/1982.`);
       } else {
         dur.push(`L’affitto ha la durata di ${qta(mesi / 12, 'anno', 'anni')}, dal ${dIni} al ${dFine} (art. 1 legge n. 203/1982). In mancanza di disdetta comunicata da una delle parti all’altra con lettera raccomandata con avviso di ricevimento almeno un anno prima della scadenza, il contratto si intende rinnovato per un periodo di uguale durata (art. 4 legge n. 203/1982).`);
       }
     } else if (comm) {
       const a = st.dur.alberghiero, rin = a ? 'nove anni in nove anni' : 'sei anni in sei anni', prea = a ? 'diciotto' : 'dodici';
-      dur.push(`La locazione ha la durata di ${lettere(mesi / 12)} anni, dal ${dIni} al ${dFine}, e si rinnova tacitamente di ${rin} se nessuna delle parti comunica all’altra disdetta con lettera raccomandata con avviso di ricevimento almeno ${prea} mesi prima della scadenza (art. 28 legge n. 392/1978).`);
+      dur.push(`La locazione ha la durata di ${qta(mesi / 12, 'anno', 'anni')}, dal ${dIni} al ${dFine}, e si rinnova tacitamente di ${rin} se nessuna delle parti comunica all’altra disdetta con lettera raccomandata con avviso di ricevimento almeno ${prea} mesi prima della scadenza (art. 28 legge n. 392/1978).`);
       dur.push(`Alla prima scadenza il ${A} può negare la rinnovazione soltanto per i motivi indicati dall’art. 29 della legge n. 392/1978, da specificare a pena di nullità nella comunicazione di diniego, con le modalità e nei termini ivi previsti.`);
     }
     out.push(ARTICOLO('durata', 'Durata', dur, { fixed: true }));
@@ -347,13 +412,13 @@ const Contratti = (() => {
     /* recesso del conduttore */
     const rec = [];
     if (st.tipo === 'studenti') rec.push(`Il ${B} ha facoltà di recedere dal contratto per gravi motivi, anche connessi al corso di studi, previo avviso da recapitarsi al ${A} con lettera raccomandata almeno un mese e non oltre tre mesi prima.`);
-    else if (st.tipo === 'transitorio') { const m = Math.max(1, Math.min(6, +st.trans.preavviso || 3)); rec.push(`Il ${B} ha facoltà di recedere dal contratto per gravi motivi, previo avviso da recapitarsi al ${A} con lettera raccomandata almeno ${qta(m, 'mese', 'mesi')} prima.`); }
+    else if (st.tipo === 'transitorio') { const m = Math.max(1, Math.min(12, +st.trans.preavviso || 3)); rec.push(`Il ${B} ha facoltà di recedere dal contratto per gravi motivi, previo avviso da recapitarsi al ${A} con lettera raccomandata almeno ${qta(m, 'mese', 'mesi')} prima.`); }
     else if (fondo) rec.push(`L’${B} può recedere dal contratto con semplice preavviso da comunicare al ${A} con lettera raccomandata con avviso di ricevimento almeno un anno prima della scadenza dell’annata agraria (art. 5, primo comma, legge n. 203/1982).`);
-    else if (box) rec.push(`Il ${B} può recedere in qualsiasi momento dal contratto dandone avviso al ${A} con lettera raccomandata o posta elettronica certificata almeno ${lettere(Math.max(15, +st.box.disdetta || 30))} giorni prima.`);
+    else if (box) rec.push(`Il ${B} può recedere in qualsiasi momento dal contratto dandone avviso al ${A} con lettera raccomandata o posta elettronica certificata almeno ${lettere(Math.max(1, +st.box.disdetta || 30))} giorni prima.`);
     else if (comm || fores) rec.push(`Il ${B} può recedere in qualsiasi momento dal contratto qualora ricorrano gravi motivi, dandone avviso al ${A} con lettera raccomandata almeno sei mesi prima della data in cui il recesso deve avere esecuzione (art. 27, ultimo comma, legge n. 392/1978).`);
     else rec.push(`Il ${B} ha facoltà di recedere dal contratto qualora ricorrano gravi motivi, previo avviso da recapitarsi al ${A} con lettera raccomandata almeno sei mesi prima (art. 3, comma 6, legge n. 431/1998).`);
     if (st.cl.recesso.on && !['studenti', 'box', 'fondo'].includes(st.tipo)) {
-      const m = Math.max(comm ? 6 : 1, +st.cl.recesso.mesi || 3);
+      const m = Math.max(comm && !D.recesso ? 6 : 1, +st.cl.recesso.mesi || 3);
       rec.push(`È inoltre facoltà del ${B} recedere in qualsiasi momento dal contratto, anche in assenza di gravi motivi, dandone avviso al ${A} con lettera raccomandata almeno ${qta(m, 'mese', 'mesi')} prima della data del rilascio${comm ? ' (art. 27, comma 7, legge n. 392/1978)' : ''}.`);
     }
     if (multiB) rec.push(`In caso di recesso di uno solo dei ${r.Bp}, il contratto prosegue con gli altri, che restano obbligati in solido per l’intero canone, salvo diverso accordo scritto con il ${A}.`);
@@ -362,12 +427,12 @@ const Contratti = (() => {
     /* canone */
     const cn = [];
     const rate = RATE[st.can.periodo] || 12, rataV = isFinite(annuo) ? annuo / rate : NaN;
-    const rateTxt = rate === 1 ? `in un’unica rata annuale anticipata di ${canTxt(rataV)}, entro il giorno ${Math.max(1, Math.min(28, +st.can.giorno || 5))} del primo mese di ogni annata` : `in ${lettere(rate)} rate ${rate === 12 ? 'mensili' : rate === 4 ? 'trimestrali' : 'semestrali'} anticipate di ${canTxt(rataV)} ciascuna, entro il giorno ${Math.max(1, Math.min(28, +st.can.giorno || 5))} ${rate === 12 ? 'di ogni mese' : 'del primo mese di ogni ' + (rate === 4 ? 'trimestre' : 'semestre')}`;
-    const giorno = Math.max(1, Math.min(28, +st.can.giorno || 5));
+    const rateTxt = rate === 1 ? `in un’unica rata annuale anticipata di ${canTxt(rataV)}, entro il giorno ${Math.max(1, Math.min(31, +st.can.giorno || 5))} del primo mese di ogni annata` : `in ${lettere(rate)} rate ${rate === 12 ? 'mensili' : rate === 4 ? 'trimestrali' : 'semestrali'} anticipate di ${canTxt(rataV)} ciascuna, entro il giorno ${Math.max(1, Math.min(31, +st.can.giorno || 5))} ${rate === 12 ? 'di ogni mese' : 'del primo mese di ogni ' + (rate === 4 ? 'trimestre' : 'semestre')}`;
+    const giorno = Math.max(1, Math.min(31, +st.can.giorno || 5));
     let base = `Il canone annuo ${fondo ? 'di affitto' : 'di locazione'} è convenuto in ${canTxt(annuo)}`;
-    if (st.tipo === 'concordato' || st.tipo === 'studenti' || (st.tipo === 'transitorio' && st.can.accordo.comune.trim())) base = `Il canone annuo di locazione, determinato dalle parti nei valori minimo e massimo stabiliti${st.can.accordo.zona.trim() ? ` per la zona ${st.can.accordo.zona.trim()}` : ''} dall’Accordo territoriale per il Comune di ${val(st.can.accordo.comune, 'Comune')}, è convenuto in ${canTxt(annuo)}`;
+    if (st.tipo === 'concordato' || st.tipo === 'studenti' || (st.tipo === 'transitorio' && st.can.accordo.comune.trim())) base = `Il canone annuo di locazione, determinato dalle parti nei valori minimo e massimo stabiliti${st.can.accordo.zona.trim() ? ` per la zona ${st.can.accordo.zona.trim()}` : ''} dall’Accordo territoriale per il Comune di ${val(st.can.accordo.comune, 'Comune', 'can.accordo.comune')}, è convenuto in ${canTxt(annuo)}`;
     if ((comm || box) && st.can.iva) base += `, oltre IVA nella misura di legge, avendo il ${A} optato per l’imponibilità ai sensi dell’art. 10, primo comma, n. 8, del D.P.R. n. 633/1972`;
-    const modo = st.can.modo === 'bonifico' ? `mediante bonifico bancario sul conto corrente intestato a ${val(st.can.intestatario, 'intestatario del conto')}, IBAN ${val(ibanFmt(st.can.iban), 'IBAN')}` : `con la seguente modalità tracciabile: ${val(st.can.altro, 'modalità di pagamento')}`;
+    const modo = st.can.modo === 'bonifico' ? `mediante bonifico bancario sul conto corrente intestato a ${val(st.can.intestatario, 'intestatario del conto', 'can.intestatario')}, IBAN ${val(ibanFmt(st.can.iban), 'IBAN', 'can.iban')}` : `con la seguente modalità tracciabile: ${val(st.can.altro, 'modalità di pagamento', 'can.altro')}`;
     cn.push(`${base}, che ${fondo ? 'l’' : 'il '}${B} si obbliga a corrispondere ${rateTxt}, ${modo}.`);
     if (abit) cn.push('Il pagamento avviene in forme che escludono l’uso del contante e ne assicurano la tracciabilità (art. 1, comma 50, legge n. 147/2013).');
     cn.push(`Il mancato pagamento, in tutto o in parte, del canone decorsi venti giorni dalla scadenza, ovvero il mancato pagamento degli oneri accessori quando l’importo non pagato superi quello di due mensilità del canone, costituisce motivo di risoluzione del contratto ai sensi dell’art. 1455 del codice civile${abit ? ', come previsto dall’art. 5 della legge n. 392/1978, fatto salvo quanto previsto dall’art. 55 della medesima legge' : ''}.`);
@@ -379,14 +444,14 @@ const Contratti = (() => {
     if (st.can.cedolare && abit) {
       out.push(ARTICOLO('aggiornamento', 'Cedolare secca', [`Il ${A} comunica al ${B} che intende optare per il regime della cedolare secca previsto dall’art. 3 del D.Lgs. n. 23/2011 e che, per tutta la durata dell’opzione, rinuncia a chiedere l’aggiornamento del canone a qualsiasi titolo, compreso l’aggiornamento ISTAT. Per la durata dell’opzione non sono dovute l’imposta di registro e l’imposta di bollo sul contratto.`]));
     } else {
-      const pct = comm || fores ? Math.min(75, +st.can.istat || 0) : +st.can.istat || 0;
+      const pct = Math.max(0, Math.min(100, comm || fores ? (D.istat ? +st.can.istat || 0 : Math.min(75, +st.can.istat || 0)) : +st.can.istat || 0));
       if (pct > 0 && (mesi > 12 || box)) out.push(ARTICOLO('aggiornamento', 'Aggiornamento del canone', [`Il canone è aggiornato ogni anno, su richiesta del ${A} da comunicare con lettera raccomandata, nella misura del ${pct}% della variazione, accertata dall’ISTAT, dell’indice dei prezzi al consumo per le famiglie di operai e impiegati (FOI) verificatasi nell’anno precedente${comm || fores ? ' (art. 32 legge n. 392/1978)' : ''}. L’aggiornamento decorre dal mese successivo a quello della richiesta.`]));
     }
 
     /* deposito cauzionale e garanzie */
-    const dm = Math.max(0, Math.min(3, Math.round(+st.dep.mesi || 0))), dep = [];
+    const dm = Math.max(0, Math.min(D.deposito ? 12 : 3, Math.round(+st.dep.mesi || 0))), dep = [];
     if (dm > 0) dep.push(`A garanzia delle obbligazioni assunte, il ${B} versa al ${A}, che con la sottoscrizione del contratto ne rilascia quietanza, la somma di ${canTxt(isFinite(can) ? can * dm : NaN)}, pari a ${qta(dm, 'mensilità', 'mensilità', true)} del canone, non imputabile in conto canoni e produttiva di interessi legali, che sono corrisposti al ${B} al termine di ogni anno di locazione (art. 11 legge n. 392/1978). Il deposito è restituito al termine della locazione, previa verifica dello stato dell’unità immobiliare e dell’adempimento di tutte le obbligazioni contrattuali.`);
-    if (st.gar.on) dep.push(`Interviene al presente contratto ${chi(st.gar.p)}, che si costituisce fideiussore del ${B} e garantisce in solido con lui l’adempimento di tutte le obbligazioni derivanti dal contratto, fino all’importo massimo di ${canTxt(num(st.gar.max))} (art. 1938 c.c.), rinunciando al beneficio della preventiva escussione del debitore principale (art. 1944, secondo comma, c.c.) e al termine previsto dall’art. 1957 c.c.`);
+    if (st.gar.on) dep.push(`Interviene al presente contratto ${chi(st.gar.p)}, che si costituisce ${fem([st.gar.p]) ? 'fideiussora' : 'fideiussore'} del ${B} e garantisce in solido con ${luiB} l’adempimento di tutte le obbligazioni derivanti dal contratto, fino all’importo massimo di ${canTxt(num(st.gar.max))} (art. 1938 c.c.), rinunciando al beneficio della preventiva escussione del debitore principale (art. 1944, secondo comma, c.c.) e al termine previsto dall’art. 1957 c.c.`);
     if (dep.length) out.push(ARTICOLO('deposito', dm > 0 ? 'Deposito cauzionale' + (st.gar.on ? ' e garanzia' : '') : 'Garanzia', dep, { onerous: st.gar.on }));
 
     /* oneri accessori e utenze */
@@ -415,14 +480,14 @@ const Contratti = (() => {
     /* uso, sublocazione, cessione */
     const uso = [];
     if (abit) {
-      uso.push(`L’immobile è destinato esclusivamente ad abitazione del ${B}${st.imm.conviventi.trim() ? ` e delle seguenti persone con lui conviventi: ${st.imm.conviventi.trim()}` : ' e delle persone con lui stabilmente conviventi'}. È vietato mutare la destinazione d’uso.`);
+      uso.push(`L’immobile è destinato esclusivamente ad abitazione del ${B}${st.imm.conviventi.trim() ? ` e delle seguenti persone con ${luiB} conviventi: ${st.imm.conviventi.trim()}` : ` e delle persone con ${luiB} stabilmente conviventi`}. È vietato mutare la destinazione d’uso.`);
       uso.push(st.cl.subParz.on ? `È vietato al ${B} sublocare, in tutto o in parte, l’immobile, cederne il godimento anche gratuito a terzi e cedere il contratto senza il consenso scritto del ${A}.` : `Il ${B} non può sublocare totalmente l’immobile né cedere ad altri il contratto senza il consenso scritto del ${A}. La sublocazione parziale è consentita previa comunicazione al ${A} con lettera raccomandata che indichi la persona del subconduttore, la durata del contratto e i vani sublocati (art. 2 legge n. 392/1978).`);
     } else if (box) {
-      uso.push(`L’autorimessa è destinata esclusivamente a ${val(st.box.uso, 'uso')}${st.box.targa.trim() ? ` (veicolo targato ${st.box.targa.trim().toUpperCase()})` : ''}. La destinazione costituisce condizione essenziale del contratto: il suo mutamento ne comporta la risoluzione.`);
+      uso.push(`L’autorimessa è destinata esclusivamente a ${val(st.box.uso, 'uso', 'box.uso')}${st.box.targa.trim() ? ` (veicolo targato ${st.box.targa.trim().toUpperCase()})` : ''}. La destinazione costituisce condizione essenziale del contratto: il suo mutamento ne comporta la risoluzione.`);
       uso.push(`Sono vietati: sostare con il veicolo negli spazi di manovra e nelle parti comuni; lavare o riparare il veicolo nell’autorimessa o nelle parti comuni; introdurre o tenere sostanze infiammabili, esplosive, maleodoranti o nocive, oltre al carburante contenuto nel serbatoio; duplicare o cedere a terzi chiavi, telecomandi o tessere di accesso; consentire l’accesso alle parti comuni a persone estranee.`);
       uso.push(`Le chiavi, i telecomandi e le tessere di accesso sono forniti dal ${A}; le copie aggiuntive sono a carico del ${B}. Il ${B} non può sublocare l’autorimessa né cederne il godimento, anche gratuito, a terzi, né cedere il contratto senza il consenso scritto del ${A}.`);
     } else if (fores) {
-      uso.push(`L’immobile è destinato esclusivamente all’uso foresteria, cioè ad abitazione temporanea di ${val(st.fores.destinatari, 'destinatari')} del ${B}, con esclusione di ogni altro uso. È vietato mutare la destinazione senza il consenso scritto del ${A}.`);
+      uso.push(`L’immobile è destinato esclusivamente all’uso foresteria, cioè ad abitazione temporanea di ${val(st.fores.destinatari, 'destinatari', 'fores.destinatari')} del ${B}, con esclusione di ogni altro uso. È vietato mutare la destinazione senza il consenso scritto del ${A}.`);
       uso.push(`Il ${B} comunica al ${A}, su richiesta, i nominativi delle persone che occupano l’immobile, risponde del loro comportamento e dei danni da esse causati e provvede alle comunicazioni all’autorità di pubblica sicurezza previste dalla legge. È vietato sublocare l’immobile o cedere il contratto senza il consenso scritto del ${A}.`);
     } else if (fondo) {
       uso.push(`L’${B} si impegna a coltivare i terreni secondo le regole della buona tecnica agraria e a conservarne la destinazione agricola${st.fondo.coltura.trim() ? `, con il seguente indirizzo colturale: ${st.fondo.coltura.trim()}` : ''}, con la diligenza del buon coltivatore.`);
@@ -452,7 +517,7 @@ const Contratti = (() => {
     if (st.cl.migliorie.on) man.push(`Il ${B} non può eseguire innovazioni, migliorie o addizioni senza il consenso scritto del ${A}. Quelle eseguite restano acquisite all’immobile senza diritto a indennità, salvo diverso accordo scritto, ferma la facoltà del ${A} di chiedere il ripristino dello stato originario per quelle eseguite senza consenso.`);
     if (box) man.push(`Sono a carico del ${B} anche le piccole riparazioni della porta, della serranda o della basculante, delle serrature e dei congegni di apertura dovute all’uso.`);
     if (st.imm.riscAut && !box && !fondo) man.push(`L’immobile è dotato di impianto di riscaldamento autonomo: il ${B}, quale occupante, è responsabile dell’esercizio e della manutenzione ordinaria dell’impianto termico e dei controlli periodici di efficienza energetica, e conserva il libretto di impianto (D.P.R. n. 74/2013).`);
-    if (!fondo) man.push(`Il ${B} è custode dell’immobile e risponde dei danni causati a sé, al ${A} o a terzi per sua colpa o negligenza, anche dalle persone che con lui convivono o che egli vi ammette.`);
+    if (!fondo) man.push(`Il ${B} è custode dell’immobile e risponde dei danni causati a sé, al ${A} o a terzi per sua colpa o negligenza, anche dalle persone che con ${luiB} convivono o che ${st.B.length > 1 ? 'essi vi ammettono' : (fem(st.B) ? 'ella' : 'egli') + ' vi ammette'}.`);
     out.push(ARTICOLO('manutenzione', 'Manutenzione, modifiche e danni', man, { onerous: st.cl.migliorie.on }));
 
     /* condominio */
@@ -462,19 +527,19 @@ const Contratti = (() => {
       `Il ${B} ha diritto di voto, in luogo del proprietario, nelle delibere dell’assemblea condominiale relative alle spese e alle modalità di gestione dei servizi di riscaldamento e di condizionamento d’aria, e di intervenire, senza diritto di voto, sulle delibere relative alla modifica degli altri servizi comuni (art. 10 legge n. 392/1978).`]));
 
     /* accessi */
-    if (st.cl.visite.on) { const g = Math.max(1, +st.cl.visite.giorni || 3), og = fondo ? 'i terreni' : 'l’immobile'; out.push(ARTICOLO('accessi', fondo ? 'Accesso ai terreni' : 'Accesso all’immobile', [`Il ${B} consente al ${A}, o a persona da lui incaricata, di visitare ${og} per motivate ragioni, previo avviso di almeno ${qta(g, 'giorno', 'giorni')}. In caso di disdetta, di cessazione del contratto o di messa in vendita ${fondo ? 'dei terreni' : 'dell’immobile'}, il ${B} consente la visita a chi sia interessato ${fondo ? 'all’affitto' : 'alla locazione'} o all’acquisto, in giorni e orari da concordare.`], { onerous: true })); }
+    if (st.cl.visite.on) { const g = Math.max(1, +st.cl.visite.giorni || 3), og = fondo ? 'i terreni' : 'l’immobile'; out.push(ARTICOLO('accessi', fondo ? 'Accesso ai terreni' : 'Accesso all’immobile', [`Il ${B} consente al ${A}, o a persona da ${luiA} incaricata, di visitare ${og} per motivate ragioni, previo avviso di almeno ${qta(g, 'giorno', 'giorni')}. In caso di disdetta, di cessazione del contratto o di messa in vendita ${fondo ? 'dei terreni' : 'dell’immobile'}, il ${B} consente la visita a chi sia interessato ${fondo ? 'all’affitto' : 'alla locazione'} o all’acquisto, in giorni e orari da concordare.`], { onerous: true })); }
 
     /* dichiarazioni: APE e impianti */
     const ape = st.imm.ape.classe;
     if (!box && !fondo) out.push(ARTICOLO('ape', 'Prestazione energetica e impianti', [
-      ape === 'esente' ? `Le parti danno atto che l’immobile rientra tra i casi di esclusione dall’obbligo di dotazione dell’attestato di prestazione energetica previsti dalla normativa vigente.` : `Il ${B} dà atto di aver ricevuto le informazioni e la documentazione, comprensiva dell’attestato, in ordine alla prestazione energetica dell’unità immobiliare (art. 6, comma 3, D.Lgs. n. 192/2005). L’immobile è in classe energetica ${val(ape, 'classe')}${st.imm.ape.codice.trim() ? ` (attestato n. ${st.imm.ape.codice.trim()})` : ''}.`,
+      ape === 'esente' ? `Le parti danno atto che l’immobile rientra tra i casi di esclusione dall’obbligo di dotazione dell’attestato di prestazione energetica previsti dalla normativa vigente.` : `Il ${B} dà atto di aver ricevuto le informazioni e la documentazione, comprensiva dell’attestato, in ordine alla prestazione energetica dell’unità immobiliare (art. 6, comma 3, D.Lgs. n. 192/2005). L’immobile è in classe energetica ${val(ape, 'classe', 'imm.ape.classe')}${st.imm.ape.codice.trim() ? ` (attestato n. ${st.imm.ape.codice.trim()})` : ''}.`,
       `Il ${A} dichiara che gli impianti dell’unità immobiliare sono conformi alla normativa vigente in materia di sicurezza; il ${B} ne fa uso secondo la loro destinazione e le istruzioni ricevute.`]));
 
     /* commissione di conciliazione (contratti tipo D.M. 16 gennaio 2017) */
     if (st.tipo === 'concordato' || st.tipo === 'transitorio' || st.tipo === 'studenti') {
       const acc = st.tipo !== 'transitorio' || st.can.accordo.comune.trim();
       const c = [`Per ogni controversia sull’interpretazione e sull’esecuzione del contratto${acc ? ', nonché sull’attestazione della rispondenza del contratto all’Accordo territoriale' : ''}, ciascuna parte può rivolgersi alla Commissione di negoziazione paritetica e conciliazione stragiudiziale prevista dal D.M. 16 gennaio 2017 e dall’Accordo territoriale.`];
-      if (st.tipo === 'concordato') c.unshift(st.can.accordo.assistenza === 'assistito' ? `Il contratto è stipulato con l’assistenza delle seguenti organizzazioni della proprietà edilizia e dei conduttori firmatarie dell’Accordo territoriale: ${val(st.can.accordo.org, 'organizzazioni')}.` : `Il contratto è stipulato senza l’assistenza delle organizzazioni; la rispondenza del suo contenuto economico e normativo all’Accordo territoriale è attestata, su richiesta di una delle parti, da almeno un’organizzazione firmataria dell’Accordo, secondo il D.M. 16 gennaio 2017.`);
+      if (st.tipo === 'concordato') c.unshift(st.can.accordo.assistenza === 'assistito' ? `Il contratto è stipulato con l’assistenza delle seguenti organizzazioni della proprietà edilizia e dei conduttori firmatarie dell’Accordo territoriale: ${val(st.can.accordo.org, 'organizzazioni', 'can.accordo.org')}.` : `Il contratto è stipulato senza l’assistenza delle organizzazioni; la rispondenza del suo contenuto economico e normativo all’Accordo territoriale è attestata, su richiesta di una delle parti, da almeno un’organizzazione firmataria dell’Accordo, secondo il D.M. 16 gennaio 2017.`);
       out.push(ARTICOLO('commissione', st.tipo === 'concordato' ? 'Assistenza, attestazione e conciliazione' : 'Commissione di conciliazione', c));
     }
 
@@ -486,12 +551,13 @@ const Contratti = (() => {
   /* comodato (artt. 1803–1812 c.c.) */
   function comodato(st, r) {
     const A = r.A, B = r.B, out = [], C = st.comod;
-    const ini = st.dur.inizio, dIni = ini ? dataEstesa(ini) : PH('data di inizio'), dFine = st.dur.fine ? dataEstesa(st.dur.fine) : PH('data di fine');
-    const uso = [`Il ${B} si serve dell’immobile esclusivamente per il seguente uso: ${val(C.uso, 'uso dell’immobile')}.`];
+    const luiA = pron(st.A), luiB = pron(st.B);
+    const ini = st.dur.inizio, dIni = ini ? dataEstesa(ini) : PH('data di inizio', 'dur.inizio'), dFine = st.dur.fine ? dataEstesa(st.dur.fine) : PH('data di fine', 'dur.fine');
+    const uso = [`Il ${B} si serve dell’immobile esclusivamente per il seguente uso: ${val(C.uso, 'uso dell’immobile', 'comod.uso')}.`];
     if (C.parente) uso.push(`Il ${B}, ${C.rel === 'genitore' ? 'genitore' : st.B[0].sesso === 'F' ? 'figlia' : 'figlio'} del ${A}, adibisce l’immobile ad abitazione principale, nella quale stabilisce la propria residenza anagrafica e dimora abitualmente.`);
     out.push(ARTICOLO('uso', 'Uso e gratuità', [...uso, `Il comodato è essenzialmente gratuito (art. 1803 c.c.): per l’uso dell’immobile non è dovuto alcun corrispettivo.`], { fixed: true }));
     const dur = st.dur.termine
-      ? [`Il comodato ha durata dal ${dIni} al ${dFine}. Alla scadenza il ${B} restituisce l’immobile senza bisogno di disdetta (art. 1809 c.c.).`, `Se, prima della scadenza, sopravviene al ${A} un urgente e impreveduto bisogno, questi può esigere la restituzione immediata dell’immobile (art. 1809, secondo comma, c.c.).`]
+      ? [`Il comodato ha durata dal ${dIni} al ${dFine}. Alla scadenza il ${B} restituisce l’immobile senza bisogno di disdetta (art. 1809 c.c.).`, `Se, prima della scadenza, sopravviene al ${A} un urgente e impreveduto bisogno, ${st.A.length > 1 ? (fem(st.A) ? 'queste possono' : 'questi possono') : fem(st.A) ? 'questa può' : 'questi può'} esigere la restituzione immediata dell’immobile (art. 1809, secondo comma, c.c.).`]
       : [`Il comodato decorre dal ${dIni} ed è a tempo indeterminato: il ${B} restituisce l’immobile non appena il ${A} lo richieda (art. 1810 c.c.), entro ${qta(Math.max(1, +st.dur.preavviso || 30), 'giorno', 'giorni')} dalla richiesta comunicata con lettera raccomandata.`, `Le parti convengono che la destinazione dell’immobile ad abitazione del ${B} o della sua famiglia non comporta l’apposizione di un termine al comodato.`];
     out.push(ARTICOLO('durata', 'Durata e restituzione', dur, { fixed: true, onerous: !st.dur.termine }));
     out.push(ARTICOLO('obblighi', 'Obblighi del ' + B, [
@@ -500,13 +566,13 @@ const Contratti = (() => {
     const sc = C.spCond === 'comodante' ? `del ${A}` : `del ${B}`;
     out.push(ARTICOLO('spese', 'Spese', [
       `Sono a carico del ${B} le spese ordinarie di manutenzione, le utenze, la tassa sui rifiuti e ogni altra spesa sostenuta per servirsi dell’immobile, senza diritto a rimborso (art. 1808, primo comma, c.c.). Le spese condominiali ordinarie sono a carico ${sc}.`,
-      `Restano a carico del ${A} le spese straordinarie e le imposte gravanti sulla proprietà. Il ${B} ha diritto al rimborso delle spese straordinarie da lui anticipate solo se necessarie e urgenti (art. 1808, secondo comma, c.c.).`]));
+      `Restano a carico del ${A} le spese straordinarie e le imposte gravanti sulla proprietà. Il ${B} ha diritto al rimborso delle spese straordinarie da ${luiB} anticipate solo se necessarie e urgenti (art. 1808, secondo comma, c.c.).`]));
     out.push(ARTICOLO('consegna', 'Consegna, stato e riconsegna', [
       `Il ${B} dichiara di aver visitato l’immobile, di averlo trovato in buono stato e adatto all’uso convenuto${st.cl.verbale.on ? ', come descritto nel verbale di consegna allegato,' : ''} e di riceverlo in consegna con la sottoscrizione del contratto.`,
       `Alla cessazione del comodato il ${B} restituisce l’immobile nello stato in cui lo ha ricevuto, salvo il normale deterioramento per l’uso, libero da persone e cose. In caso di morte del ${B} il ${A} può esigere dagli eredi l’immediata restituzione (art. 1811 c.c.).`]));
     const rg = C.spReg === 'comodante' ? `del ${A}` : C.spReg === 'meta' ? `del ${A} e del ${B} in parti uguali` : `del ${B}`;
     out.push(ARTICOLO('registro', 'Registrazione', [`Il contratto è registrato entro venti giorni dalla sottoscrizione; l’imposta di registro in misura fissa e l’imposta di bollo sono a carico ${rg}.`]));
-    if (st.cl.visite.on) { const g = Math.max(1, +st.cl.visite.giorni || 3); out.push(ARTICOLO('accessi', 'Accesso all’immobile', [`Il ${B} consente al ${A}, o a persona da lui incaricata, di visitare l’immobile per motivate ragioni, previo avviso di almeno ${qta(g, 'giorno', 'giorni')}.`], { onerous: true })); }
+    if (st.cl.visite.on) { const g = Math.max(1, +st.cl.visite.giorni || 3); out.push(ARTICOLO('accessi', 'Accesso all’immobile', [`Il ${B} consente al ${A}, o a persona da ${luiA} incaricata, di visitare l’immobile per motivate ragioni, previo avviso di almeno ${qta(g, 'giorno', 'giorni')}.`], { onerous: true })); }
     out.push(...facoltative(st, r));
     return out;
   }
@@ -517,8 +583,8 @@ const Contratti = (() => {
     if (cl.animali.on) out.push(ARTICOLO('animali', 'Animali domestici', [cl.animali.mode === 'si' ? `Il ${B} può tenere nell’immobile animali domestici, rispondendo di ogni danno da essi causato all’immobile, alle parti comuni e a terzi.` : cl.animali.mode === 'no' ? `Il ${B} non può tenere animali nell’immobile.` : `Il ${B} può tenere animali domestici nell’immobile solo con il consenso scritto del ${A}, rispondendo di ogni danno da essi causato all’immobile, alle parti comuni e a terzi.`], { onerous: cl.animali.mode !== 'si' }));
     if (cl.fumo.on) out.push(ARTICOLO('fumo', 'Divieto di fumo', [`È vietato fumare all’interno dell’immobile. Il ${B} risponde dei danni a pareti, tessuti e arredi causati dal fumo.`], { onerous: true }));
     if (cl.assic.on) out.push(ARTICOLO('assicurazione', 'Assicurazione', [`Il ${B} si impegna a stipulare, entro trenta giorni dalla consegna e per tutta la durata del contratto, una polizza di assicurazione per la responsabilità civile verso terzi e per i danni all’immobile derivanti da incendio, scoppio e acqua condotta (rischio locativo), consegnandone copia al ${A}.`], { onerous: true }));
-    if (loc && cl.risolutiva.on) { const n = Math.max(1, Math.min(6, +cl.risolutiva.rate || 2)); out.push(ARTICOLO('risolutiva', 'Clausola risolutiva espressa', [`Il contratto si risolve di diritto, ai sensi dell’art. 1456 c.c., quando il ${A} dichiara al ${B}, con lettera raccomandata, di volersi avvalere della presente clausola in caso di: mancato pagamento di ${qta(n, 'rata', 'rate', true)} del canone, anche non consecutive; sublocazione o cessione del contratto in violazione di quanto previsto dal contratto; mutamento della destinazione d’uso dell’immobile.${isAbit(st) ? ' Resta ferma la facoltà del conduttore di sanare la morosità nei termini dell’art. 55 della legge n. 392/1978.' : ''}`], { onerous: true })); }
-    if (loc && cl.esonero.on) out.push(ARTICOLO('esonero', 'Esonero da responsabilità', [`Il ${B} esonera il ${A} da ogni responsabilità per i danni diretti o indiretti che possano derivargli da fatti dolosi o colposi di altri occupanti dell’edificio o di terzi, compresi furti e interruzioni di servizi non imputabili al ${A}.`], { onerous: true }));
+    if (loc && cl.risolutiva.on) { const n = Math.max(1, Math.min(12, +cl.risolutiva.rate || 2)); out.push(ARTICOLO('risolutiva', 'Clausola risolutiva espressa', [`Il contratto si risolve di diritto, ai sensi dell’art. 1456 c.c., quando il ${A} dichiara al ${B}, con lettera raccomandata, di volersi avvalere della presente clausola in caso di: mancato pagamento di ${qta(n, 'rata', 'rate', true)} del canone, anche non consecutive; sublocazione o cessione del contratto in violazione di quanto previsto dal contratto; mutamento della destinazione d’uso dell’immobile.${isAbit(st) ? ' Resta ferma la facoltà del conduttore di sanare la morosità nei termini dell’art. 55 della legge n. 392/1978.' : ''}`], { onerous: true })); }
+    if (loc && cl.esonero.on) out.push(ARTICOLO('esonero', 'Esonero da responsabilità', [`Il ${B} esonera il ${A} da ogni responsabilità per i danni diretti o indiretti che possano ${st.A.length > 1 ? 'derivare loro' : fem(st.A) ? 'derivarle' : 'derivargli'} da fatti dolosi o colposi di altri occupanti dell’edificio o di terzi, compresi furti e interruzioni di servizi non imputabili al ${A}.`], { onerous: true }));
     if (cl.bombole.on && (isAbit(st) || st.tipo === 'foresteria' || st.tipo === 'comodato')) out.push(ARTICOLO('bombole', 'Divieto di bombole di gas', [`È vietato al ${B} detenere e usare nell’immobile bombole di gas di petrolio liquefatto (GPL) o altri combustibili in recipienti mobili.`], { onerous: true }));
     if (cl.clima.on && st.tipo !== 'box' && st.tipo !== 'fondo') out.push(ARTICOLO('climatizzazione', 'Climatizzatori e pompe di calore', [`Il ${B} può installare a sua cura e spese climatizzatori o pompe di calore, nel rispetto del regolamento di condominio e delle norme vigenti, previa comunicazione scritta al ${A}. Alla riconsegna il ${B} rimuove gli apparecchi e ripristina a sue spese le parti interessate dall’installazione, salvo che il ${A} chieda per iscritto di trattenerli senza corrispettivo.`]));
     if (cl.noPrel.on && ['libero', 'concordato', 'transitorio', 'studenti', 'foresteria', 'box'].includes(st.tipo)) out.push(ARTICOLO('prelazione', 'Prelazione', [`Le parti danno atto che al ${B} non spetta alcun diritto di prelazione, né in caso di vendita dell’immobile né in caso di nuova locazione alla scadenza, salvo quanto previsto inderogabilmente dalla legge.`]));
@@ -544,9 +610,29 @@ const Contratti = (() => {
     return out;
   }
 
+  /* diciture al femminile: «la locatrice», «della conduttrice», «alla comodataria», «l’affittuaria», «la garante»… */
+  const FEMM = { locatore: 'locatrice', locatori: 'locatrici', conduttore: 'conduttrice', conduttori: 'conduttrici', comodatario: 'comodataria', comodatari: 'comodatarie', affittuario: 'affittuaria', affittuari: 'affittuarie', comodante: 'comodante', comodanti: 'comodanti', concedente: 'concedente', concedenti: 'concedenti', garante: 'garante' };
+  const PLUR = new Set(['locatori', 'conduttori', 'comodatari', 'affittuari', 'comodanti', 'concedenti']);
+  const ART_S = { il: 'la', Il: 'La', lo: 'la', Lo: 'La', del: 'della', Del: 'Della', al: 'alla', Al: 'Alla', dal: 'dalla', Dal: 'Dalla', nel: 'nella', Nel: 'Nella', sul: 'sulla', Sul: 'Sulla', un: 'una', Un: 'Una' };
+  const ART_P = { i: 'le', I: 'Le', gli: 'le', Gli: 'Le', dei: 'delle', Dei: 'Delle', degli: 'delle', Degli: 'Delle', ai: 'alle', Ai: 'Alle', agli: 'alle', Agli: 'Alle', dai: 'dalle', Dai: 'Dalle', dagli: 'dalle', Dagli: 'Dalle', nei: 'nelle', Nei: 'Nelle', sui: 'sulle', Sui: 'Sulle' };
+  function genere(t, nomi, o = {}) {
+    if (typeof t !== 'string') return t;
+    for (const n of nomi) {
+      const f = FEMM[n]; if (!f) continue; const A = PLUR.has(n) ? ART_P : ART_S;
+      t = t.replace(new RegExp(`\\b(${Object.keys(A).join('|')}) ${n}\\b`, 'g'), (m, a) => `${A[a]} ${f}`)
+        .replace(new RegExp(`([Ll]|[Dd]ell|[Aa]ll|[Dd]all|[Nn]ell|[Ss]ull)’${n}\\b`, 'g'), (m, a) => `${a}’${f}`)
+        .replace(new RegExp(`\\b${n}\\b`, 'g'), f);
+    }
+    // concordanze che riguardano chi prende l'immobile
+    if (o.B) t = t.replace(/condizione di studente universitario/g, 'condizione di studentessa universitaria').replace(/, iscritto al corso/g, ', iscritta al corso').replace(/è tenuto a custodire/g, 'è tenuta a custodire')
+      .replace(/prosegue con gli altri, che restano obbligati/g, 'prosegue con le altre, che restano obbligate').replace(/sono obbligati in solido/g, 'sono obbligate in solido').replace(/di uno solo delle/g, 'di una sola delle');
+    return t;
+  }
+
   /* il documento: intestazione, parti, articoli numerati (con le modifiche e gli articoli tolti), firme, allegati */
   function documento(st) {
     const T = TIPI[st.tipo], r = R(st);
+    KP = new WeakMap(); st.A.forEach((p, i) => KP.set(p, 'A.' + i)); st.B.forEach((p, i) => KP.set(p, 'B.' + i)); if (st.gar?.p) KP.set(st.gar.p, 'gar.p');
     const parti = (list, ruolo, Rp) => {
       const t = list.map(chi).join(';\ne ');
       return `${t}${list.length > 1 ? `\n(di seguito, congiuntamente, «${ruolo}»)` : `\n(di seguito «${ruolo}»)`}`;
@@ -557,20 +643,19 @@ const Contratti = (() => {
     for (const a of all) {
       if (st.off[a.key] && !a.fixed) { off.push(a); continue; }
       const o = st.ov[a.key];
-      arts.push({ ...a, auto: a.paras, paras: typeof o === 'string' ? o.split(/\n{2,}/).map(x => x.trim()).filter(Boolean) : a.paras, edited: typeof o === 'string' });
+      const ot = typeof st.ovT?.[a.key] === 'string' && st.ovT[a.key].trim() ? st.ovT[a.key].trim() : null;
+      arts.push({ ...a, auto: a.paras, paras: typeof o === 'string' ? o.split(/\n{2,}/).map(x => x.trim()).filter(Boolean) : a.paras, edited: typeof o === 'string' || !!ot, testoMano: typeof o === 'string', titoloMano: ot });
     }
     arts.forEach((a, i) => a.n = i + 1);
-    const on = arts.filter(a => a.onerous);
-    const approv = on.length ? `Ai sensi e per gli effetti degli artt. 1341 e 1342 del codice civile, le parti dichiarano di aver letto e di approvare specificamente le clausole contenute nei seguenti articoli: ${on.map(a => `${a.n} (${a.title})`).join(', ')}.` : null;
     const firme = [...st.A.map(p => ({ ruolo: `${st.A.length > 1 ? 'Un' : 'Il'} ${r.A}`, nome: nomeBreve(p) })), ...st.B.map(p => ({ ruolo: `${st.B.length > 1 ? 'Un' : 'Il'} ${r.B}`, nome: nomeBreve(p) }))];
     if (isLoc(st) && st.gar.on) firme.push({ ruolo: 'Il garante', nome: nomeBreve(st.gar.p) });
-    if (st.tipo === 'fondo' && st.fondo.deroga) firme.push({ ruolo: 'Per le organizzazioni professionali agricole', nome: st.fondo.org.trim() || PH('organizzazioni') });
+    if (st.tipo === 'fondo' && st.fondo.deroga) firme.push({ ruolo: 'Per le organizzazioni professionali agricole', nome: st.fondo.org.trim() || PH('organizzazioni', 'fondo.org') });
     const allegati = [];
     if (isLoc(st) && !['box', 'fondo'].includes(st.tipo) && st.imm.ape.classe && st.imm.ape.classe !== 'esente') allegati.push('attestato di prestazione energetica (APE)');
     if (st.imm.arredo !== 'no' && !['box', 'fondo', 'commerciale'].includes(st.tipo)) allegati.push('inventario degli arredi');
     if (st.cl.verbale.on) allegati.push('verbale di consegna');
     if (st.imm.condominio && (isAbit(st) || st.tipo === 'foresteria' || st.tipo === 'box')) allegati.push('regolamento di condominio');
-    if (st.tipo === 'transitorio') allegati.push(`documentazione dell’esigenza transitoria (${val(st.trans.doc, 'documento')})`);
+    if (st.tipo === 'transitorio') allegati.push(`documentazione dell’esigenza transitoria (${val(st.trans.doc, 'documento', 'trans.doc')})`);
     const appendici = [];
     if (st.imm.arredo !== 'no' && !['box', 'fondo', 'commerciale'].includes(st.tipo)) appendici.push({ key: 'inventario', title: 'Allegato – Inventario degli arredi', items: st.imm.inventario.split('\n').map(x => x.trim()).filter(Boolean) });
     if (st.cl.verbale.on) { const v = st.cl.verbale; appendici.push({ key: 'verbale', title: 'Allegato – Verbale di consegna', rows: [['Data della consegna', v.data ? dataEstesa(v.data) : ''], ['Lettura contatore energia elettrica', v.luce], ['Lettura contatore gas', v.gas], ['Lettura contatore acqua', v.acqua], ['Chiavi consegnate', v.chiavi], ['Stato dell’immobile e osservazioni', v.note]] }); }
@@ -583,15 +668,33 @@ const Contratti = (() => {
       arts.forEach(a => { a.title = g(a.title); a.paras = a.paras.map(g); a.auto = a.auto.map(g); }); off.forEach(a => { a.title = g(a.title); });
       intro.forEach((t, i) => intro[i] = g(t)); firme.forEach(f => f.ruolo = g(f.ruolo));
     }
+    // genere delle parti (il testo scritto a mano resta com'è)
+    const gA = fem(st.A), gB = fem(st.B), gG = isLoc(st) && st.gar.on && fem([st.gar.p]);
+    if (gA || gB || gG) {
+      const nomi = [...(gA ? [r.Ap, r.A] : []), ...(gB ? [r.Bp, r.B] : []), ...(gG ? ['garante'] : [])], G = t => genere(t, nomi, { B: gB });
+      intro.forEach((t, i) => intro[i] = G(t)); firme.forEach(f => f.ruolo = G(f.ruolo)); off.forEach(a => { a.title = G(a.title); });
+      arts.forEach(a => { a.title = G(a.title); a.auto = a.auto.map(G); if (!a.testoMano) a.paras = a.paras.map(G); });
+    }
+    arts.forEach(a => { a.titoloAuto = a.title; if (a.titoloMano) a.title = a.titoloMano; });
+    const on = arts.filter(a => a.onerous);
+    const approv = on.length ? `Ai sensi e per gli effetti degli artt. 1341 e 1342 del codice civile, le parti dichiarano di aver letto e di approvare specificamente le clausole contenute nei seguenti articoli: ${on.map(a => `${a.n} (${a.title})`).join(', ')}.` : null;
+    // intestazione, parti e chiusura si possono riscrivere a mano come gli articoli
+    const ovS = k => typeof st.ov?.[k] === 'string' ? st.ov[k] : null, par = t => t.split(/\n{2,}/).map(x => x.trim()).filter(Boolean);
+    let title = T.titolo, sub = T.sotto, chiusa = `Letto, approvato e sottoscritto.\n${val(st.firma.luogo, 'luogo', 'firma.luogo')}, ${st.firma.data ? dataEstesa(st.firma.data) : PH('data', 'firma.data')}`;
+    const auto = { _titolo: `${T.titolo}\n${T.sotto}`, _intro: intro.join('\n\n'), _chiusa: chiusa };
+    if (ovS('_titolo') != null) { const [t1, ...t2] = ovS('_titolo').split('\n'); title = t1.trim() || T.titolo; sub = t2.join(' ').trim(); }
+    const introF = ovS('_intro') != null ? par(ovS('_intro')) : intro;
+    if (ovS('_chiusa') != null) chiusa = ovS('_chiusa').trim();
     return {
-      title: T.titolo, sub: T.sotto, intro, arts, off, approv,
-      chiusa: `Letto, approvato e sottoscritto.\n${val(st.firma.luogo, 'luogo')}, ${st.firma.data ? dataEstesa(st.firma.data) : PH('data')}`,
+      title, sub, intro: introF, arts, off, approv, chiusa, auto, mano: { _titolo: ovS('_titolo') != null, _intro: ovS('_intro') != null, _chiusa: ovS('_chiusa') != null },
       firme, firme2: firme.filter(f => !/garante/.test(f.ruolo)), allegati, appendici,
       immBreve: `${st.imm.indirizzo.trim() || 'immobile'}${st.imm.comune.trim() ? ', ' + st.imm.comune.trim() : ''}`,
     };
   }
 
   /* ---------- testo a pezzi: **grassetto**, ⟦dato mancante⟧, a capo ---------- */
+  const segnaposto = x => { const i = x.indexOf('§'); return i < 0 ? { ph: x } : { ph: x.slice(0, i), k: x.slice(i + 1) }; };
+  const senzaPercorsi = t => String(t).replace(/§[^⟧]*⟧/g, '⟧');
   function pezzi(t) {
     const out = []; const re = /\*\*([^*]+)\*\*|⟦([^⟧]*)⟧/g; let last = 0, m;
     const plain = (s, b) => { if (s) out.push({ t: s, b }); };
@@ -599,16 +702,16 @@ const Contratti = (() => {
       plain(t.slice(last, m.index));
       if (m[1] != null) {   // grassetto, che può contenere segnaposto
         const inner = m[1]; let l2 = 0, m2; const re2 = /⟦([^⟧]*)⟧/g;
-        while ((m2 = re2.exec(inner))) { plain(inner.slice(l2, m2.index), true); out.push({ ph: m2[1], b: true }); l2 = m2.index + m2[0].length; }
+        while ((m2 = re2.exec(inner))) { plain(inner.slice(l2, m2.index), true); out.push({ ...segnaposto(m2[1]), b: true }); l2 = m2.index + m2[0].length; }
         plain(inner.slice(l2), true);
-      } else out.push({ ph: m[2] });
+      } else out.push(segnaposto(m[2]));
       last = m.index + m[0].length;
     }
     plain(t.slice(last));
     return out;
   }
   const BLANK = '________________';
-  const mancanti = d => { const s = new Set(); const scan = t => { for (const m of String(t).matchAll(/⟦([^⟧]*)⟧/g)) s.add(m[1]); }; [d.title, ...d.intro, ...d.arts.flatMap(a => a.paras), d.approv || '', d.chiusa, ...d.allegati].forEach(scan); return [...s]; };
+  const mancanti = d => { const s = new Set(); const scan = t => { for (const m of String(t).matchAll(/⟦([^⟧]*)⟧/g)) s.add(segnaposto(m[1]).ph); }; [d.title, ...d.intro, ...d.arts.flatMap(a => a.paras), d.approv || '', d.chiusa, ...d.allegati].forEach(scan); return [...s]; };
 
   /* ---------- PDF accessibile (FlowPdf: tag PDF/UA, titoli, lingua) ---------- */
   async function pdf(st) {
@@ -714,7 +817,7 @@ const Contratti = (() => {
       const mesiT = mesiDurata(st); const fine = mesiT && st.dur.inizio ? fineDurata(st.dur.inizio, mesiT) : null;
       if (fine && (st.tipo === 'libero' || st.tipo === 'concordato')) items.push({ t: `Prima scadenza: ${dataEstesa(fine)}`, d: `Disdetta del ${r.A} (solo per i motivi dell’art. 3 L. 431/1998) entro il ${dataEstesa(toIso(piuMesi(fine, -6)))}, con lettera raccomandata ricevuta almeno sei mesi prima.` });
       if (fine && st.tipo === 'fondo' && !st.fondo.deroga) items.push({ t: `Scadenza: ${dataEstesa(fine)}`, d: `Senza disdetta comunicata con lettera raccomandata con avviso di ricevimento almeno un anno prima (entro il ${dataEstesa(toIso(piuMesi(fine, -12)))}) il contratto si rinnova per uguale durata (art. 4 L. 203/1982).` });
-      if (fine && st.tipo === 'box') items.push({ t: `Scadenza: ${dataEstesa(fine)}, poi di anno in anno`, d: `La disdetta va comunicata almeno ${Math.max(15, +st.box.disdetta || 30)} giorni prima della scadenza.` });
+      if (fine && st.tipo === 'box') items.push({ t: `Scadenza: ${dataEstesa(fine)}, poi di anno in anno`, d: `La disdetta va comunicata almeno ${Math.max(1, +st.box.disdetta || 30)} giorni prima della scadenza.` });
       if (fine && st.tipo === 'commerciale') items.push({ t: `Prima scadenza: ${dataEstesa(fine)}`, d: `Eventuale diniego di rinnovo (solo per i motivi dell’art. 29 L. 392/1978) entro il ${dataEstesa(toIso(piuMesi(fine, st.dur.alberghiero ? -18 : -12)))}, con lettera raccomandata con avviso di ricevimento.` });
       if (num(st.dep.mesi) > 0) items.push({ t: 'Deposito cauzionale', d: `Gli interessi legali sul deposito vanno corrisposti al ${r.B} alla fine di ogni anno (art. 11 L. 392/1978).` });
     } else {
@@ -743,15 +846,15 @@ const Contratti = (() => {
     const P = (t, o = {}) => ({ type: 'p', runs: pezzi(t).map(x => x.ph != null ? { t: `${BLANK} (${x.ph})` } : { t: x.t, b: x.b }), size: 11, fam: FAM, after: 8, lh: 1.35, align: 'justify', ...o });
     const B = [P(`Mittente: ${mitt}`, { align: 'left', after: 2 }), P(`Destinatario: ${dest}`, { align: 'left', after: 18 }), P('Raccomandata a mano / con avviso di ricevimento', { align: 'left', after: 18 }),
       { type: 'p', role: 'H1', runs: [{ t: 'Oggetto: opzione per la cedolare secca e rinuncia all’aggiornamento del canone (art. 3, comma 11, D.Lgs. n. 23/2011)', b: true }], size: 11, fam: FAM, after: 12 },
-      P(`Con riferimento al contratto di locazione relativo all’immobile sito in ${val(st.imm.comune, 'Comune')}, ${val(st.imm.indirizzo, 'indirizzo')}, decorrente dal ${st.dur.inizio ? dataEstesa(st.dur.inizio) : PH('data di inizio')}, il sottoscritto ${r.A} comunica di voler optare per il regime della cedolare secca previsto dall’art. 3 del D.Lgs. n. 23/2011.`),
+      P(`Con riferimento al contratto di locazione relativo all’immobile sito in ${val(st.imm.comune, 'Comune', 'imm.comune')}, ${val(st.imm.indirizzo, 'indirizzo', 'imm.indirizzo')}, decorrente dal ${st.dur.inizio ? dataEstesa(st.dur.inizio) : PH('data di inizio', 'dur.inizio')}, ${fem(st.A) ? 'la sottoscritta ' + genere(r.A, [r.A]) : 'il sottoscritto ' + r.A} comunica di voler optare per il regime della cedolare secca previsto dall’art. 3 del D.Lgs. n. 23/2011.`),
       P('Comunica altresì di rinunciare, per tutto il periodo di durata dell’opzione, alla facoltà di chiedere l’aggiornamento del canone a qualsiasi titolo, compreso l’aggiornamento ISTAT.'),
-      P(`${val(st.firma.luogo, 'luogo')}, ${st.firma.data ? dataEstesa(st.firma.data) : PH('data')}`, { align: 'left', before: 10 }),
+      P(`${val(st.firma.luogo, 'luogo', 'firma.luogo')}, ${st.firma.data ? dataEstesa(st.firma.data) : PH('data', 'firma.data')}`, { align: 'left', before: 10 }),
       P(`Il ${r.A}`, { align: 'left', before: 16, after: 22 }), P('________________________________', { align: 'left' }),
       P(`Per ricevuta, il ${r.B}`, { align: 'left', before: 22, after: 22 }), P('________________________________', { align: 'left' })];
     return (await FlowPdf.make({ size: FlowPdf.SIZES.a4, margins: { t: 72, r: 72, b: 72, l: 72 }, blocks: B, title: 'Comunicazione di opzione per la cedolare secca', lang: 'it-IT', brand: false })).bytes;
   }
 
-  return { TIPI, R, nuovo, normalizza, persona, controlla, documento, articoli, pdf, docx, adempimenti, promemoriaPdf, letteraCedolare, mancanti, pezzi, cfOk, pivaOk, ibanOk, ibanFmt, daCf, lettere, eurLettere, eur, num, dataEstesa, fineDurata, mesiDurata, anniMinimi, isLoc, isAbit, isoToday, parseIso };
+  return { TIPI, R, Comuni, senzaPercorsi, nuovo, normalizza, persona, controlla, documento, articoli, pdf, docx, adempimenti, promemoriaPdf, letteraCedolare, mancanti, pezzi, cfOk, pivaOk, ibanOk, ibanFmt, daCf, lettere, eurLettere, eur, num, dataEstesa, fineDurata, mesiDurata, anniMinimi, isLoc, isAbit, isoToday, parseIso };
 })();
 
 /* ---------- lo strumento: colonna laterale con i dati, anteprima del contratto dal vivo ---------- */
@@ -763,8 +866,11 @@ async function startContratto(stage, files = []) {
   const json = files.find(f => /\.json$/i.test(f.name || '')), pdfIn = files.find(f => /\.pdf$/i.test(f.name || '') || f.type === 'application/pdf');
   if (json) { try { st = C.normalizza(JSON.parse(await json.text())); resumed = 'file'; } catch { toast('Il file non è una bozza di contratto valida', 'error'); } }
   else { const x = load(); if (x) { st = C.normalizza(x.st); resumed = x.t; } }
-  const open = new Set(['tipo']), touched = new Set();
-  let showAll = false, editing = null, k = C.controlla(st);
+  // le sezioni con i dati da scrivere sono aperte: si compila scorrendo, senza aprire e chiudere (le clausole restano chiuse)
+  const APERTE = ['tipo', 'A', 'B', 'imm', 'dur', 'can', 'dep', 'spese', 'firma'];
+  const open = new Set(APERTE), touched = new Set(), touchedSec = new Set();
+  let showAll = false, editing = null, k = C.controlla(st), guida = null, vista = 'dati';
+  const AUTO = {};   // valori proposti dal programma (intestatario, luogo della firma): seguono la fonte finché nessuno li cambia
   const get = p => p.split('.').reduce((o, x) => o == null ? o : o[x], st);
   const set = (p, v) => { const ks = p.split('.'); let o = st; for (const x of ks.slice(0, -1)) o = o[x]; o[ks[ks.length - 1]] = v; };
   const T = () => C.TIPI[st.tipo], loc = () => C.isLoc(st), abit = () => C.isAbit(st), r = () => C.R(st);
@@ -773,13 +879,14 @@ async function startContratto(stage, files = []) {
   const errOf = p => k.req.find(x => x.path === p);
   function F(path, label, o = {}) {
     const id = 'ct-' + path.replace(/\./g, '-'), v = get(path);
-    const after = () => { saveLocal(); if (o.rebuild) rebuild(); else soon(); };
+    const after = () => { derive(); saveLocal(); if (o.rebuild) rebuild(); else soon(); };
+    const tocca = () => { touched.add(path); const sec = inp.closest('.ct-sec')?.dataset.sec; if (sec) touchedSec.add(sec); };
     let inp;
-    if (o.type === 'select') inp = h('select', { class: 'select', id, onchange: e => { set(path, o.num ? +e.target.value : e.target.value); touched.add(path); after(); } }, o.opts.map(([kk, l]) => h('option', { value: String(kk), selected: String(v) === String(kk) }, l)));
-    else if (o.type === 'textarea') { inp = h('textarea', { class: 'input', id, rows: o.rows || 3, placeholder: o.ph || '', oninput: e => { set(path, e.target.value); after(); }, onblur: () => { touched.add(path); refreshErrors(); } }); inp.value = v || ''; }
-    else inp = h('input', { class: 'input', id, type: o.type || 'text', value: v ?? '', placeholder: o.ph || '', inputmode: o.im || null, autocomplete: 'off', spellcheck: o.type ? null : 'false', min: o.min, max: o.max, maxlength: o.maxlength || null,
-      oninput: e => { let x = e.target.value; if (o.up) { const pos = e.target.selectionStart; x = x.toUpperCase(); e.target.value = x; try { e.target.setSelectionRange(pos, pos); } catch { } } set(path, x); o.onInput?.(x); after(); },
-      onblur: () => { touched.add(path); if (o.fmt) { const f = o.fmt(get(path)); if (f !== get(path)) { set(path, f); inp.value = f; saveLocal(); soon(); } } refreshErrors(); } });
+    if (o.type === 'select') inp = h('select', { class: 'select', id, onchange: e => { set(path, o.num ? +e.target.value : e.target.value); tocca(); after(); } }, o.opts.map(([kk, l]) => h('option', { value: String(kk), selected: String(v) === String(kk) }, l)));
+    else if (o.type === 'textarea') { inp = h('textarea', { class: 'input', id, rows: o.rows || 3, placeholder: o.ph || '', oninput: e => { set(path, e.target.value); after(); }, onblur: () => { tocca(); refreshErrors(); renderPreview(); } }); inp.value = v || ''; }
+    else inp = h('input', { class: 'input', id, type: o.type || 'text', value: v ?? '', placeholder: o.ph || '', inputmode: o.im || null, autocomplete: 'off', spellcheck: o.type ? null : 'false', min: o.min, max: o.max, maxlength: o.maxlength || null, list: o.comune ? 'ct-comuni' : null,
+      oninput: e => { let x = e.target.value; if (o.up) { const pos = e.target.selectionStart; x = x.toUpperCase(); e.target.value = x; try { e.target.setSelectionRange(pos, pos); } catch { } } set(path, x); o.onInput?.(x); if (o.comune) suggerisci(x); after(); },
+      onblur: () => { tocca(); if (o.fmt) { const f = o.fmt(get(path)); if (f !== get(path)) { set(path, f); inp.value = f; saveLocal(); soon(); } } if (o.comune) comuneScelto(path, o.comune); refreshErrors(); renderPreview(); } });
     if (o.req) inp.setAttribute('aria-required', 'true');
     // etichetta collegata al campo; suggerimento ed errore come descrizione (non fanno parte del nome del campo)
     const err = h('span', { class: 'ct-e', id: id + '-e' }); inp.setAttribute('aria-describedby', (o.hint ? id + '-h ' : '') + id + '-e');
@@ -787,49 +894,111 @@ async function startContratto(stage, files = []) {
   }
   const CB = (path, label, sub, o = {}) => { const el = checkbox(label, !!get(path), v => { set(path, v); saveLocal(); if (o.rebuild !== false) rebuild(); else soon(); }, sub); el.dataset.path = path; if (o.disabled) { el.querySelector('input').disabled = true; el.classList.add('ct-dis'); } return el; };
   const row = (...kids) => h('div', { class: 'ct-row' }, kids);
+  // scrive un valore anche nel campo visibile (senza ridisegnare la colonna)
+  const metti = (p, v, sempre = false) => { set(p, v); const el = side?.querySelector(`[data-path="${CSS.escape(p)}"] input, [data-path="${CSS.escape(p)}"] select`); if (el && (sempre || el !== document.activeElement)) el.value = v; };
+  // valori che si ricavano da altri: l'intestatario del conto è il locatore, la firma di solito si fa nel Comune dell'immobile
+  function derive() {
+    const put = (p, v) => { const cur = String(get(p) ?? ''); v = String(v || '').trim(); if (v && (cur === '' || cur === AUTO[p]) && cur !== v) { AUTO[p] = v; metti(p, v); } else if (!v && cur && cur === AUTO[p]) { AUTO[p] = ''; metti(p, ''); } };
+    const a = st.A[0];
+    if (C.isLoc(st)) put('can.intestatario', st.A.length === 1 ? (a.tipo === 'pg' ? a.den : `${a.nome.trim()} ${a.cognome.trim()}`) : '');
+    put('firma.luogo', st.imm.comune);
+  }
+  // Comuni: suggerimenti mentre si scrive (elenco ISTAT) e, a Comune scelto, il nome scritto giusto e la provincia
+  const comuniDl = h('datalist', { id: 'ct-comuni' });
+  const suggerisci = q => comuniDl.replaceChildren(...C.Comuni.cerca(q, 8).map(c => h('option', { value: c.n, label: `${c.n} (${c.s})` })));
+  function comuneScelto(path, provPath) {
+    const v = String(get(path) || '').trim(), m = v ? C.Comuni.daNome(v) : [];
+    if (m.length && m[0].n !== v && m.every(c => c.n === m[0].n)) metti(path, m[0].n, true);
+    if (m.length === 1 && typeof provPath === 'string' && !String(get(provPath) || '').trim()) metti(provPath, m[0].s);
+    derive(); saveLocal(); soon();
+  }
   const note = (t, cls = '') => h('div', { class: 'ct-note ' + cls }, t);
   const btn = (label, onclick, icon = null, cls = 'btn sm') => h('button', { type: 'button', class: cls, onclick }, icon ? ic(icon, 15) : null, label);
 
   /* una persona (parte o garante) */
   function personaUI(base, p, ruolo, i, list) {
     const P = (f, l, o = {}) => F(`${base}.${f}`, l, o);
-    const cfInput = v => { const d = C.daCf(v); if (d && (!p.dataN || !p.sesso)) { if (!p.dataN) p.dataN = d.dataN; if (!p.sesso) p.sesso = d.sesso; rebuild(); } };
-    const head = h('div', { class: 'ct-ph' }, h('b', {}, list && list.length > 1 ? `${ruolo} ${i + 1}` : ruolo),
+    // dal codice fiscale: data, luogo e provincia di nascita e titolo (solo nei campi ancora vuoti)
+    const cfInput = v => { const d = C.daCf(v); if (!d) return; let ch = false; for (const f of ['dataN', 'sesso', 'luogoN', 'provN']) if (d[f] && !String(p[f] || '').trim()) { p[f] = d[f]; ch = true; } if (ch) rebuild(); };
+    const head = h('div', { class: 'ct-ph' }, list && list.length > 1 || base.startsWith('gar') ? h('b', {}, list && list.length > 1 ? `${ruolo} ${i + 1}` : ruolo) : null,
       base.startsWith('gar') ? null : seg([['pf', 'Persona'], ['pg', 'Società o ente']], p.tipo, v => { p.tipo = v; saveLocal(); rebuild(); }),
       list && list.length > 1 ? h('button', { type: 'button', class: 'icon-btn ct-x', title: `Togli ${ruolo} ${i + 1}`, 'aria-label': `Togli ${ruolo} ${i + 1}`, onclick: () => { list.splice(i, 1); saveLocal(); rebuild(); } }, ic('x', 16)) : null);
     if (p.tipo === 'pg') return h('div', { class: 'ct-card' }, head,
       P('den', 'Denominazione', { req: true, ph: 'Immobiliare Esempio S.r.l.' }),
       row(P('cf', 'Codice fiscale', { req: true, up: true, w: 'half', maxlength: 16 }), P('piva', 'Partita IVA', { w: 'half', im: 'numeric', maxlength: 13 })),
-      row(P('comune', 'Comune della sede', { req: true, w: 'grow' }), P('prov', 'Prov.', { up: true, w: 'xs', maxlength: 2 })),
+      row(P('comune', 'Comune della sede', { req: true, w: 'grow', comune: `${base}.prov` }), P('prov', 'Prov.', { up: true, w: 'xs', maxlength: 2 })),
       row(P('indirizzo', 'Indirizzo della sede', { req: true, w: 'grow' }), P('cap', 'CAP', { w: 'xs', im: 'numeric', maxlength: 5 })),
       row(P('lr', 'Legale rappresentante', { req: true, w: 'half', ph: 'Nome e cognome' }), P('lrRuolo', 'In qualità di', { w: 'half' })),
       P('lrCf', 'Codice fiscale del rappresentante', { up: true, maxlength: 16 }),
       row(P('pec', 'PEC', { w: 'half', type: 'email' }), P('tel', 'Telefono', { w: 'half', type: 'tel' })));
     return h('div', { class: 'ct-card' }, head,
       row(P('nome', 'Nome', { req: true, w: 'half' }), P('cognome', 'Cognome', { req: true, w: 'half' })),
-      row(P('cf', 'Codice fiscale', { req: true, up: true, w: 'grow', maxlength: 16, onInput: cfInput, hint: 'Data di nascita e titolo si compilano da soli' }), P('sesso', 'Titolo', { type: 'select', w: 'sm', opts: [['', '—'], ['M', 'Sig.'], ['F', 'Sig.ra']], rebuild: true })),
-      row(P('luogoN', 'Luogo di nascita', { req: true, w: 'grow' }), P('provN', 'Prov.', { up: true, w: 'xs', maxlength: 2 })),
+      row(P('cf', 'Codice fiscale', { req: true, up: true, w: 'grow', maxlength: 16, onInput: cfInput, hint: 'Data e luogo di nascita si scrivono da soli.' }), P('sesso', 'Titolo', { type: 'select', w: 'sm', opts: [['', '—'], ['M', 'Sig.'], ['F', 'Sig.ra']], rebuild: true })),
+      row(P('luogoN', 'Luogo di nascita', { req: true, w: 'grow', comune: `${base}.provN` }), P('provN', 'Prov.', { up: true, w: 'xs', maxlength: 2 })),
       P('dataN', 'Data di nascita', { req: true, type: 'date' }),
-      row(P('comune', 'Comune di residenza', { req: true, w: 'grow' }), P('prov', 'Prov.', { up: true, w: 'xs', maxlength: 2 })),
+      row(P('comune', 'Comune di residenza', { req: true, w: 'grow', comune: `${base}.prov` }), P('prov', 'Prov.', { up: true, w: 'xs', maxlength: 2 })),
       row(P('indirizzo', 'Indirizzo', { req: true, w: 'grow', ph: 'via Roma 10' }), P('cap', 'CAP', { w: 'xs', im: 'numeric', maxlength: 5 })),
       row(P('email', 'E-mail o PEC', { w: 'half', type: 'email' }), P('tel', 'Telefono', { w: 'half', type: 'tel' })));
   }
 
   /* sezioni della colonna, ciascuna con lo stato (completa / dati mancanti) */
+  // stato di una sezione: in grigio quello che resta da fare; in rosso solo dopo aver provato a scaricare; gli avvisi
+  // compaiono quando si è lavorato nella sezione (all'apertura nessun allarme)
+  const avvisi = () => k.warn.filter(w => showAll || touchedSec.has(w.sec) || (w.path && touched.has(w.path)));
+  function chip(id) {
+    if (id === 'tipo') return ['', TIPO_UI[st.tipo][1]];
+    const n = k.req.filter(x => x.sec === id).length, w = avvisi().filter(x => x.sec === id).length;
+    return n ? [showAll ? 'bad' : '', `${n} da completare`] : w ? ['warn', `${w} ${w === 1 ? 'avviso' : 'avvisi'}`] : ['ok', 'completa'];
+  }
   function sezione(id, title, kids, sub = null) {
-    const n = k.req.filter(x => x.sec === id).length, w = k.warn.filter(x => x.sec === id).length;
+    const [cls, txt] = chip(id);
     const d = h('details', { class: 'ct-sec', 'data-sec': id, open: open.has(id), ontoggle: () => { if (d.open) open.add(id); else open.delete(id); } },
-      h('summary', {}, h('span', { class: 'ct-st' }, title), h('span', { class: 'ct-chip ' + (n ? 'bad' : w ? 'warn' : 'ok'), 'data-chip': id }, n ? `${n} da completare` : w ? `${w} ${w === 1 ? 'avviso' : 'avvisi'}` : 'completa')),
+      h('summary', {}, h('span', { class: 'ct-st' }, title), h('span', { class: 'ct-chip ' + cls, 'data-chip': id }, txt)),
       sub ? h('div', { class: 'ct-sub' }, sub) : null, h('div', { class: 'ct-body' }, kids));
     return d;
+  }
+  /* tipo di contratto: riquadri compatti; «Aiutami a scegliere» porta al tipo giusto con poche domande */
+  const TIPO_UI = { libero: ['home', '4+4 canone libero'], concordato: ['seal', '3+2 concordato'], transitorio: ['clock', 'Transitorio'], studenti: ['cap', 'Studenti'], commerciale: ['building', 'Negozio o ufficio'], foresteria: ['user', 'Foresteria'], box: ['key', 'Box o posto auto'], fondo: ['grid', 'Terreni agricoli'], comodato: ['hand', 'Comodato gratuito'] };
+  function setTipo(id) {
+    const x = C.TIPI[id]; st.tipo = id;
+    if (id === 'fondo') { st.dep.mesi = 0; st.dur.anni = Math.max(+st.dur.anni || 0, 15); st.can.periodo = 'annuale'; } else if (st.can.periodo === 'annuale' || st.can.periodo === 'semestrale') st.can.periodo = 'mensile';
+    if (x.anni) st.dur.anni = Math.max(+st.dur.anni || 0, x.anni[0]); if (x.mesi) st.dur.mesi = Math.min(x.mesi[1], Math.max(x.mesi[0], +st.dur.mesi || x.mesi[0]));
+    if (id === 'commerciale' && st.can.istat > 75) st.can.istat = 75;
+    saveLocal(); rebuild();
+  }
+  const GUIDA = {
+    start: ['Che cosa dai?', [['Una casa', 'casa'], ['Un negozio, un ufficio o un laboratorio', 'neg'], ['Un box o un posto auto', 'box'], ['Un terreno agricolo', 'ter']]],
+    casa: ['A chi?', [['Una persona o una famiglia', 'pers'], ['Uno studente universitario fuori sede', '=studenti', 'Iscritto all’università in un Comune diverso da quello in cui vive.'], ['Un’impresa per i suoi dipendenti', '=foresteria', 'La casa serve a dipendenti, collaboratori od ospiti dell’impresa.']]],
+    pers: ['In cambio di che cosa?', [['Con un canone', 'durata'], ['Gratis', '=comodato', 'Per esempio a un figlio o a un genitore.']]],
+    durata: ['Per quanto tempo?', [['Per anni', 'canone'], ['Per pochi mesi', '=transitorio', 'Da 1 a 18 mesi, per un bisogno temporaneo da scrivere e documentare.']]],
+    canone: ['Che canone?', [['Canone libero', '=libero', 'Lo decidete voi. Dura 4 anni, poi altri 4.'], ['Canone concordato', '=concordato', 'Entro i valori dell’Accordo del Comune. Meno tasse per tutti e due. Dura 3 anni, poi altri 2.'], ['Non lo so', '=libero', 'È il più usato. Se il Comune ha un Accordo territoriale, chiedi del concordato: si pagano meno tasse.']]],
+    neg: ['In cambio di che cosa?', [['Con un canone', '=commerciale'], ['Gratis', '=comodato']]],
+    box: ['In cambio di che cosa?', [['Con un canone', '=box'], ['Gratis', '=comodato']]],
+    ter: ['In cambio di che cosa?', [['Con un canone', '=fondo'], ['Gratis', '=comodato']]],
+  };
+  function guidaUI() {
+    const g = guida, chiudi = h('button', { type: 'button', class: 'icon-btn ct-x', title: 'Chiudi', 'aria-label': 'Chiudi la guida', onclick: () => { guida = null; rebuild(); } }, ic('x', 16));
+    const fatto = g.storia.length ? h('div', { class: 'ct-gs' }, g.storia.join(' · ')) : null;
+    if (g.esito) {
+      const [id, nota] = g.esito, x = C.TIPI[id];
+      return h('div', { class: 'ct-guida', role: 'group', 'aria-label': 'Aiuto per scegliere il tipo' }, h('div', { class: 'ct-ph' }, h('b', {}, 'Il tipo giusto'), chiudi), fatto,
+        h('div', { class: 'ct-gr' }, ic(TIPO_UI[id][0], 20), h('div', {}, h('b', {}, x.label), h('div', { class: 'ct-h' }, nota || x.desc))),
+        h('div', { class: 'ct-row' }, h('button', { type: 'button', class: 'btn sm primary', 'data-ct-usa': '', onclick: () => { guida = null; setTipo(id); side.querySelector('[data-ct-guida]')?.focus({ preventScroll: true }); } }, ic('check', 15), 'Usa questo tipo'), btn('Ricomincia', () => { guida = { nodo: 'start', storia: [] }; rebuild(); }, 'undo', 'btn sm ghost')));
+    }
+    const [dom, opts] = GUIDA[g.nodo];
+    return h('div', { class: 'ct-guida', role: 'group', 'aria-label': 'Aiuto per scegliere il tipo' }, h('div', { class: 'ct-ph' }, h('b', {}, dom), chiudi), fatto,
+      h('div', { class: 'ct-gopts' }, opts.map(([l, to, nota]) => h('button', { type: 'button', class: 'ct-gopt', onclick: () => { g.storia.push(l); if (to[0] === '=') g.esito = [to.slice(1), nota]; else g.nodo = to; rebuild(); side.querySelector('.ct-guida button')?.focus({ preventScroll: true }); } }, l))),
+      g.storia.length ? btn('Indietro', () => { g.storia.pop(); let n = 'start'; for (const l of g.storia) n = GUIDA[n][1].find(o => o[0] === l)[1]; g.nodo = n; g.esito = null; rebuild(); }, 'back', 'btn sm ghost') : null);
   }
   function sideKids() {
     const t = T(), R0 = r(), I = st.imm;
     const out = [];
     // tipo
-    out.push(sezione('tipo', 'Tipo di contratto', [h('div', { class: 'ct-types', role: 'radiogroup', 'aria-label': 'Tipo di contratto' }, Object.entries(C.TIPI).map(([id, x]) => h('label', { class: 'ct-type' + (st.tipo === id ? ' on' : '') },
-      h('input', { type: 'radio', name: 'ct-tipo', value: id, checked: st.tipo === id, onchange: () => { st.tipo = id; if (id === 'fondo') { st.dep.mesi = 0; st.dur.anni = Math.max(+st.dur.anni || 0, 15); st.can.periodo = 'annuale'; } else if (st.can.periodo === 'annuale' || st.can.periodo === 'semestrale') st.can.periodo = 'mensile'; if (x.anni) st.dur.anni = Math.max(+st.dur.anni || 0, x.anni[0]); if (x.mesi) st.dur.mesi = Math.min(x.mesi[1], Math.max(x.mesi[0], +st.dur.mesi || x.mesi[0])); if (id === 'commerciale' && st.can.istat > 75) st.can.istat = 75; saveLocal(); rebuild(); } }),
-      h('span', {}, h('b', {}, x.label), h('span', { class: 'ct-h' }, x.desc)))))]));
+    out.push(sezione('tipo', 'Tipo di contratto', [
+      h('div', { class: 'ct-types', role: 'radiogroup', 'aria-label': 'Tipo di contratto' }, Object.entries(C.TIPI).map(([id, x]) => h('label', { class: 'ct-type' + (st.tipo === id ? ' on' : ''), title: x.label },
+        h('input', { type: 'radio', name: 'ct-tipo', value: id, checked: st.tipo === id, 'aria-describedby': st.tipo === id ? 'ct-tipo-desc' : null, onchange: () => setTipo(id) }), ic(TIPO_UI[id][0], 18), h('span', {}, TIPO_UI[id][1])))),
+      h('p', { class: 'ct-tdesc' }, h('span', { id: 'ct-tipo-desc' }, t.desc), guida ? null : [' ', h('button', { type: 'button', class: 'linkbtn ct-gbtn', 'data-ct-guida': '', onclick: () => { guida = { nodo: 'start', storia: [] }; rebuild(); side.querySelector('.ct-guida button.ct-gopt')?.focus({ preventScroll: true }); } }, 'Non sai quale scegliere? Ti aiuto io')]),
+      guida ? guidaUI() : null]));
     // parti
     const parti = (sec, key, ruolo, ruoloP) => sezione(sec, ruolo[0].toUpperCase() + ruolo.slice(1) + (st[key].length > 1 ? ` (${st[key].length})` : ''), [
       ...st[key].map((p, i) => personaUI(`${key}.${i}`, p, ruolo[0].toUpperCase() + ruolo.slice(1), i, st[key])),
@@ -851,7 +1020,7 @@ async function startContratto(stage, files = []) {
         row(F(`fondo.terreni.${i}.qualita`, 'Qualità', { w: 'third', ph: 'seminativo' }), F(`fondo.terreni.${i}.rd`, 'Reddito dominicale €', { w: 'third', im: 'decimal' }), F(`fondo.terreni.${i}.ra`, 'Reddito agrario €', { w: 'third', im: 'decimal' }))));
       out.push(sezione('imm', 'Terreni', [
         row(btn('Compila dalla visura catastale (PDF)', () => pickVisura(), 'upload'), h('span', { class: 'ct-h' }, 'Terreni, superfici, redditi e proprietari si leggono dalla visura del Catasto Terreni, sul tuo dispositivo.')),
-        row(F('imm.comune', 'Comune', { req: true, w: 'grow' }), F('imm.prov', 'Prov.', { up: true, w: 'xs', maxlength: 2 })),
+        row(F('imm.comune', 'Comune', { req: true, w: 'grow', comune: 'imm.prov' }), F('imm.prov', 'Prov.', { up: true, w: 'xs', maxlength: 2 })),
         F('imm.indirizzo', 'Località (facoltativa)', { ph: 'contrada …' }),
         h('div', { class: 'ct-group' }, 'Catasto Terreni (dalla visura)'),
         ...trUI, row(btn('Aggiungi un terreno', () => { TR.push({ foglio: TR[TR.length - 1]?.foglio || '', part: '', sup: '', qualita: '', rd: '', ra: '' }); saveLocal(); rebuild(); }, 'plus')),
@@ -860,7 +1029,7 @@ async function startContratto(stage, files = []) {
       ], TR.length ? null : 'Aggiungi i terreni con foglio e particella: si leggono dalla visura del Catasto Terreni.'));
     } else out.push(sezione('imm', tipo === 'commerciale' ? 'Locali' : isBox ? 'Box o posto auto' : 'Immobile', [
       row(btn('Compila dalla visura catastale (PDF)', () => pickVisura(), 'upload'), h('span', { class: 'ct-h' }, 'Dati catastali, indirizzo, pertinenze e proprietari si leggono dalla visura, sul tuo dispositivo.')),
-      row(F('imm.comune', 'Comune', { req: true, w: 'grow' }), F('imm.prov', 'Prov.', { up: true, w: 'xs', maxlength: 2 })),
+      row(F('imm.comune', 'Comune', { req: true, w: 'grow', comune: 'imm.prov' }), F('imm.prov', 'Prov.', { up: true, w: 'xs', maxlength: 2 })),
       row(F('imm.indirizzo', 'Indirizzo e numero civico', { req: true, w: 'grow', ph: 'via Garibaldi 12' }), F('imm.cap', 'CAP', { w: 'xs', im: 'numeric', maxlength: 5 })),
       row(F('imm.scala', 'Scala', { w: 'third' }), F('imm.piano', 'Piano', { w: 'third' }), F('imm.interno', 'Interno', { w: 'third' })),
       F('imm.descr', tipo === 'commerciale' ? 'Descrizione dei locali' : isBox ? 'Descrizione' : 'Composizione', { req: true, type: 'textarea', rows: 2, ph: tipo === 'commerciale' ? 'un locale al piano terra con vetrina, retro e bagno' : isBox ? 'box auto al piano interrato con porta basculante' : 'ingresso, soggiorno, cucina, due camere e bagno' }),
@@ -884,9 +1053,9 @@ async function startContratto(stage, files = []) {
     const mesi = C.mesiDurata(st), fine = mesi && C.parseIso(st.dur.inizio) ? C.fineDurata(st.dur.inizio, mesi) : null;
     out.push(sezione('dur', 'Durata', [
       F('dur.inizio', 'Data di inizio', { req: true, type: 'date' }),
-      t.anni ? F('dur.anni', `Durata in anni (minimo ${C.anniMinimi(st)})`, { type: 'number', min: C.anniMinimi(st), max: t.anni[1], im: 'numeric' }) : null,
-      t.mesi ? F('dur.mesi', `Durata in mesi (da ${t.mesi[0]} a ${t.mesi[1]})`, { type: 'number', min: t.mesi[0], max: t.mesi[1], im: 'numeric' }) : null,
-      st.tipo === 'box' ? F('box.disdetta', 'Preavviso per la disdetta e il recesso', { type: 'select', num: true, opts: [[30, '30 giorni'], [60, '60 giorni'], [90, '90 giorni']] }) : null,
+      t.anni ? F('dur.anni', `Durata in anni (per legge almeno ${C.anniMinimi(st)})`, { type: 'number', min: 1, max: 99, im: 'numeric' }) : null,
+      t.mesi ? F('dur.mesi', `Durata in mesi (per legge da ${t.mesi[0]} a ${t.mesi[1]})`, { type: 'number', min: 1, max: 600, im: 'numeric' }) : null,
+      st.tipo === 'box' ? F('box.disdetta', 'Preavviso per la disdetta e il recesso (giorni)', { type: 'number', min: 1, max: 365, im: 'numeric' }) : null,
       st.tipo === 'fondo' ? CB('fondo.deroga', 'Patti in deroga con le organizzazioni agricole', 'Durata e patti diversi dalla legge, con l’assistenza delle organizzazioni professionali agricole che firmano il contratto (art. 45 L. 203/1982).') : null,
       st.tipo === 'fondo' && st.fondo.deroga ? F('fondo.org', 'Organizzazioni che assistono le parti', { req: true, ph: 'nomi delle organizzazioni e dei loro rappresentanti' }) : null,
       st.tipo === 'commerciale' ? CB('dur.alberghiero', 'Attività alberghiera o teatrale', 'Durata minima 9 anni, rinnovo di 9, disdetta 18 mesi prima.') : null,
@@ -898,7 +1067,7 @@ async function startContratto(stage, files = []) {
         F('trans.chi', 'Di chi è l’esigenza', { type: 'select', rebuild: true, opts: [['conduttore', 'Del conduttore'], ['locatore', 'Del locatore']] }),
         F('trans.esigenza', 'Esigenza', { req: true, type: 'textarea', rows: 2, ph: st.trans.chi === 'locatore' ? 'rientro in Italia del figlio previsto per il …' : 'trasferimento temporaneo per lavoro fino al …', hint: 'Deve rientrare tra quelle previste dall’Accordo territoriale del Comune.' }),
         F('trans.doc', 'Documento che la prova (allegato)', { req: true, ph: 'lettera del datore di lavoro del …' }),
-        F('trans.preavviso', 'Preavviso per il recesso per gravi motivi (mesi)', { type: 'select', num: true, opts: [1, 2, 3, 4, 5, 6].map(v => [v, String(v)]) })) : null,
+        F('trans.preavviso', 'Preavviso per il recesso per gravi motivi (mesi)', { type: 'number', min: 1, max: 12, im: 'numeric' })) : null,
     ]));
     // canone
     if (loc()) {
@@ -907,24 +1076,24 @@ async function startContratto(stage, files = []) {
       out.push(sezione('can', 'Canone e pagamento', [
         row(F('can.mensile', st.tipo === 'fondo' ? 'Canone annuo €' : 'Canone mensile €', { req: true, w: 'half', im: 'decimal', ph: st.tipo === 'fondo' ? '3.000,00' : '750,00', fmt: v => { const n = C.num(v); return isFinite(n) && n > 0 ? C.eur(n) : v; } }), F('can.periodo', 'Rate', { type: 'select', w: 'half', opts: st.tipo === 'fondo' ? [['annuale', 'Una rata annuale'], ['semestrale', 'Semestrali']] : [['mensile', 'Mensili'], ['trimestrale', 'Trimestrali']] })),
         can > 0 && st.tipo !== 'fondo' ? note(`Canone annuo: ${C.eur(can * 12)} € (${C.eurLettere(can * 12)})`) : can > 0 ? note(`${C.eurLettere(can)}`) : null,
-        F('can.giorno', 'Da pagare entro il giorno', { type: 'select', num: true, opts: [1, 5, 10, 15, 20, 25, 28].map(v => [v, String(v)]) }),
+        F('can.giorno', 'Da pagare entro il giorno', { type: 'number', min: 1, max: 31, im: 'numeric' }),
         F('can.modo', 'Modalità di pagamento', { type: 'select', rebuild: true, opts: [['bonifico', 'Bonifico bancario'], ['altro', 'Altra modalità tracciabile']], hint: abit() ? 'Per l’abitativo il contante non è ammesso (art. 1, c. 50, L. 147/2013).' : null }),
         st.can.modo === 'bonifico' ? F('can.iban', 'IBAN', { req: true, up: true, maxlength: 42, fmt: C.ibanFmt }) : null,
         st.can.modo === 'bonifico' ? F('can.intestatario', 'Intestatario del conto', { req: true }) : F('can.altro', 'Modalità', { req: true, ph: 'assegno bancario non trasferibile' }),
         accordo ? h('div', { class: 'ct-card' }, h('div', { class: 'ct-ph' }, h('b', {}, 'Accordo territoriale')),
-          row(F('can.accordo.comune', 'Comune dell’Accordo', { req: st.tipo !== 'transitorio', w: 'half' }), F('can.accordo.zona', 'Zona o fascia', { w: 'half', ph: 'es. zona C, fascia 2' })),
+          row(F('can.accordo.comune', 'Comune dell’Accordo', { req: st.tipo !== 'transitorio', w: 'half', comune: true }), F('can.accordo.zona', 'Zona o fascia', { w: 'half', ph: 'es. zona C, fascia 2' })),
           st.tipo === 'transitorio' ? note('Compila solo se nel Comune il canone dei transitori è fissato dall’Accordo territoriale.', 'muted') : null,
           st.tipo === 'concordato' ? F('can.accordo.assistenza', 'Come si stipula', { type: 'select', rebuild: true, opts: [['attestazione', 'Da soli, poi attestazione di un’organizzazione'], ['assistito', 'Con l’assistenza delle organizzazioni']] }) : null,
           st.tipo === 'concordato' && st.can.accordo.assistenza === 'assistito' ? F('can.accordo.org', 'Organizzazioni', { req: true, ph: 'nomi delle organizzazioni di proprietari e inquilini' }) : null,
           st.tipo === 'concordato' ? CB('can.alta', 'Comune ad alta tensione abitativa', 'Solo per il promemoria fiscale: base del registro al 70% e cedolare al 10%.') : null) : null,
         abit() ? CB('can.cedolare', 'Cedolare secca', pg ? 'Non disponibile: c’è un locatore società.' : 'Niente registro e bollo; il locatore rinuncia all’aggiornamento ISTAT.', { disabled: pg && !st.can.cedolare }) : null,
         st.tipo === 'commerciale' || st.tipo === 'box' ? CB('can.iva', 'Canone più IVA', 'Se il locatore è soggetto IVA e sceglie di applicarla.') : null,
-        !(abit() && st.can.cedolare) ? F('can.istat', 'Aggiornamento ISTAT annuale', { type: 'select', num: true, opts: (['commerciale', 'foresteria'].includes(st.tipo) ? [0, 50, 75] : [0, 75, 100]).map(v => [v, v ? `${v}% della variazione` : 'Nessun aggiornamento']), hint: ['commerciale', 'foresteria'].includes(st.tipo) ? 'Al massimo il 75% (art. 32 L. 392/1978).' : (C.mesiDurata(st) <= 12 && st.tipo !== 'box' ? 'Non si applica ai contratti fino a 12 mesi.' : null) }) : null,
+        !(abit() && st.can.cedolare) ? F('can.istat', 'Aggiornamento ISTAT annuale (% della variazione, 0 = nessuno)', { type: 'number', min: 0, max: 100, im: 'numeric', hint: ['commerciale', 'foresteria'].includes(st.tipo) ? 'Al massimo il 75% (art. 32 L. 392/1978).' : (C.mesiDurata(st) <= 12 && st.tipo !== 'box' ? 'Non si applica ai contratti fino a 12 mesi.' : null) }) : null,
       ]));
       // deposito e garanzie
       const dm = +st.dep.mesi || 0;
       out.push(sezione('dep', 'Deposito e garanzie', [
-        F('dep.mesi', 'Deposito cauzionale', { type: 'select', num: true, opts: [[0, 'Nessun deposito'], [1, '1 mensilità'], [2, '2 mensilità'], [3, '3 mensilità (il massimo di legge)']], hint: can > 0 && dm ? `${C.eur(can * dm)} €, restituito con gli interessi legali.` : 'Per legge non più di tre mensilità (art. 11 L. 392/1978).' }),
+        F('dep.mesi', 'Deposito cauzionale (mensilità, 0 = nessuno)', { type: 'number', min: 0, max: 12, im: 'numeric', hint: can > 0 && dm ? `${C.eur(can * dm)} €, restituito con gli interessi legali.` : 'Per legge non più di tre mensilità (art. 11 L. 392/1978).' }),
         CB('gar.on', 'C’è un garante (fideiussore)', 'Una persona che garantisce i pagamenti dell’inquilino.'),
         st.gar.on ? personaUI('gar.p', st.gar.p, 'Garante') : null,
         st.gar.on ? F('gar.max', 'Importo massimo garantito €', { req: true, im: 'decimal', hint: 'Obbligatorio per legge (art. 1938 c.c.): di solito da 6 a 12 mensilità.', fmt: v => { const n = C.num(v); return isFinite(n) && n > 0 ? C.eur(n) : v; } }) : null,
@@ -943,14 +1112,14 @@ async function startContratto(stage, files = []) {
     ]));
     // clausole facoltative
     const cl = st.cl, CL = (key, label, sub, extra = null, when = true) => when ? h('div', { class: 'ct-cl' + (cl[key].on ? ' on' : '') }, CB(`cl.${key}.on`, label, sub), cl[key].on && extra ? h('div', { class: 'ct-clx' }, extra) : null) : null;
-    out.push(sezione('cl', 'Clausole facoltative (dopo i dati obbligatori)', [
-      CL('recesso', 'Recesso libero dell’inquilino', 'Oltre ai «gravi motivi» di legge, può lasciare l’immobile quando vuole con un preavviso.', F('cl.recesso.mesi', 'Preavviso (mesi)', { type: 'select', num: true, opts: (['commerciale', 'foresteria'].includes(st.tipo) ? [6, 9, 12] : [1, 2, 3, 4, 5, 6]).map(v => [v, String(v)]) }), loc() && !['studenti', 'box', 'fondo'].includes(st.tipo)),
-      CL('risolutiva', 'Clausola risolutiva espressa', 'Il contratto si risolve se l’inquilino non paga alcune rate (art. 1456 c.c.).', F('cl.risolutiva.rate', 'Rate non pagate', { type: 'select', num: true, opts: [1, 2, 3, 4, 5, 6].map(v => [v, String(v)]) }), loc()),
+    out.push(sezione('cl', 'Clausole facoltative', [
+      CL('recesso', 'Recesso libero dell’inquilino', 'Oltre ai «gravi motivi» di legge, può lasciare l’immobile quando vuole con un preavviso.', F('cl.recesso.mesi', 'Preavviso (mesi)', { type: 'number', min: 1, max: 24, im: 'numeric' }), loc() && !['studenti', 'box', 'fondo'].includes(st.tipo)),
+      CL('risolutiva', 'Clausola risolutiva espressa', 'Il contratto si risolve se l’inquilino non paga alcune rate (art. 1456 c.c.).', F('cl.risolutiva.rate', 'Rate non pagate', { type: 'number', min: 1, max: 12, im: 'numeric' }), loc()),
       CL('animali', 'Animali domestici', 'Una regola chiara evita discussioni.', F('cl.animali.mode', 'Regola', { type: 'select', opts: [['consenso', 'Solo con consenso scritto'], ['si', 'Ammessi'], ['no', 'Non ammessi']] }), !['box', 'fondo'].includes(st.tipo)),
       CL('fumo', 'Divieto di fumo all’interno', '', null, !['box', 'fondo'].includes(st.tipo)),
       CL('subParz', 'Vietata anche la sublocazione parziale', 'La legge vieta solo quella totale.', null, abit()),
       CL('assic', 'Assicurazione dell’inquilino', 'Responsabilità civile e danni da incendio e acqua.'),
-      CL('visite', 'Visite all’immobile con preavviso', 'Anche per mostrarlo a chi vuole comprarlo o affittarlo.', F('cl.visite.giorni', 'Preavviso (giorni)', { type: 'select', num: true, opts: [1, 2, 3, 5, 7].map(v => [v, String(v)]) })),
+      CL('visite', 'Visite all’immobile con preavviso', 'Anche per mostrarlo a chi vuole comprarlo o affittarlo.', F('cl.visite.giorni', 'Preavviso (giorni)', { type: 'number', min: 1, max: 60, im: 'numeric' })),
       CL('migliorie', 'Lavori e migliorie solo con consenso scritto', 'Restano all’immobile senza indennità.', null, loc() && st.tipo !== 'fondo'),
       CL('esonero', 'Esonero del locatore per fatti di terzi', 'Danni causati da altri inquilini o da terzi, furti, interruzioni dei servizi non dovute al locatore.', null, loc() && st.tipo !== 'fondo'),
       CL('bombole', 'Divieto di bombole di gas', 'Niente GPL o combustibili in recipienti mobili nell’abitazione.', null, abit() || ['foresteria', 'comodato'].includes(st.tipo)),
@@ -972,47 +1141,79 @@ async function startContratto(stage, files = []) {
       row(btn('Aggiungi una clausola', () => { st.pers.push({ titolo: '', testo: '', onerosa: false }); open.add('pers'); saveLocal(); rebuild(); }, 'plus')),
       doc.off.length ? h('div', { class: 'ct-off' }, h('div', { class: 'ct-group' }, 'Articoli tolti'), doc.off.map(a => row(h('span', {}, a.title), btn('Rimetti', () => { delete st.off[a.key]; saveLocal(); rebuild(); })))) : null,
     ], 'Ogni articolo si può anche modificare direttamente nell’anteprima.'));
-    out.push(sezione('firma', 'Firma', [row(F('firma.luogo', 'Luogo', { req: true, w: 'half' }), F('firma.data', 'Data', { req: true, type: 'date', w: 'half' }))]));
+    out.push(sezione('firma', 'Firma', [row(F('firma.luogo', 'Luogo', { req: true, w: 'half', comune: true }), F('firma.data', 'Data', { req: true, type: 'date', w: 'half' }))]));
     return out;
   }
 
   /* anteprima del contratto: carta, articoli modificabili */
-  const runsEl = t => C.pezzi(t).map(x => x.ph != null ? h('mark', { class: 'paper-ph', title: 'Dato da completare' }, x.ph) : x.b ? h('b', {}, x.t) : x.t);
+  // un dato mancante nell'anteprima porta al suo campo (clic, Invio o spazio)
+  const runsEl = t => C.pezzi(t).map(x => x.ph != null ? h('mark', { class: 'paper-ph', role: 'button', tabindex: '0', title: `Compila: ${x.ph}`, 'data-k': x.k || null, onclick: () => vaiAlCampo(x.k, x.ph), onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); vaiAlCampo(x.k, x.ph); } } }, x.ph) : x.b ? h('b', {}, x.t) : x.t);
   const parasEl = t => t.split('\n').flatMap((l, i) => i ? [h('br'), ...runsEl(l)] : runsEl(l));
+  // modifica diretta: Modifica, doppio clic o Invio su un articolo (anche titolo), sull'intestazione, sulle parti o sulla chiusura
+  const apri = key => { editing = key; renderPreview(); };
+  function editorEl(key, label, testo, auto, mano, titolo = null) {
+    const ta = h('textarea', { class: 'input paper-ta', rows: Math.min(18, Math.max(4, testo.length / 70 + testo.split('\n').length + 1)), 'aria-label': `Testo: ${label}` }); ta.value = C.senzaPercorsi(testo);
+    const ti = titolo ? h('input', { class: 'input paper-ti', value: titolo.v, 'aria-label': `Titolo: ${label}` }) : null;
+    setTimeout(() => (ti || ta).focus(), 0);
+    const salva = () => {
+      if (ti) { const v = ti.value.trim(); if (v && v !== titolo.auto) st.ovT[key] = v; else delete st.ovT[key]; }
+      if (C.senzaPercorsi(auto).trim() !== ta.value.trim()) st.ov[key] = ta.value; else delete st.ov[key];
+      editing = null; saveLocal(); rebuild();
+    };
+    return h('section', { class: 'paper-art editing', 'data-key': key }, ti ? h('div', { class: 'ct-f' }, h('span', { class: 'ct-l' }, 'Titolo'), ti) : h('h3', { class: 'paper-h' }, label),
+      h('div', { class: 'ct-h' }, 'Modifica liberamente il testo. Una riga vuota separa i paragrafi; ⟦…⟧ indica un dato da completare.'), ta,
+      h('div', { class: 'paper-acts' }, btn('Salva il testo', salva, 'check', 'btn sm primary'), btn('Annulla', () => { editing = null; renderPreview(); }),
+        mano ? btn('Ripristina il testo automatico', () => { delete st.ov[key]; delete st.ovT[key]; editing = null; saveLocal(); rebuild(); }, 'undo') : null));
+  }
+  const modificabile = (key, label, el, mano, extra = null) => h('section', { class: 'paper-art paper-blk' + (mano ? ' edited' : ''), 'data-key': key, ondblclick: e => { if (!e.target.closest('mark, button')) apri(key); } },
+    h('div', { class: 'paper-hrow paper-hrow-s' }, mano ? h('span', { class: 'ct-chip warn', title: 'Testo scritto a mano: non cambia più con i dati' }, 'modificato') : null,
+      h('span', { class: 'paper-acts' }, btn(`Modifica ${label}`, () => apri(key), 'edit', 'btn sm ghost'), extra)), el);
   function articleEl(a) {
-    if (editing === a.key) {
-      const ta = h('textarea', { class: 'input paper-ta', rows: Math.min(18, Math.max(5, a.paras.join('\n\n').length / 70 + a.paras.length * 2)), 'aria-label': `Testo dell’articolo ${a.n}` }); ta.value = a.paras.join('\n\n');
-      setTimeout(() => ta.focus(), 0);
-      return h('section', { class: 'paper-art editing', 'data-key': a.key }, h('h3', { class: 'paper-h' }, `Art. ${a.n} – ${a.title}`),
-        h('div', { class: 'ct-h' }, 'Modifica liberamente il testo. Una riga vuota separa i paragrafi; ⟦…⟧ indica un dato da completare.'), ta,
-        h('div', { class: 'paper-acts' }, btn('Salva il testo', () => { st.ov[a.key] = ta.value; editing = null; saveLocal(); rebuild(); }, 'check', 'btn sm primary'), btn('Annulla', () => { editing = null; renderPreview(); }),
-          a.edited ? btn('Ripristina il testo automatico', () => { delete st.ov[a.key]; editing = null; saveLocal(); rebuild(); }, 'undo') : null));
-    }
-    return h('section', { class: 'paper-art' + (a.edited ? ' edited' : ''), 'data-key': a.key },
+    if (editing === a.key) return editorEl(a.key, `articolo ${a.n}`, a.paras.join('\n\n'), a.auto.join('\n\n'), a.edited, { v: a.title, auto: a.titoloAuto });
+    return h('section', { class: 'paper-art' + (a.edited ? ' edited' : ''), 'data-key': a.key, ondblclick: e => { if (!e.target.closest('mark, button')) apri(a.key); } },
       h('div', { class: 'paper-hrow' }, h('h3', { class: 'paper-h' }, `Art. ${a.n} – ${a.title}`), a.edited ? h('span', { class: 'ct-chip warn', title: 'Testo modificato a mano: non cambia più con i dati' }, 'modificato') : null,
-        h('span', { class: 'paper-acts' }, btn('Modifica', () => { editing = a.key; renderPreview(); }, 'edit', 'btn sm ghost'), !a.fixed ? btn('Togli', () => { st.off[a.key] = true; saveLocal(); rebuild(); toast(`Articolo «${a.title}» tolto: puoi rimetterlo da «Clausole personalizzate»`); }, 'x', 'btn sm ghost') : null)),
+        h('span', { class: 'paper-acts' }, btn('Modifica', () => apri(a.key), 'edit', 'btn sm ghost'), !a.fixed ? btn('Togli', () => { st.off[a.key] = true; saveLocal(); rebuild(); toast(`Articolo «${a.title}» tolto: puoi rimetterlo da «Clausole personalizzate»`); }, 'x', 'btn sm ghost') : null)),
       a.paras.map(t => h('p', {}, parasEl(t))));
   }
   const paper = h('article', { class: 'paper ct-paper', 'aria-label': 'Anteprima del contratto' });
   const status = h('div', { class: 'ct-status', role: 'status' });
+  let firmaCarta = '';
   function renderPreview() {
     const d = C.documento(st);
-    paper.replaceChildren(h('h2', { class: 'paper-t' }, d.title), h('div', { class: 'paper-s' }, d.sub),
-      ...d.intro.map(t => h('p', { class: 'paper-i' }, parasEl(t))),
+    // la carta si ridisegna solo se il testo è cambiato (un clic su un dato mancante non si perde mentre il campo si chiude)
+    const sig = JSON.stringify([d.title, d.sub, d.intro, d.arts.map(a => [a.key, a.n, a.title, a.paras, a.edited, a.fixed]), d.allegati, d.chiusa, d.firme, d.approv, d.mano, editing]);
+    const blocco = (key, label, testo, el) => editing === key ? editorEl(key, label, testo, d.auto[key], d.mano[key]) : modificabile(key, label, el, d.mano[key]);
+    if (sig !== firmaCarta) { firmaCarta = sig; paper.replaceChildren(
+      blocco('_titolo', 'l’intestazione', `${d.title}\n${d.sub}`, [h('h2', { class: 'paper-t' }, d.title), h('div', { class: 'paper-s' }, d.sub)]),
+      blocco('_intro', 'le parti', d.intro.join('\n\n'), d.intro.map(t => h('p', { class: 'paper-i' }, parasEl(t)))),
       ...d.arts.map(articleEl),
       d.allegati.length ? h('p', { class: 'paper-i' }, h('b', {}, 'Allegati: '), parasEl(d.allegati.join('; ') + '.')) : null,
-      h('p', { class: 'paper-i' }, parasEl(d.chiusa)),
+      blocco('_chiusa', 'la chiusura', d.chiusa, h('p', { class: 'paper-i' }, parasEl(d.chiusa))),
       h('div', { class: 'paper-sign' }, d.firme.map(f => h('div', {}, h('div', {}, f.ruolo), h('div', { class: 'paper-line' }), h('div', { class: 'paper-n' }, runsEl(f.nome))))),
-      d.approv ? h('p', { class: 'paper-ap' }, parasEl(d.approv)) : null);
+      d.approv ? h('p', { class: 'paper-ap' }, parasEl(d.approv)) : null); }
     // stato: dati obbligatori e avvisi
-    const req = k.req, warn = k.warn;
+    const req = k.req, warn = avvisi().filter(w => !w.path);
+    refreshProg();
     status.replaceChildren(
-      req.length ? h('div', { class: 'ct-sline ' + (touched.size || showAll ? 'bad' : 'todo') }, ic(touched.size || showAll ? 'alert' : 'edit', 16), h('b', {}, touched.size || showAll ? `Mancano ${plural(req.length, 'dato obbligatorio', 'dati obbligatori')}` : `Da compilare: ${plural(req.length, 'dato obbligatorio', 'dati obbligatori')}, segnati con *`), h('span', { class: 'ct-miss' }, req.slice(0, 8).map(x => h('button', { type: 'button', class: 'ct-mbtn', onclick: () => goTo(x) }, x.label)), req.length > 8 ? h('span', { class: 'muted' }, ` e altri ${req.length - 8}`) : null))
+      req.length ? h('div', { class: 'ct-sline ' + (showAll ? 'bad' : 'todo') }, ic(showAll ? 'alert' : 'edit', 16), h('b', {}, showAll ? `Mancano ${plural(req.length, 'dato obbligatorio', 'dati obbligatori')}` : `Da compilare: ${plural(req.length, 'dato obbligatorio', 'dati obbligatori')}, segnati con *`), h('span', { class: 'ct-miss' }, req.slice(0, 8).map(x => h('button', { type: 'button', class: 'ct-mbtn', onclick: () => goTo(x) }, x.label)), req.length > 8 ? h('span', { class: 'muted' }, ` e altri ${req.length - 8}`) : null))
         : h('div', { class: 'ct-sline ok' }, ic('check', 16), h('b', {}, 'Dati obbligatori completi'), h('span', { class: 'muted' }, ` · ${plural(d.arts.length, 'articolo', 'articoli')}`)),
       warn.length ? h('ul', { class: 'ct-warn' }, warn.map(w => h('li', {}, w.msg))) : '');   // (replaceChildren scriverebbe «null» come testo)
   }
+  function vaiAlCampo(path, label) {
+    if (!path || !side.querySelector(`[data-path="${CSS.escape(path)}"]`)) { const r0 = k.req.find(x => x.path === path) || k.req.find(x => x.label.startsWith(label)); if (r0) path = r0.path; }
+    if (!path) return;
+    setVista('dati');
+    let f = side.querySelector(`[data-path="${CSS.escape(path)}"]`);
+    const sec = f?.closest('.ct-sec')?.dataset.sec || k.req.find(x => x.path === path)?.sec;
+    if (sec && (!open.has(sec) || !f)) { open.add(sec); rebuild(); f = side.querySelector(`[data-path="${CSS.escape(path)}"]`); }
+    const el = f?.querySelector('input:not([type=radio]), select, textarea') || f?.closest('.ct-body')?.querySelector('button');
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    setTimeout(() => el.focus({ preventScroll: true }), 250);
+    f.classList.remove('ct-flash'); void f.offsetWidth; f.classList.add('ct-flash');
+  }
   function goTo(x) {
-    open.add(x.sec); showAll = true; rebuild();
+    open.add(x.sec); showAll = true; setVista('dati'); rebuild();
     const el = side.querySelector(`[data-path="${CSS.escape(x.path)}"] input, [data-path="${CSS.escape(x.path)}"] select, [data-path="${CSS.escape(x.path)}"] textarea`);
     if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); setTimeout(() => el.focus({ preventScroll: true }), 250); }
   }
@@ -1020,22 +1221,46 @@ async function startContratto(stage, files = []) {
   function refreshErrors() {
     k = C.controlla(st);
     side.querySelectorAll('.ct-f[data-path]').forEach(f => {
-      const p = f.dataset.path, e = errOf(p), show = e && (showAll || touched.has(p)) && !(/Manca/.test(e.msg) && !showAll && !touched.has(p));
+      const p = f.dataset.path, e = errOf(p), w0 = k.warn.find(x => x.path === p), vis = showAll || touched.has(p) || !!w0?.der, show = e && vis, w = !show && vis && w0;
       const inp = f.querySelector('input,select,textarea'), msg = f.querySelector('.ct-e');
-      if (inp) inp.setAttribute('aria-invalid', show ? 'true' : 'false'); if (msg) msg.textContent = show ? e.msg : '';
+      if (inp) inp.setAttribute('aria-invalid', show ? 'true' : 'false');
+      if (msg) {
+        // fuori dai limiti di legge: si può tenere il proprio valore, con un clic consapevole (e tornare indietro)
+        const der = w && w.der ? h('button', { type: 'button', class: 'linkbtn ct-der', onclick: () => { st.der = { ...(st.der || {}), [w.der]: !w.on }; if (w.on) delete st.der[w.der]; saveLocal(); rebuild(); } }, w.on ? 'Torna al valore di legge' : `Usa comunque ${w.scelto}`) : null;
+        // si ridisegna solo se cambia (il clic su «Usa comunque» non si perde mentre il campo si chiude)
+        const firma = `${show ? e.msg : w ? w.msg : ''}|${der ? der.textContent : ''}`;
+        if (msg.dataset.firma !== firma) { msg.dataset.firma = firma; msg.replaceChildren(show ? e.msg : w ? w.msg : '', ...(der ? [' ', der] : [])); }
+        msg.classList.toggle('warn', !!w);
+      }
     });
-    side.querySelectorAll('[data-chip]').forEach(c => { const id = c.dataset.chip, n = k.req.filter(x => x.sec === id).length, w = k.warn.filter(x => x.sec === id).length; c.className = 'ct-chip ' + (n ? 'bad' : w ? 'warn' : 'ok'); c.textContent = n ? `${n} da completare` : w ? `${w} ${w === 1 ? 'avviso' : 'avvisi'}` : 'completa'; });
+    side.querySelectorAll('[data-chip]').forEach(c => { const [cls, txt] = chip(c.dataset.chip); c.className = 'ct-chip ' + cls; c.textContent = txt; });
+    refreshProg();
   }
+  // avanzamento: dati obbligatori compilati sul totale del tipo scelto (nella barra in alto e nella scheda «Dati» al telefono)
+  const prog = h('div', { class: 'ct-prog', role: 'progressbar', 'aria-valuemin': '0', 'aria-label': 'Dati obbligatori compilati' }, h('span', { class: 'ct-prog-t' }), h('span', { class: 'ct-prog-bar' }, h('i')));
+  function refreshProg() {
+    const tot = k.tot || 1, done = Math.max(0, tot - k.req.filter(x => x.need).length);
+    prog.setAttribute('aria-valuemax', String(tot)); prog.setAttribute('aria-valuenow', String(done)); prog.setAttribute('aria-valuetext', `${done} di ${tot}`);
+    prog.querySelector('.ct-prog-t').textContent = done >= tot ? 'Dati obbligatori completi' : `${done} di ${tot} dati obbligatori`;
+    prog.querySelector('i').style.width = `${Math.round(done / tot * 100)}%`; prog.classList.toggle('ok', done >= tot);
+    const n = vistaBtns.dati.querySelector('.ct-vn'); if (n) n.textContent = done >= tot ? '✓' : `${done}/${tot}`;
+  }
+  // al telefono: «Dati» e «Anteprima» come due schede, l'anteprima a un tocco
+  const vistaBtn = (v, label) => h('button', { type: 'button', class: 'ct-vb', 'data-ct-vista': v, 'aria-pressed': String(vista === v), onclick: () => { setVista(v); scrollTo({ top: 0 }); } }, label, v === 'dati' ? h('span', { class: 'ct-vn' }) : null);
+  const vistaBtns = { dati: vistaBtn('dati', 'Dati'), anteprima: vistaBtn('anteprima', 'Anteprima') };
+  const vistaBar = h('div', { class: 'ct-vista', role: 'group', 'aria-label': 'Che cosa mostrare' }, vistaBtns.dati, vistaBtns.anteprima);
+  function setVista(v) { vista = v; ws.dataset.vista = v; for (const [kk, b] of Object.entries(vistaBtns)) b.setAttribute('aria-pressed', String(kk === v)); }
   // passo 2: completati i dati obbligatori si aprono le clausole facoltative (una volta sola, senza togliere il fuoco)
   let fase2 = false;
   const passo2 = () => { if (!fase2 && touched.size && !k.req.length) { fase2 = true; open.add('cl'); const d = side.querySelector('.ct-sec[data-sec="cl"]'); if (d && !d.open) d.open = true; toast('Dati obbligatori completi: ora scegli le clausole da aggiungere'); } };
-  let tm = 0; const soon = () => { clearTimeout(tm); tm = setTimeout(() => { refreshErrors(); renderPreview(); passo2(); }, 140); };
+  let tm = 0; const soon = () => { clearTimeout(tm); tm = setTimeout(() => { refreshErrors(); renderPreview(); passo2(); }, 40); };
   // ridisegno della colonna (cambia la struttura): il fuoco e la posizione restano dove erano
   function rebuild() {
     const ae = document.activeElement, path = ae?.closest?.('[data-path]')?.dataset.path, sc = sideScroll.scrollTop;
     k = C.controlla(st);
     sideScroll.replaceChildren(...sideKids().filter(Boolean));
     sideScroll.scrollTop = sc;
+    const on = sideScroll.querySelector('.ct-type.on'), row0 = on?.parentElement; if (row0 && row0.scrollWidth > row0.clientWidth) row0.scrollLeft = on.offsetLeft - row0.offsetLeft - 16;
     if (path) { const el = side.querySelector(`[data-path="${CSS.escape(path)}"] input:not([type=radio]), [data-path="${CSS.escape(path)}"] select, [data-path="${CSS.escape(path)}"] textarea`); if (el) { el.focus({ preventScroll: true }); try { if (el.setSelectionRange && /text|search|tel/.test(el.type)) el.setSelectionRange(el.value.length, el.value.length); } catch { } } }
     refreshErrors(); renderPreview();
   }
@@ -1097,10 +1322,10 @@ async function startContratto(stage, files = []) {
         const nOwn = aiLocatori();
         const others = fab.filter(x => x !== main && !TIPO[(x.categoria || '').toUpperCase()]).length;
         msg = [`Dalla visura: dati catastali (${main.categoria || 'categoria'}), indirizzo${pert.length ? `, ${plural(pert.length, 'pertinenza', 'pertinenze')}` : ''}${nOwn ? `, ${plural(nOwn, 'proprietario', 'proprietari')} come ${r().Ap}` : ''}.${others ? ` La visura contiene altre ${others} unità: controlla di aver preso quella giusta.` : ''} Controlla i dati prima di firmare.`, 'ok'];
-        open.add('imm'); saveLocal();
+        open.add('imm'); touchedSec.add('imm'); saveLocal();
       } finally { try { await worker?.terminate(); } catch { } }
     });
-    if (msg) toast(msg[0], msg[1] === 'error' ? 'error' : ''); rebuild();
+    if (msg) toast(msg[0], msg[1] === 'error' ? 'error' : ''); derive(); rebuild();
   }
   function mieiDati() {
     const pr = FillKit.profile(); if (!pr || !Object.values(pr).some(Boolean)) return toast('Non hai ancora salvato «I miei dati»: si compilano nel Centro privacy o nella compilazione dei moduli.', 'error');
@@ -1108,7 +1333,7 @@ async function startContratto(stage, files = []) {
     Object.assign(p, { tipo: 'pf', nome: pr.nome || p.nome, cognome: pr.cognome || p.cognome, cf: (pr.cf || p.cf).toUpperCase(), luogoN: pr.luogoNascita || p.luogoN, provN: pr.provNascita || p.provN, comune: pr.comune || p.comune, prov: pr.prov || p.prov, indirizzo: pr.indirizzo || p.indirizzo, cap: pr.cap || p.cap, email: pr.pec || pr.email || p.email, tel: pr.telefono || p.tel });
     if (d) p.dataN = `${d[3]}-${d[2].padStart(2, '0')}-${d[1].padStart(2, '0')}`; const dd = C.daCf(p.cf); if (dd) { p.sesso ||= dd.sesso; p.dataN ||= dd.dataN; }
     if (pr.iban && !st.can.iban) { st.can.iban = C.ibanFmt(pr.iban); st.can.intestatario ||= `${p.nome} ${p.cognome}`.trim(); }
-    saveLocal(); rebuild(); toast('Locatore compilato con i tuoi dati');
+    touchedSec.add('A'); derive(); saveLocal(); rebuild(); toast('Locatore compilato con i tuoi dati');
   }
   const num = v => C.num(v);
 
@@ -1140,7 +1365,7 @@ async function startContratto(stage, files = []) {
   }
   function nuovo() {
     const m = modal(h('div', { class: 'ct-dlg' }, h('h3', {}, 'Ricominciare da capo?'), h('p', {}, 'I dati inseriti in questo contratto si cancellano da questo dispositivo. Se vuoi conservarli, prima salva la bozza.'),
-      h('div', { class: 'ct-dacts' }, h('button', { class: 'btn danger', onclick: () => { m.close(); st = C.nuovo(); editing = null; touched.clear(); showAll = false; try { localStorage.removeItem(KEY); } catch { } open.clear(); open.add('tipo'); rebuild(); banner.replaceChildren(); } }, 'Ricomincia'), h('button', { class: 'btn', 'data-autofocus': '', onclick: () => m.close() }, 'Annulla'))), { width: 460 });
+      h('div', { class: 'ct-dacts' }, h('button', { class: 'btn danger', onclick: () => { m.close(); st = C.nuovo(); editing = null; guida = null; touched.clear(); touchedSec.clear(); for (const kk of Object.keys(AUTO)) delete AUTO[kk]; showAll = false; try { localStorage.removeItem(KEY); } catch { } open.clear(); APERTE.forEach(x => open.add(x)); setVista('dati'); rebuild(); banner.replaceChildren(); } }, 'Ricomincia'), h('button', { class: 'btn', 'data-autofocus': '', onclick: () => m.close() }, 'Annulla'))), { width: 460 });
   }
   function salvaBozza() { download(new Blob([JSON.stringify({ tipo: 'file360-contratto', salvato: new Date().toISOString(), ...st }, null, 1)], { type: 'application/json' }), `Bozza contratto - ${C.documento(st).immBreve}.json`.replace(/[\\/:*?"<>|]+/g, '-'), 'application/json'); toast('Bozza salvata: riaprila trascinando il file .json nello strumento'); }
 
@@ -1148,13 +1373,12 @@ async function startContratto(stage, files = []) {
   const banner = h('div', { class: 'ct-banner' });
   if (resumed) banner.append(h('div', { class: 'ct-sline' }, ic('clock', 16), h('span', {}, resumed === 'file' ? 'Bozza riaperta dal file.' : `Ho ripreso la bozza del ${new Date(resumed).toLocaleDateString('it-IT')}, salvata solo su questo dispositivo.`), btn('Ricomincia da capo', nuovo, null, 'btn sm ghost')));
   const main = h('div', { class: 'ws-main ct-main' },
-    h('div', { class: 'toolbar ct-tb' }, h('div', { class: 'tb-title' }, 'Contratto di affitto e comodato'), h('div', { class: 'ct-tba' }, btn('Salva bozza', salvaBozza, 'download', 'btn sm ghost'), btn('Nuovo', nuovo, 'plus', 'btn sm ghost'))),
-    banner, status, h('div', { class: 'ct-legal muted small' }, 'Il contratto segue le norme indicate in ogni articolo e cambia con le tue scelte. I dati restano su questo dispositivo. Per i casi particolari fallo vedere a un professionista.'), paper);
+    h('div', { class: 'toolbar ct-tb' }, prog, h('div', { class: 'ct-tba' }, btn('Salva bozza', salvaBozza, 'download', 'btn sm ghost'), btn('Nuovo', nuovo, 'plus', 'btn sm ghost'))),
+    banner, status, h('div', { class: 'ct-legal muted small' }, 'Il contratto segue le norme indicate in ogni articolo e cambia con le tue scelte. Ogni parte si riscrive con un doppio clic. I dati restano su questo dispositivo. Per i casi particolari fallo vedere a un professionista.'), paper);
   const sideScroll = h('div');
-  const ws = workspace(stage, main, [sideScroll], [h('button', { class: 'btn primary big btn-run', onclick: run }, ic('download', 18), 'Scarica il contratto'), h('div', { class: 'muted small ct-foot' }, 'PDF accessibile, Word modificabile e promemoria degli adempimenti.')]);
-  const side = ws.querySelector('.side'); ws.classList.add('ct-ws');
+  const ws = workspace(stage, main, [sideScroll], [h('button', { class: 'btn primary big btn-run', onclick: run }, ic('download', 18), 'Scarica il contratto'), h('div', { class: 'muted small ct-foot' }, 'PDF, Word e promemoria di registrazione')]);
+  const side = ws.querySelector('.side'); ws.classList.add('ct-ws'); ws.dataset.vista = vista; ws.append(vistaBar, comuniDl);
   sideScroll.className = 'ct-side';
-  if (!resumed) open.add('A');
   rebuild();
   if (pdfIn) importaVisura(pdfIn);
 }

@@ -198,9 +198,14 @@ Gli importi sono indicativi e calcolati sui dati inseriti. Il promemoria dice se
 | **PDF/UA-1 con veraPDF** | 9/9 conformi |
 | **Word aperto da LibreOffice**: stesse parole del PDF | 100% in tutti e 9 i tipi |
 
-**Interfaccia** (4 comportamenti nella suite):
+**Interfaccia** (9 comportamenti nella suite):
 - i dati obbligatori guidano;
-- il codice fiscale compila data di nascita e titolo;
+- il codice fiscale compila data, luogo e provincia di nascita e titolo;
+- il Comune scritto porta la provincia; intestatario del conto e luogo della firma sono proposti finché non si cambiano;
+- all'apertura nessun allarme rosso; i dati scritti male (CAP, provincia, e-mail…) si segnalano accanto al campo;
+- un clic su un dato mancante nell'anteprima porta al suo campo; al telefono «Dati» e «Anteprima» sono a un tocco;
+- «Ti aiuto io» porta al tipo giusto con poche domande;
+- durata e deposito anche fuori dai limiti di legge con un clic consapevole (e ritorno al valore di legge); intestazione, parti e titoli degli articoli si riscrivono; con «Sig.ra» il testo è al femminile;
 - il tipo cambia il testo;
 - l'errore sul codice fiscale compare accanto al campo;
 - un articolo si modifica e si ripristina;
@@ -213,3 +218,14 @@ Gli importi sono indicativi e calcolati sui dati inseriti. Il promemoria dice se
 Provato anche sul sito Netlify, con il codice in file separati.
 
 **Ricerca:** «contratto di affitto», «comodato a mio figlio», «affitto studenti», «contratto 3+2 canone concordato», «affittare un negozio», «cedolare secca contratto»… portano allo strumento in 10 casi su 10.
+
+## 10. Flessibilità e genere (20 novembre 2026)
+
+- **Valori fuori dai limiti di legge.** Durata, deposito, ISTAT nell'uso diverso e preavviso del recesso nell'uso diverso si possono scegliere liberamente. Il contratto usa il valore di legge finché chi compila non sceglie «Usa comunque…» accanto al campo; l'avviso spiega la conseguenza e resta visibile (campo `der` nella bozza). Giorno di pagamento, preavvisi, giorni di visita e rate della clausola risolutiva sono numeri liberi.
+- **Testo.** Si riscrivono intestazione, parti, chiusura (`ov._titolo`, `ov._intro`, `ov._chiusa`) e titoli degli articoli (`ovT`), oltre agli articoli.
+- **Genere.** Tutte le diciture delle parti passano al femminile quando tutte le persone di quel lato sono donne (persone fisiche con «Sig.ra», anche dal codice fiscale): articoli e preposizioni («la», «della», «alla», «dalla», «una», «le», «delle»), ruoli (locatrice, conduttrice, comodataria, affittuaria, garante, fideiussora), pronomi («lei», «loro», «ella», «derivarle», «questa») e concordanze («iscritta», «tenuta», «obbligate»). Il testo scritto a mano non viene toccato.
+- **Banco:** 7 regole nuove (durata, deposito, ISTAT e giorno liberi; genere; genere misto; testo riscritto), tutte verdi.
+
+## 11. Esperienza d'uso (19 novembre 2026)
+
+Analisi da capo dello strumento, con un banco che misura velocità, facilità, intuitività, aspetto e affidabilità con soglie fisse: metodo, misure e confronto prima/dopo in `VALUTAZIONE-CONTRATTI.md` (banco `test/bench/contratti_ux.js`, nella suite).

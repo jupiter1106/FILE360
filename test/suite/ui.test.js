@@ -385,7 +385,7 @@ test('Contratto: i dati obbligatori guidano, il codice fiscale compila nascita e
   await ctCompila(page);
   const r = await page.evaluate(() => ({ status: document.querySelector('.ct-status').innerText, dataN: document.querySelector('[data-path="A.0.dataN"] input').value, sesso: document.querySelector('[data-path="A.0.sesso"] select').value, txt: document.querySelector('.ct-paper').innerText }));
   ok(/Dati obbligatori completi/.test(r.status), r.status.slice(0, 160)); ok(r.dataN === '1980-01-01' && r.sesso === 'M', 'il codice fiscale non ha compilato nascita e titolo: ' + r.dataN + ' ' + r.sesso);
-  ok(/euro 9\.000,00 \(novemila\/00\)/.test(r.txt) && /il sig\. Mario Rossi, nato a Roma il 1° gennaio 1980/.test(r.txt), 'testo del contratto inatteso');
+  ok(/euro 9\.000,00 \(novemila\/00\)/.test(r.txt) && /il sig\. Mario Rossi, nato a Roma \(RM\) il 1° gennaio 1980/.test(r.txt), 'testo del contratto inatteso');
   await ctSec(page, 'tipo'); await page.locator('.ct-type', { hasText: 'Comodato' }).click(); await page.waitForTimeout(300);
   const c = await page.evaluate(() => document.querySelector('.ct-paper').innerText);
   ok(/COMODATO D’USO GRATUITO/.test(c) && /essenzialmente gratuito/.test(c) && !/Canone e pagamento/.test(c), 'il comodato non ha cambiato il testo');
@@ -420,6 +420,73 @@ test('Contratto: una visura del Catasto Terreni porta all’affitto di fondo rus
   const r = await page.evaluate(() => { const v = p => document.querySelector(`[data-path="${p}"] input`)?.value; return { tipo: document.querySelector('input[name="ct-tipo"]:checked')?.value, t: [0, 1, 2].map(i => [v(`fondo.terreni.${i}.foglio`), v(`fondo.terreni.${i}.part`), v(`fondo.terreni.${i}.sup`), v(`fondo.terreni.${i}.qualita`), v(`fondo.terreni.${i}.rd`)].join('/')), own: v('A.0.cognome'), txt: document.querySelector('.ct-paper').innerText }; });
   ok(r.tipo === 'fondo' && r.t[0] === '12/34/1,5000/seminativo/10,50' && r.t[2] === '13/101/2,0540/vigneto/95,40' && r.own === 'Verdi', JSON.stringify(r).slice(0, 300));
   ok(/superficie complessiva di ettari 4,304/.test(r.txt) && /AFFITTO DI FONDO RUSTICO/i.test(r.txt), 'testo del contratto senza i terreni: ' + (r.txt.match(/superficie complessiva[^;.]*/) || [r.txt.slice(0, 200)])[0]);
+  await page.evaluate(() => { try { localStorage.removeItem('officina-contratto'); } catch { } });
+});
+test('Contratto: dal codice fiscale anche luogo e provincia di nascita; il Comune porta la provincia; intestatario e luogo della firma proposti finché non si cambiano', async b => {
+  const { page } = await open(b, 'desk1440'); await ctOpen(page);
+  ok(await page.evaluate(() => [...document.querySelectorAll('.ct-chip.bad, .ct-sline.bad, .ct-warn li, [aria-invalid="true"]')].filter(e => e.getClientRects().length).length) === 0, 'allarmi rossi prima di iniziare');
+  await ctFill(page, 'A.0.nome', 'Mario'); await ctFill(page, 'A.0.cognome', 'Rossi'); await ctFill(page, 'A.0.cf', 'RSSMRA80A01H501U'); await page.waitForTimeout(300);
+  const v = p => page.evaluate(p => document.querySelector(`[data-path="${p}"] input, [data-path="${p}"] select`)?.value, p);
+  ok(await v('A.0.luogoN') === 'Roma' && await v('A.0.provN') === 'RM' && await v('A.0.dataN') === '1980-01-01', 'nascita dal codice fiscale: ' + [await v('A.0.luogoN'), await v('A.0.provN')]);
+  await ctFill(page, 'A.0.comune', 'torino'); await page.waitForTimeout(200);
+  ok(await v('A.0.comune') === 'Torino' && await v('A.0.prov') === 'TO', 'provincia dal Comune: ' + [await v('A.0.comune'), await v('A.0.prov')]);
+  ok(await v('can.intestatario') === 'Mario Rossi', 'intestatario non proposto: ' + await v('can.intestatario'));
+  await ctFill(page, 'imm.comune', 'Milano'); await page.waitForTimeout(200);
+  ok(await v('firma.luogo') === 'Milano' && await v('imm.prov') === 'MI', 'luogo della firma o provincia non proposti');
+  await ctFill(page, 'firma.luogo', 'Roma'); await ctFill(page, 'imm.comune', 'Napoli'); await page.waitForTimeout(200);
+  ok(await v('firma.luogo') === 'Roma', 'il luogo della firma scritto a mano è stato cambiato');
+  // un dato scritto male si segnala accanto al campo
+  await ctFill(page, 'A.0.cap', '123'); await page.waitForTimeout(200);
+  ok(/5 cifre/.test(await page.locator('[data-path="A.0.cap"] .ct-e').innerText()), 'CAP sbagliato non segnalato');
+  ok(page.errs.length === 0, page.errs.join(' | '));
+  await page.evaluate(() => { try { localStorage.removeItem('officina-contratto'); } catch { } });
+});
+test('Contratto: un clic su un dato mancante nell’anteprima porta al suo campo; al telefono «Anteprima» e «Dati» sono a un tocco', async b => {
+  { const { page } = await open(b, 'desk1440'); await ctOpen(page);
+    for (const [i, path] of [[0, 'A.0.nome'], [3, 'A.0.dataN']]) {
+      await page.locator('.ct-paper mark.paper-ph').nth(i).click(); await page.waitForTimeout(400);
+      ok(await page.evaluate(() => document.activeElement?.closest('[data-path]')?.dataset.path) === path, `il segnaposto ${i} non porta a ${path}`);
+    }
+    await page.locator('.ct-paper mark.paper-ph', { hasText: 'importo' }).first().click(); await page.waitForTimeout(400);
+    ok(await page.evaluate(() => document.activeElement?.closest('[data-path]')?.dataset.path) === 'can.mensile', 'l’importo non porta al canone');
+    await page.evaluate(() => { try { localStorage.removeItem('officina-contratto'); } catch { } }); }
+  { const { page } = await open(b, 'iphone13'); await ctOpen(page);
+    ok(!(await page.locator('.ct-paper').isVisible()) && await page.locator('[data-ct-vista="anteprima"]').isVisible(), 'al telefono la scheda Anteprima non c’è o il contratto è già sotto i dati');
+    await page.locator('[data-ct-vista="anteprima"]').click(); await page.waitForTimeout(300);
+    ok(await page.evaluate(() => { const r = document.querySelector('.ct-paper').getBoundingClientRect(); return r.top < innerHeight && r.width > 300; }), 'l’anteprima non si vede dopo il tocco');
+    await page.locator('.ct-paper mark.paper-ph').first().click(); await page.waitForTimeout(500);
+    ok(await page.evaluate(() => document.activeElement?.closest('[data-path]')?.dataset.path) === 'A.0.nome' && await page.locator('[data-ct-vista="dati"][aria-pressed="true"]').count() === 1, 'dal segnaposto non torna ai dati');
+    await page.evaluate(() => { try { localStorage.removeItem('officina-contratto'); } catch { } }); }
+});
+test('Contratto: durata e deposito anche fuori dai limiti di legge con un clic consapevole; intestazione, parti e titoli si riscrivono; con «Sig.ra» il testo è al femminile', async b => {
+  const { page } = await open(b, 'desk1440'); await ctOpen(page);
+  const txt = () => page.locator('.ct-paper').innerText();
+  await ctFill(page, 'dur.anni', '2'); await page.waitForTimeout(250);
+  ok(/durata di quattro anni/.test(await txt()) && /Fuori dai limiti di legge/.test(await page.locator('[data-path="dur.anni"] .ct-e').innerText()), 'senza consenso il contratto non usa la durata di legge con l’avviso');
+  await page.locator('[data-path="dur.anni"] .ct-der').click(); await page.waitForTimeout(300);
+  ok(/durata di due anni/.test(await txt()), 'con «Usa comunque» la durata scelta non entra');
+  await page.locator('[data-path="dur.anni"] .ct-der', { hasText: 'Torna' }).click(); await page.waitForTimeout(300);
+  ok(/durata di quattro anni/.test(await txt()), '«Torna al valore di legge» non funziona');
+  // intestazione e titolo di un articolo riscritti a mano
+  await page.locator('.ct-paper [data-key="_titolo"]').dblclick(); await page.locator('.paper-art.editing textarea').fill('CONTRATTO DI LOCAZIONE\nscritto a mano'); await page.locator('.paper-art.editing button', { hasText: 'Salva il testo' }).click(); await page.waitForTimeout(300);
+  await page.locator('.ct-paper .paper-art[data-key="oggetto"]').dblclick(); await page.locator('.paper-art.editing .paper-ti').fill('Oggetto della locazione'); await page.locator('.paper-art.editing button', { hasText: 'Salva il testo' }).click(); await page.waitForTimeout(300);
+  const t = await txt();
+  ok(/scritto a mano/.test(t) && /Art\. 1 – Oggetto della locazione/.test(t), 'intestazione o titolo non riscritti');
+  // locatrice
+  await page.selectOption('[data-path="A.0.sesso"] select', 'F'); await page.waitForTimeout(300);
+  ok(/La locatrice concede in locazione/.test(await txt()) && /«locatrice»/.test(await txt()), 'il testo non passa al femminile');
+  ok(page.errs.length === 0, page.errs.join(' | '));
+  await page.evaluate(() => { try { localStorage.removeItem('officina-contratto'); } catch { } });
+});
+test('Contratto: «Ti aiuto io» porta al tipo giusto con poche domande', async b => {
+  const { page } = await open(b, 'desk1440'); await ctOpen(page);
+  for (const [risposte, tipo] of [[['Un box o un posto auto', 'Con un canone'], 'box'], [['Una casa', 'Una persona o una famiglia', 'Con un canone', 'Per pochi mesi'], 'transitorio'], [['Una casa', 'Una persona o una famiglia', 'Gratis'], 'comodato']]) {
+    await page.locator('[data-ct-guida]').click();
+    for (const r of risposte) await page.locator('.ct-guida button', { hasText: r }).first().click();
+    await page.locator('.ct-guida [data-ct-usa]').click(); await page.waitForTimeout(200);
+    ok(await page.evaluate(() => document.querySelector('input[name="ct-tipo"]:checked')?.value) === tipo, `${risposte.join(' › ')}: non è ${tipo}`);
+  }
+  ok(/COMODATO/.test(await page.locator('.ct-paper').innerText()), 'il testo non segue il tipo scelto');
   await page.evaluate(() => { try { localStorage.removeItem('officina-contratto'); } catch { } });
 });
 test('Contratto: si scaricano il PDF, il Word e il promemoria; con dati mancanti si avvisa e si può avere la bozza', async b => {
