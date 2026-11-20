@@ -10,3 +10,6 @@ tools/node/node_modules/
 __pycache__/
 *.pyc
 shots/
+# mappa dettagliata dell’Italia (2,3 GB): si estrae con go-pmtiles, vedi tools/mappa_dati.py
+dati/mappa/italia.pmtiles
+dati/mappa/province/

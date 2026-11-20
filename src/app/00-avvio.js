@@ -9,6 +9,8 @@ const { PDFDocument, StandardFonts, rgb, degrees, BlendMode, LineCapStyle,
 /* ---------- librerie compresse dentro la pagina (file unico): si aprono al primo uso ----------
    Nel file sono blocchi gzip in base64 che il browser non esegue all'apertura: la pagina parte molto prima. */
 const LAZY_INLINE = {};
+// blocchi grandi in pezzi (build.py, a_pezzi): il testo intero è il primo pezzo più i successivi, nell'ordine
+function testoAPezzi(el) { return el.dataset.parts ? el.textContent + [...document.querySelectorAll(`script[type="text/x-officina-part"][data-of="${el.dataset.pname}"]`)].map(x => x.textContent).join('') : el.textContent; }
 function inlineLib(name) { return document.getElementById('lazy-' + name); }
 function inlineText(name) {
   return LAZY_INLINE[name] ||= (async () => {
@@ -32,14 +34,14 @@ const Later = {
   _src(el) {
     // sito: il codice del blocco è un file a parte, già scaricato in anticipo (prefetch); se non è ancora arrivato si legge ora
     if (el.dataset.src && !el.textContent) { const x = new XMLHttpRequest(); x.open('GET', el.dataset.src, false); x.send(); if (x.status !== 200) throw new Error('Impossibile scaricare un componente necessario: controlla la connessione e riprova.'); el.textContent = x.responseText; }
-    if (!el.dataset.gz) return el.textContent; const bin = atob(el.textContent.trim()), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new TextDecoder().decode(pako.ungzip(u)); },
+    if (!el.dataset.gz) return el.textContent; const bin = atob(testoAPezzi(el).trim()), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new TextDecoder().decode(pako.ungzip(u)); },
   _run(el, strict = true) { const s = document.createElement('script'); s.textContent = (strict ? '"use strict";\n' : '') + this._src(el); document.head.append(s); s.remove(); el.remove(); },
   next() { const b = this._blocks(); if (this.i >= b.length) return false; this._run(b[this.i++]); return true; },
   all() { while (this.next()); },
   // i blocchi fino a quello che definisce «name» (l'ordine conta: i blocchi dopo possono usare quelli prima); il resto a breve
   need(name) { const b = this._blocks(); const k = name ? b.findIndex(el => (' ' + (el.dataset.defs || '') + ' ').includes(' ' + name + ' ')) : -1; if (k < 0) { if (name && !(name in globalThis)) this.all(); else { const go = () => { if (this.next()) setTimeout(go, 0); }; setTimeout(go, 0); } return; } /* non trovata nei blocchi né già definita: si esegue tutto; già definita: il resto subito dopo */ while (this.i <= k && this.next()); const go = () => { if (this.next()) setTimeout(go, 0); }; setTimeout(go, 0); },
   // sito: scarica in sottofondo il codice dei blocchi (si esegue sempre e solo quando serve)
-  prefetch() { this._pre = Promise.all([...document.querySelectorAll('script[type="text/x-officina-later"][data-src]')].filter(el => !el.textContent).map(el => fetch(el.dataset.src).then(r => r.ok ? r.text() : null).then(t => { if (t && !el.textContent) el.textContent = t; }).catch(() => { }))); return this._pre; },
+  prefetch() { this._pre = Promise.all([...document.querySelectorAll('script[type="text/x-officina-later"][data-src]:not([data-lib="mappa"])')].filter(el => !el.textContent).map(el => fetch(el.dataset.src).then(r => r.ok ? r.text() : null).then(t => { if (t && !el.textContent) el.textContent = t; }).catch(() => { }))); return this._pre; },
   idle() { const step = () => { if (!this.next()) return; (window.requestIdleCallback || (f => setTimeout(f, 16)))(step, { timeout: 400 }); }; (this._pre || Promise.resolve()).then(() => setTimeout(step, 50)); },
 };
 
@@ -186,6 +188,7 @@ const ICONS = {
   chevron:'<path d="m6 9 6 6 6-6"/>',
   bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  pin:'<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
   cloud:'<path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 10.5a3.75 3.75 0 0 1 0 7.5z"/>',
   activity:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',
   recipe:'<path d="M5 4h11l3 3v13H5z"/><path d="M9 10h6M9 14h6M9 18h3"/><path d="m8.5 6.5 1 1 2-2"/>',

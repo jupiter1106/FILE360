@@ -6,6 +6,29 @@
 - **Trascinando una cartella:** esegui `python3 build.py --netlify` e trascina su Netlify la cartella `dist/netlify`
   (dentro mettici anche `cloud.json`, vedi sotto).
 
+## Mappa stradale di «Analisi delle vendite» (facoltativa, una volta sola)
+Gli indirizzi per mettere i clienti sul numero civico (`dati/mappa/civici`, 43 MB) si pubblicano sempre. Per vedere anche
+strade ed edifici servono i dati per provincia (1,8 GB in tutto), che non stanno nel repository. Chi usa il sito ne
+scarica solo pochi MB: le province dove ha clienti, e solo le zone che guarda.
+1. Installa go-pmtiles (`go install github.com/protomaps/go-pmtiles@latest`).
+2. Estrai l'Italia dalla mappa del mondo di Protomaps (la data è quella di una build recente elencata su
+   maps.protomaps.com/builds; il file serve solo per preparare i dati):
+   `go-pmtiles extract https://build.protomaps.com/20261118.pmtiles italia.pmtiles --bbox=6.55,35.45,18.55,47.1 --maxzoom=14`
+3. Scarica i confini ISTAT delle province (openpolis/geojson-italy, `geojson/limits_IT_provinces.geojson`).
+4. Dividi per provincia: `python3 tools/mappa_dati.py province italia.pmtiles limits_IT_provinces.geojson`. Crea
+   `dati/mappa/province/PR.pmtiles`, 110 file, in meno di un minuto.
+5. `python3 build.py --netlify`: ogni provincia diventa pezzi da 4 MB in `dist/netlify/mappa/province/PR/` (485 file,
+   nessuno oltre gli 8 MB).
+6. Pubblica la cartella `dist/netlify`.
+   - Trascinandola in «Deploys»: sono 1,8 GB, il caricamento richiede tempo.
+   - Con la Netlify CLI: `netlify deploy --prod --dir dist/netlify`.
+
+   Nei rilasci successivi Netlify ricarica solo i file cambiati: i pezzi della mappa non si ricaricano.
+
+Il browser legge solo i byte che servono (richieste parziali); se l'hosting non le supporta, scarica il pezzo intero da
+4 MB e lo tiene in memoria. Per il file unico senza rete: `python3 tools/mappa_dati.py cartella mappa-italia` prepara
+la cartella da scegliere nel programma.
+
 ## Google Drive (una volta sola, ~10 minuti)
 1. [Google Cloud Console](https://console.cloud.google.com/) › crea un progetto (es. «file360»).
 2. *API e servizi › Libreria*: abilita **Google Drive API** e **Google Picker API**.

@@ -37,6 +37,38 @@ const ok = (c, m) => { if (!c) throw new Error(m); };
     ok(r.main === 1 && r.h1.length === 1 && /Oscura/.test(r.h1[0]) && r.path === '/oscurare-pdf/', JSON.stringify(r));
     ok((await viol()).length === 0, (await viol()).join(' | '));
   });
+  await step('Analisi delle vendite: mappa stradale dal sito (libreria, Italia d’insieme, indirizzi e dettaglio per provincia) con i clienti sul civico; si scarica solo ciò che serve', async () => {
+    await page.goto(`http://127.0.0.1:${PORT}/analisi-vendite-fatture/`); await page.waitForSelector('.tool .dz-input', { state: 'attached' }); await page.locator('.tool .dz-input').first().setInputFiles([fx('vendite.zip')]); await page.waitForSelector('.vd-kpis', { timeout: 60000 });
+    await page.locator('.vd-tab', { hasText: 'Mappa' }).click();
+    await page.waitForFunction(() => document.querySelector('.vd-glst')?.hidden && document.querySelector('.vd-gl')?._mappa?.map?.loaded(), null, { timeout: 60000 });
+    const prec = await page.locator('.vd-precl').innerText();
+    ok(/\d+ al civico/.test(prec), prec.replace(/\n/g, ' | '));
+    // strade ed edifici: si scaricano solo le province con clienti e, di quelle, solo i byte delle zone guardate
+    if (await page.evaluate(() => !!window.OFFICINA_MAPPA?.province)) {
+      const scaricati = [], vista = r => { const u = r.url(); if (/\/mappa\/province\//.test(u)) scaricati.push([u.split('/mappa/province/')[1], +(r.headers()['content-length'] || 0)]); };
+      page.on('response', vista);
+      await page.locator('.vd-zona .vd-clb').first().click();
+      await page.waitForFunction(() => { const m = document.querySelector('.vd-gl')._mappa.map; return !m.isMoving() && m.areTilesLoaded() && m.getZoom() > 16; }, null, { timeout: 60000 });
+      page.off('response', vista);
+      const mb = scaricati.reduce((a, x) => a + x[1], 0) / 1e6, prov = [...new Set(scaricati.map(x => x[0].split('/')[0]))];
+      const conClienti = await page.evaluate(() => document.querySelector('.vd-gl')._mappa.province);
+      console.log(`      dettaglio scaricato volando sul primo cliente: ${mb.toFixed(1)} MB in ${scaricati.length} richieste, province ${prov.join(', ')}`);
+      ok(mb > 0 && mb < 15 && prov.every(p => conClienti.includes(p)), `${mb.toFixed(1)} MB, province ${prov.join(', ')}`);
+    }
+    ok((await viol()).length === 0, (await viol()).join(' | '));
+  });
+  await step('mappa dettagliata in pezzi da un sito statico (lettura parziale tra pezzi diversi)', async () => {
+    const src = path.join(__dirname, '..', 'fixtures', 'mappa', 'BO.pmtiles'), dst = path.join(__dirname, '..', '..', 'dist', 'netlify', 'mappa', 'prova-pezzi');
+    fs.mkdirSync(dst, { recursive: true }); const buf = fs.readFileSync(src), P = 1 << 20;
+    for (let i = 0; i * P < buf.length; i++) fs.writeFileSync(path.join(dst, String(i).padStart(4, '0') + '.bin'), buf.subarray(i * P, (i + 1) * P));
+    try {
+      const r = await page.evaluate(async () => {
+        await Mappa.libreria(); const p = new pmtiles.PMTiles(new Mappa.APezzi({ base: '/mappa/prova-pezzi/', nome: 'prova', pezzo: 1 << 20 })); const h = await p.getHeader();
+        const t = await p.getZxy(14, 8708, 5926); return { maxZoom: h.maxZoom, tile: t ? t.data.byteLength : 0 };
+      });
+      ok(r.maxZoom === 14 && r.tile > 1000, JSON.stringify(r));
+    } finally { fs.rmSync(dst, { recursive: true, force: true }); }
+  });
   await step('nessuna richiesta ad altri domini (OCR, librerie e dati dal sito stesso)', async () => { ok(!ext.length, ext.slice(0, 3).join(' | ')); });
   await step('una connessione verso un indirizzo non autorizzato viene bloccata dal browser', async () => { const r = await page.evaluate(async () => { try { await fetch('https://example.com/raccolta', { method: 'POST', body: 'x' }); return 'inviato'; } catch { return 'bloccato'; } }); ok(r === 'bloccato', r); });
   await step('nessun errore', async () => { const e = errs.filter(x => !/raccolta|example\.com|Content Security Policy/.test(x)); ok(!e.length, e.slice(0, 3).join(' | ')); });

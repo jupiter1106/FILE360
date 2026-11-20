@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Serve dist/netlify come Netlify: intestazioni di _headers (anche le regole con *), cartelle con index.html,
+"""Serve dist/netlify come Netlify: intestazioni di _headers (anche le regole con *), richieste parziali, cartelle con index.html,
    pagina 404.html per gli indirizzi sconosciuti, tipi giusti per wasm e manifest.
    Uso: python3 test/csp_server.py PORTA [cartella]"""
 import http.server, os, sys, functools, fnmatch
@@ -27,5 +27,16 @@ class H(http.server.SimpleHTTPRequestHandler):
             if self.command != 'HEAD': self.wfile.write(body)
             return
         super().send_error(code, message, explain)
+    # richieste parziali (Range), come Netlify: la mappa legge solo i byte che servono dei pezzi da 4 MB
+    def do_GET(self):
+        rng = self.headers.get('Range', '')
+        f = self.translate_path(self.path)
+        if rng.startswith('bytes=') and os.path.isfile(f):
+            size = os.path.getsize(f); a, _, b = rng[6:].partition('-'); a = int(a or 0); b = min(int(b) if b else size - 1, size - 1)
+            if a > b or a >= size: self.send_response(416); self.send_header('Content-Range', f'bytes */{size}'); self.end_headers(); return
+            with open(f, 'rb') as fh: fh.seek(a); data = fh.read(b - a + 1)
+            self.send_response(206); self.send_header('Content-Type', 'application/octet-stream'); self.send_header('Content-Range', f'bytes {a}-{b}/{size}')
+            self.send_header('Content-Length', str(len(data))); self.send_header('Accept-Ranges', 'bytes'); self.end_headers(); self.wfile.write(data); return
+        super().do_GET()
     def log_message(self, *a): pass
 http.server.ThreadingHTTPServer(('127.0.0.1', int(sys.argv[1])), functools.partial(H, directory=ROOT)).serve_forever()

@@ -61,6 +61,7 @@ const LUOGHI = { 'Verdi Costruzioni S.r.l.': 'Modena', 'Bianchi Elettrotecnica S
     const ok = [];
     if (await page.locator('.vd-kpis').isVisible()) ok.push('dal file alla panoramica senza altri passaggi');
     await page.locator('.vd-tab', { hasText: 'Mappa' }).click(); await page.waitForTimeout(300);
+    await page.locator('.vd-maptb button', { hasText: 'Comuni' }).click(); await page.waitForTimeout(300);
     await page.locator('.vd-dot').first().click(); await page.waitForTimeout(400);
     const side = await page.locator('.vd-side').innerText();
     if (/Chi sono e che cosa hanno comprato/i.test(side) && /Rossi Impianti/.test(side) && /Kit fotovoltaico|Quadro|Lettore/.test(side)) ok.push('Comune → chi sono e che cosa hanno comprato');
@@ -77,13 +78,120 @@ const LUOGHI = { 'Verdi Costruzioni S.r.l.': 'Modena', 'Bianchi Elettrotecnica S
     if (page.errs.length) note.push(page.errs.slice(0, 2).join(' | '));
     await page.context().close();
   }
+  /* mappa stradale: dall'Italia al civico. Cartella della mappa di prova: strade ed edifici del centro di Bologna come
+     provincia BO (test/fixtures/mappa/BO.pmtiles), la stessa come AO (provincia senza clienti: non va mai letta), e gli
+     indirizzi veri di tutta Italia (dati/mappa/civici); le fatture di prova hanno indirizzi veri scritti in 12 modi */
+  {
+    const os = require('os'), dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mappa-italia-'));
+    fs.mkdirSync(path.join(dir, 'province')); for (const p of ['BO', 'AO']) fs.copyFileSync(path.join(__dirname, '..', 'fixtures', 'mappa', 'BO.pmtiles'), path.join(dir, 'province', p + '.pmtiles'));
+    fs.mkdirSync(path.join(dir, 'civici')); for (const f of fs.readdirSync(path.join(__dirname, '..', '..', 'dati', 'mappa', 'civici'))) fs.copyFileSync(path.join(__dirname, '..', '..', 'dati', 'mappa', 'civici', f), path.join(dir, 'civici', f));
+    const { page, ctx } = await open(b, 'desk1440');
+    const rete = []; await ctx.route(/^(https?|wss?):/, r => { rete.push(r.request().url()); r.abort(); });
+    // quali archivi della cartella vengono letti (ogni lettura di un file passa da File.slice)
+    await page.addInitScript(() => { window.__letti = new Set(); const sl = Blob.prototype.slice; Blob.prototype.slice = function (...a) { if (this.name) window.__letti.add(this.name); return sl.apply(this, a); }; });
+    await page.reload(); await carica(page); await page.evaluate(() => { window.showDirectoryPicker = undefined; });
+    const pronta = () => page.waitForFunction(() => { const m = document.querySelector('.vd-gl')?._mappa?.map; return document.querySelector('.vd-glst')?.hidden && m && m.isStyleLoaded() && m.areTilesLoaded(); }, null, { timeout: 120000 });
+    let t0 = Date.now(); await page.locator('.vd-tab', { hasText: 'Mappa' }).click(); await pronta(); const msInsieme = Date.now() - t0;
+    const offre = await page.locator('.vd-glav button', { hasText: 'cartella' }).isVisible();
+    const fc = page.waitForEvent('filechooser'); await page.locator('.vd-glav button.primary').click(); const ch = await fc;
+    t0 = Date.now(); await ch.setFiles(dir);
+    await page.waitForFunction(() => document.querySelector('.vd-glav')?.hidden, null, { timeout: 120000 }); await pronta(); const msCivici = Date.now() - t0;
+    log('S4 mappa pronta: Italia d’insieme · dalla cartella ai clienti sul civico', Math.max(msInsieme, msCivici), `ms (${msInsieme} · ${msCivici}; mappa dettagliata offerta: ${offre})`);
+    // C5: ogni cliente con fatture al punto giusto (civico esatto entro 5 m; civico mancante tra i vicini; «snc» sulla via; via inesistente al centro del Comune)
+    const feats = await page.evaluate(() => document.querySelector('.vd-gl')._mappa.map.getSource('clienti').serialize().data.features.map(f => [f.properties.nome, f.geometry.coordinates, f.properties.a]));
+    const dist = (a, c) => { const t = Math.PI / 180, x = (c[0] - a[0]) * t * Math.cos((a[1] + c[1]) / 2 * t), y = (c[1] - a[1]) * t; return Math.hypot(x, y) * 6371000; };
+    const casi = Object.entries(ATT.posizioni).filter(([n]) => n in ATT.per_cliente || /^Cliente /.test(n) && !/S\.r\.l\./.test(n));
+    const sbagli = []; let giusti = 0; const perTipo = {};
+    for (const [nome, e] of casi) {
+      const f = feats.find(x => x[0] === nome) || (/^Cliente /.test(nome) && !/S\.r\.l\./.test(nome) ? feats.find(x => x[0].endsWith(' ' + nome.split(' ')[1])) : null);
+      if (!f) { if (nome in ATT.per_cliente) sbagli.push(`${e.tipo}: assente`); continue; }
+      const ok = e.prec === 'comune' ? f[2] === 1 : dist(f[1], [e.lon, e.lat]) <= e.toll_m + 4;
+      perTipo[e.tipo] = (perTipo[e.tipo] || 0) + (ok ? 1 : 0); if (ok) giusti++; else sbagli.push(`${e.tipo} «${e.scritto}» ${e.prec === 'comune' ? 'non al Comune' : Math.round(dist(f[1], [e.lon, e.lat])) + ' m'}`);
+    }
+    const nCasi = giusti + sbagli.length;
+    log('C5 clienti all’indirizzo giusto (12 modi di scrivere l’indirizzo)', `${giusti}/${nCasi}`, Object.entries(perTipo).map(([k, v]) => `${k} ${v}`).join(', ') + (sbagli.length ? ' — ' + sbagli.slice(0, 4).join('; ') : '')); M.C5 = giusti / Math.max(1, nCasi);
+    // I2: dalla mappa al cliente e ritorno
+    const ok2 = [];
+    const zoom = () => page.evaluate(() => document.querySelector('.vd-gl')._mappa.map.getZoom());
+    const fermo = () => page.waitForFunction(() => !document.querySelector('.vd-gl')._mappa.map.isMoving(), null, { timeout: 20000 }).then(() => page.waitForTimeout(400));
+    await page.locator('.vd-glw').scrollIntoViewIfNeeded(); await page.evaluate(() => document.querySelector('.vd-glw').scrollIntoView({ block: 'center' })); await page.waitForTimeout(300);
+    const z0 = await zoom(); const g = await page.evaluate(() => { const m = document.querySelector('.vd-gl')._mappa.map; const W = m.getCanvas().clientWidth, H = m.getCanvas().clientHeight; const f = m.queryRenderedFeatures({ layers: ['gruppi'] }).find(f => { const p = m.project(f.geometry.coordinates); const r0 = m.getCanvas().getBoundingClientRect(); return p.x > 60 && p.y > 80 && p.x < W - 70 && p.y < H - 60 && r0.top + p.y > 10 && r0.top + p.y < innerHeight - 10; }); if (!f) return null; const p = m.project(f.geometry.coordinates), r = m.getCanvas().getBoundingClientRect(); return [r.left + p.x, r.top + p.y]; });
+    if (g) { await page.mouse.click(g[0], g[1]); await fermo(); if (await zoom() > z0 + 0.5) ok2.push('un gruppo si apre ingrandendo'); }
+    const primo = await page.locator('.vd-zona .vd-clb b').first().innerText().catch(() => '');
+    if (primo) { await page.locator('.vd-zona .vd-clb').first().click(); await fermo(); const side = await page.locator('.vd-side').innerText(); if (await zoom() >= 16 && side.includes(primo) && /posizione /.test(side)) ok2.push('elenco della zona → volo sull’edificio e scheda con l’indirizzo'); }
+    const pt = await page.evaluate(() => { const m = document.querySelector('.vd-gl')._mappa.map; const f = m.queryRenderedFeatures({ layers: ['punti'] }).find(f => { const p = m.project(f.geometry.coordinates); return p.x > 60 && p.y > 60 && p.x < m.getCanvas().clientWidth - 60 && p.y < m.getCanvas().clientHeight - 60; }); if (!f) return null; const p = m.project(f.geometry.coordinates), r = m.getCanvas().getBoundingClientRect(); return [r.left + p.x, r.top + p.y, f.properties.nome]; });
+    if (pt) { await page.locator('.vd-side .icon-btn[aria-label="Chiudi"]').click().catch(() => {}); await page.mouse.click(pt[0], pt[1]); await page.waitForTimeout(500); if ((await page.locator('.vd-side').innerText()).includes(pt[2])) ok2.push('tocco sul punto → scheda del cliente'); }
+    await page.locator('.vd-tab', { hasText: 'Clienti' }).click(); await page.locator('.vd-t tbody tr').first().click(); await page.waitForTimeout(300);
+    const btn = page.locator('.vd-side button', { hasText: 'Mostra sulla mappa' });
+    if (await btn.count()) { await btn.click(); await pronta(); await fermo(); if (await zoom() >= 12) ok2.push('scheda del cliente → «Mostra sulla mappa»'); }
+    log('I2 facilità della mappa stradale', `${ok2.length}/4`, ok2.join('; ')); M.I2 = ok2.length / 4;
+    // B3 e B4: colori del prodotto e dettaglio fino all'edificio (Bologna, zoom 17), chiaro e scuro
+    const tinte = [], dett = [];
+    for (const scheme of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(200);
+      await page.locator('.vd-tab', { hasText: 'Panoramica' }).click(); await page.locator('.vd-tab', { hasText: 'Mappa' }).click(); await page.locator('.vd-maptb button', { hasText: 'Strade' }).click(); await pronta();
+      for (const [c, z] of [[[12.5, 42.2], 5.3], [[11.3432, 44.4937], 17]]) {
+        await page.evaluate(([c, z]) => document.querySelector('.vd-gl')._mappa.map.jumpTo({ center: c, zoom: z }), [c, z]); await page.waitForFunction(() => document.querySelector('.vd-gl')._mappa.map.areTilesLoaded() && !document.querySelector('.vd-gl')._mappa.map.isMoving(), null, { timeout: 30000 }); await page.waitForTimeout(700);
+        const shot = (await page.locator('.vd-gl canvas').screenshot()).toString('base64');
+        tinte.push(await page.evaluate(async b64 => { const im = new Image(); im.src = 'data:image/png;base64,' + b64; await im.decode(); const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const g = c.getContext('2d'); g.drawImage(im, 0, 0); const d = g.getImageData(0, 0, c.width, c.height).data; let col = 0, vio = 0;
+          for (let i = 0; i < d.length; i += 4 * 7) { const r = d[i] / 255, gg = d[i + 1] / 255, bb = d[i + 2] / 255, mx = Math.max(r, gg, bb), mn = Math.min(r, gg, bb), l = (mx + mn) / 2, s = mx === mn ? 0 : (mx - mn) / (1 - Math.abs(2 * l - 1)); if (s < 0.12 || mx - mn < 0.03) continue; col++;
+            let h = mx === r ? ((gg - bb) / (mx - mn)) % 6 : mx === gg ? (bb - r) / (mx - mn) + 2 : (r - gg) / (mx - mn) + 4; h = (h * 60 + 360) % 360; if (h >= 225 && h <= 295) vio++; }
+          return col > 500 ? vio / col : 0; }, shot));
+        if (z === 17) dett.push(await page.evaluate(() => { const m = document.querySelector('.vd-gl')._mappa.map, L = new Set(m.queryRenderedFeatures().map(f => f.layer.id)); return [[...L].some(l => /buildings|edifici3d/.test(l)), [...L].some(l => /roads_(minor|major|other)/.test(l)), [...L].some(l => /roads_labels/.test(l))].filter(Boolean).length; }));
+      }
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+    log('B3 colori della mappa nella tavolozza viola (pixel colorati, Italia e Bologna, chiaro e scuro)', +Math.min(...tinte).toFixed(3), tinte.map(x => (x * 100).toFixed(1) + '%').join(' · ')); M.B3 = Math.min(...tinte);
+    log('B4 dettaglio a zoom 17: edifici, strade, nomi delle vie (chiaro, scuro)', `${Math.min(...dett)}/3`); M.B4 = Math.min(...dett) / 3;
+    // I3 e S5: rotella del mouse (zoom avanti e indietro) e trascinamento, con il blocco più lungo del programma intanto
+    await page.evaluate(() => { document.querySelector('.vd-gl')._mappa.tutta(); window.__lt = []; new PerformanceObserver(l => l.getEntries().forEach(e => window.__lt.push(e.duration))).observe({ type: 'longtask' }); });
+    await page.locator('.vd-glw').scrollIntoViewIfNeeded(); await page.waitForTimeout(400);
+    const bx = await page.locator('.vd-gl canvas').boundingBox(), cxm = bx.x + bx.width * 0.45, cym = bx.y + bx.height * 0.4;
+    const zA = await zoom(); await page.mouse.move(cxm, cym);
+    for (let i = 0; i < 8; i++) { await page.mouse.wheel(0, -240); await page.waitForTimeout(90); }
+    await page.waitForTimeout(700); const zB = await zoom();
+    for (let i = 0; i < 4; i++) { await page.mouse.move(cxm, cym); await page.mouse.down(); await page.mouse.move(cxm + 180, cym + 60, { steps: 12 }); await page.mouse.up(); await page.waitForTimeout(150); }
+    for (let i = 0; i < 8; i++) { await page.mouse.wheel(0, 240); await page.waitForTimeout(90); }
+    await page.waitForTimeout(900); const zC = await zoom();
+    const lt = await page.evaluate(() => Math.max(0, ...window.__lt));
+    log('I3 rotella del mouse: zoom avanti e indietro, trascinamento', zB > zA + 1.5 && zC < zB - 1.5, `zoom ${zA.toFixed(1)} → ${zB.toFixed(1)} → ${zC.toFixed(1)}`); M.I3 = zB > zA + 1.5 && zC < zB - 1.5;
+    log('S5 fluidità: blocco più lungo durante zoom e trascinamenti', Math.round(lt), 'ms'); M.S5 = lt;
+    log('C6 richieste di rete con la mappa stradale', rete.length, rete.slice(0, 3).join(' ')); M.C6 = rete.length;
+    const letti = await page.evaluate(() => [...window.__letti]);
+    log('C7 dettaglio letto solo per le province con clienti', letti.includes('BO.pmtiles') && !letti.includes('AO.pmtiles'), 'letti: ' + letti.filter(n => /pmtiles/.test(n)).join(', ')); M.C7 = letti.includes('BO.pmtiles') && !letti.includes('AO.pmtiles');
+    if (page.errs.length) note.push(page.errs.slice(0, 2).join(' | '));
+    await page.context().close(); fs.rmSync(dir, { recursive: true, force: true });
+  }
+  /* clienti tutti in una regione (Emilia-Romagna): si vede solo la regione, con il dettaglio delle sue province, e la
+     mappa d'insieme dell'Italia non si legge nemmeno */
+  {
+    const os = require('os'), dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mappa-regione-'));
+    fs.mkdirSync(path.join(dir, 'province')); for (const p of ['BO', 'MO', 'RE', 'FE', 'FC', 'RA', 'RN', 'PR', 'PC', 'AO']) fs.copyFileSync(path.join(__dirname, '..', 'fixtures', 'mappa', 'BO.pmtiles'), path.join(dir, 'province', p + '.pmtiles'));
+    fs.mkdirSync(path.join(dir, 'civici')); for (const p of ['BO', 'MO', 'RE', 'FE', 'FC', 'RA', 'RN', 'PR', 'PC']) fs.copyFileSync(path.join(__dirname, '..', '..', 'dati', 'mappa', 'civici', p + '.json.gz'), path.join(dir, 'civici', p + '.json.gz'));
+    const { page } = await open(b, 'desk1440');
+    await page.addInitScript(() => { window.__letti = new Set(); const sl = Blob.prototype.slice; Blob.prototype.slice = function (...a) { if (this.name) window.__letti.add(this.name); return sl.apply(this, a); }; });
+    await page.reload(); await page.evaluate(() => { location.hash = '#vendite'; }); await page.waitForSelector('.tool .dropzone');
+    await page.locator('.tool .dz-input').first().setInputFiles([path.join(__dirname, '..', 'fixtures', 'vendite-emilia.zip')]); await page.waitForSelector('.vd-kpis', { timeout: 60000 });
+    await page.evaluate(() => { window.showDirectoryPicker = undefined; window.__letti.clear(); });
+    await page.locator('.vd-tab', { hasText: 'Mappa' }).click();
+    await page.waitForFunction(() => document.querySelector('.vd-glst')?.hidden && document.querySelector('.vd-gl')?._mappa, null, { timeout: 60000 });
+    await page.evaluate(() => window.__letti.clear());
+    const fc = page.waitForEvent('filechooser'); await page.locator('.vd-glav button.primary').click(); await (await fc).setFiles(dir);
+    await page.waitForFunction(() => { const m = document.querySelector('.vd-gl')?._mappa?.map; return document.querySelector('.vd-glav')?.hidden && document.querySelector('.vd-glst')?.hidden && m && m.isStyleLoaded() && m.areTilesLoaded(); }, null, { timeout: 120000 });
+    const r = await page.evaluate(() => { const g = document.querySelector('.vd-gl')._mappa, m = g.map, b = m.getMaxBounds(); return { regione: g.regione, solo: g.soloRegione, maschera: !!m.getLayer('regione-fuori'), insieme: !!m.getSource('insieme'), limiti: b ? [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map(v => +v.toFixed(2)) : null, letti: [...window.__letti].filter(n => /pmtiles/.test(n)) }; });
+    const ok = r.regione === 'Emilia-Romagna' && r.solo && r.maschera && !r.insieme && r.limiti && r.limiti[0] > 7.5 && r.limiti[2] < 14.5 && !r.letti.includes('AO.pmtiles') && !r.letti.some(n => /insieme|italia/.test(n));
+    log('C8 clienti in una sola regione: solo la regione, Italia d’insieme non letta', ok, JSON.stringify(r)); M.C8 = ok;
+    if (page.errs.length) note.push(page.errs.slice(0, 2).join(' | '));
+    await page.context().close(); fs.rmSync(dir, { recursive: true, force: true });
+  }
   /* aspetto: axe in 4 viste, telefono senza scorrimento laterale */
   {
     const viol = []; let gravi = 0, over = [];
     for (const [view, scheme] of [['desk1440', 'light'], ['desk1440', 'dark'], ['iphone13', 'light'], ['iphone13', 'dark']]) {
       const { page } = await open(b, view, scheme); await carica(page); await page.waitForTimeout(500);
-      for (const tab of ['Panoramica', 'Clienti']) {
+      for (const tab of ['Panoramica', 'Clienti', 'Mappa']) {
         await page.locator('.vd-tab', { hasText: tab }).click(); await page.waitForTimeout(300);
+        if (tab === 'Mappa') await page.waitForFunction(() => document.querySelector('.vd-glst')?.hidden || /non si può/.test(document.querySelector('.vd-glst')?.textContent || ''), null, { timeout: 60000 });
         await page.addScriptTag({ content: AXE });
         const r = await page.evaluate(async () => (await axe.run(document.querySelector('.tool'), { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] }, resultTypes: ['violations'] })).violations.map(v => ({ id: v.id, impact: v.impact, n: v.nodes.length, es: v.nodes.slice(0, 2).map(n => n.target.join(' ').slice(0, 60)) })));
         for (const v of r) { viol.push(`${view}/${scheme}/${tab}: ${v.id} (${v.impact}, ${v.n}) ${v.es.join(' ; ')}`); if (/serious|critical/.test(v.impact)) gravi += v.n; }
@@ -91,7 +199,7 @@ const LUOGHI = { 'Verdi Costruzioni S.r.l.': 'Modena', 'Bianchi Elettrotecnica S
       if (view === 'iphone13' && await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) over.push(`${view}/${scheme}`);
       await page.context().close();
     }
-    log('B1 violazioni WCAG 2.2 AA (axe), 4 viste × 2 schede', viol.length, viol.slice(0, 4).join(' | ')); M.B1 = viol.length; M.B1g = gravi;
+    log('B1 violazioni WCAG 2.2 AA (axe), 4 viste × 3 schede', viol.length, viol.slice(0, 4).join(' | ')); M.B1 = viol.length; M.B1g = gravi;
     log('B2 telefono senza scorrimento laterale', over.length ? over.join(', ') : 'nessun difetto'); M.B2 = over.length;
   }
   await b.close();
@@ -107,8 +215,18 @@ const LUOGHI = { 'Verdi Costruzioni S.r.l.': 'Modena', 'Bianchi Elettrotecnica S
     I1: voto(M.I1, [[1, 5], [0.75, 4], [0.5, 3], [0.25, 2], [0, 1]]),
     B1: M.B1g ? 3 : votoMax(M.B1, [[0, 5], [2, 4], [5, 3], [1e9, 2]]),
     B2: M.B2 ? 2 : 5,
+    C5: voto(M.C5, [[1, 5], [0.95, 4], [0.9, 3], [0.8, 2], [0, 1]]),
+    C6: M.C6 === 0 ? 5 : 0,
+    C7: M.C7 ? 5 : 1,
+    C8: M.C8 ? 5 : 1,
+    I3: M.I3 ? 5 : 1,
+    S5: votoMax(M.S5, [[100, 5], [200, 4], [400, 3], [800, 2], [1e9, 1]]),
+    S4: votoMax(M['S4 mappa pronta: Italia d’insieme · dalla cartella ai clienti sul civico'], [[3000, 5], [6000, 4], [12000, 3], [25000, 2], [1e9, 1]]),
+    I2: voto(M.I2, [[1, 5], [0.75, 4], [0.5, 3], [0.25, 2], [0, 1]]),
+    B3: voto(M.B3, [[0.97, 5], [0.9, 4], [0.8, 3], [0.6, 2], [0, 1]]),
+    B4: voto(M.B4, [[1, 5], [2 / 3, 3], [1 / 3, 2], [0, 1]]),
   };
-  const AREE = { 'Correttezza': [30, ['C1', 'C2', 'C3', 'C4']], 'Scoperte': [25, ['D1']], 'Velocità': [15, ['S1', 'S2', 'S3']], 'Facilità': [15, ['I1']], 'Aspetto': [15, ['B1', 'B2']] };
+  const AREE = { 'Correttezza': [30, ['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8']], 'Scoperte': [25, ['D1']], 'Velocità': [15, ['S1', 'S2', 'S3', 'S4', 'S5']], 'Facilità': [15, ['I1', 'I2', 'I3']], 'Aspetto': [15, ['B1', 'B2', 'B3', 'B4']] };
   let tot = 0; const righe = [];
   for (const [n, [p, ks]] of Object.entries(AREE)) { const m = ks.reduce((a, k) => a + V[k], 0) / ks.length; tot += m * p; righe.push(`${n.padEnd(12)} ${m.toFixed(2)}  (${ks.map(k => `${k} ${V[k]}`).join(', ')})`); }
   const indice = tot / 100;

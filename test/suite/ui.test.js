@@ -1268,7 +1268,7 @@ test('Analisi delle vendite: dallo ZIP le scoperte, la mappa e i clienti; un Com
   const { page } = await open(b, 'desk1440'); await openTool(page, 'vendite', ['vendite.zip']); await page.waitForSelector('.vd-kpis', { timeout: 60000 });
   const t = await page.locator('.vd-body').innerText();
   ok(/2\.449\.546/.test(t) && /da 3 clienti/.test(t) && /non compra da/.test(t) && /si comprano insieme/.test(t), 'panoramica o scoperte mancanti: ' + t.slice(0, 200));
-  await page.locator('.vd-tab', { hasText: 'Mappa' }).click(); await page.locator('.vd-dot').first().click(); await page.waitForTimeout(300);
+  await page.locator('.vd-tab', { hasText: 'Mappa' }).click(); await page.locator('.vd-maptb button', { hasText: 'Comuni' }).click(); await page.locator('.vd-dot').first().click(); await page.waitForTimeout(300);
   const side = await page.locator('.vd-side').innerText();
   ok(/Milano/.test(side) && /Rossi Impianti/.test(side) && /fatture/.test(side), 'il Comune non mostra i clienti: ' + side.slice(0, 160));
   await page.locator('.vd-side button', { hasText: 'Solo questo Comune' }).click(); await page.waitForTimeout(300);
@@ -1287,6 +1287,38 @@ test('Analisi delle vendite: insieme a fatture di altre aziende e a PDF analizza
   ok(page.errs.length === 0, page.errs.join(' | '));
   const p2 = (await open(b, 'desk1280')).page; await openTool(p2, 'vendite', ['rotto.pdf']); await p2.waitForSelector('.vd-empty, .toast', { timeout: 60000 });
   ok(/Nessuna fattura/.test(await p2.locator('.tool').innerText()), 'nessun messaggio per i file non validi');
+});
+test('Analisi delle vendite: mappa stradale dall’Italia al civico con la cartella della mappa, rilievo in 3D; senza WebGL resta la mappa per Comuni', async b => {
+  const os = require('os'), fs = require('fs'), path = require('path'), dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mappa-italia-'));
+  fs.mkdirSync(path.join(dir, 'province')); fs.copyFileSync(path.join(__dirname, '..', 'fixtures', 'mappa', 'BO.pmtiles'), path.join(dir, 'province', 'BO.pmtiles')); fs.mkdirSync(path.join(dir, 'civici'));
+  for (const p of ['BO', 'MI', 'MO', 'RE']) fs.copyFileSync(path.join(__dirname, '..', '..', 'dati', 'mappa', 'civici', p + '.json.gz'), path.join(dir, 'civici', p + '.json.gz'));
+  try {
+    const { page } = await open(b, 'desk1440'); await openTool(page, 'vendite', ['vendite.zip']); await page.waitForSelector('.vd-kpis', { timeout: 60000 });
+    await page.evaluate(() => { window.showDirectoryPicker = undefined; });
+    await page.locator('.vd-tab', { hasText: 'Mappa' }).click();
+    const pronta = () => page.waitForFunction(() => document.querySelector('.vd-glst')?.hidden && document.querySelector('.vd-gl')?._mappa?.map?.loaded(), null, { timeout: 90000 });
+    await pronta();
+    ok(/Italia d’insieme/.test(await page.locator('.vd-glav').innerText()), 'senza cartella non propone la mappa dettagliata');
+    const fc = page.waitForEvent('filechooser'); await page.locator('.vd-glav button.primary').click(); await (await fc).setFiles(dir);
+    await page.waitForFunction(() => document.querySelector('.vd-glav')?.hidden, null, { timeout: 90000 }); await pronta();
+    ok(/\d+ al civico/.test(await page.locator('.vd-precl').innerText()), 'nessun cliente al civico');
+    await page.locator('.vd-zona .vd-clb', { hasText: 'Rossi Impianti' }).click();
+    await page.waitForFunction(() => { const m = document.querySelector('.vd-gl')._mappa.map; return !m.isMoving() && m.getZoom() >= 16; }, null, { timeout: 20000 });
+    const side = await page.locator('.vd-side').innerText();
+    ok(/Rossi Impianti/.test(side) && /posizione al civico/.test(side), 'la scheda non dice l’indirizzo e la precisione: ' + side.slice(0, 200));
+    await page.locator('.vd-glm', { hasText: 'Rilievo' }).click();
+    await page.waitForFunction(() => { const m = document.querySelector('.vd-gl')._mappa.map; return !m.isMoving() && m.getPitch() > 30; }, null, { timeout: 20000 }); await page.waitForTimeout(1600);
+    const ril = await page.evaluate(() => { const m = document.querySelector('.vd-gl')._mappa.map; return { vis: m.getLayoutProperty('rilievo', 'visibility'), col: m.queryRenderedFeatures({ layers: ['rilievo'] }).length }; });
+    ok(ril.vis === 'visible' && ril.col > 5, 'il rilievo non mostra le colonne: ' + JSON.stringify(ril));
+    await page.locator('.vd-glm', { hasText: 'Clienti' }).click();
+    await page.waitForFunction(() => { const m = document.querySelector('.vd-gl')._mappa.map; return !m.isMoving() && m.getPitch() < 1; }, null, { timeout: 20000 });
+    ok(page.errs.length === 0, page.errs.join(' | '));
+    const p2 = (await open(b, 'desk1280')).page;
+    await p2.addInitScript(() => { const g = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function (t, ...a) { return /webgl/.test(t) ? null : g.call(this, t, ...a); }; });
+    await p2.reload(); await openTool(p2, 'vendite', ['vendite.zip']); await p2.waitForSelector('.vd-kpis', { timeout: 60000 });
+    await p2.locator('.vd-tab', { hasText: 'Mappa' }).click(); await p2.waitForTimeout(300);
+    ok(await p2.locator('.vd-dot').count() > 10 && !(await p2.locator('.vd-maptb button', { hasText: 'Strade' }).count()), 'senza WebGL la mappa per Comuni non compare');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 (async () => {
   const only = process.argv[2]; const browser = await chromium.launch(); let fail = 0;

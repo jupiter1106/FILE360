@@ -14,7 +14,7 @@ Uso (da build.py --netlify): make_site(ROOT, html_del_file_unico, cartella)"""
 import base64, gzip, hashlib, json, os, re, shutil, subprocess, sys, pathlib
 
 LIBS = {'heic', 'forge', 'utif', 'fontkit', 'lexicon'}       # librerie eseguite quando servono (need → <script src>)
-DATA = {'tsl', 'stdfonts'}                                   # dati letti quando servono (inlineText → fetch)
+DATA = {'tsl', 'stdfonts', 'mappaitalia'}                                   # dati letti quando servono (inlineText → fetch)
 LANGS = ['ita', 'eng', 'fra', 'deu', 'spa']                  # modelli dell'OCR (come OCR_LANGS nell'app)
 
 
@@ -22,7 +22,7 @@ def sha256_b64(text: str) -> str:
     return base64.b64encode(hashlib.sha256(text.encode('utf-8')).digest()).decode()
 
 
-def make_site(ROOT: pathlib.Path, html: str, out: pathlib.Path, csp_parts, site_url: str = '') -> dict:
+def make_site(ROOT: pathlib.Path, html: str, out: pathlib.Path, csp_parts, site_url: str = '', mappa: dict = None) -> dict:
     assets = out / 'assets'; assets.mkdir(parents=True, exist_ok=True)
     written = {}
 
@@ -33,6 +33,11 @@ def make_site(ROOT: pathlib.Path, html: str, out: pathlib.Path, csp_parts, site_
         written[name] = len(data)
         return '/assets/' + name
 
+    # blocchi in pezzi nel file unico (build.py, a_pezzi): sul sito tornano un blocco solo, poi un file a parte
+    pezzi = {}
+    def take_part(m): pezzi.setdefault(m.group(1), []).append(m.group(2)); return ''
+    html = re.sub(r'<script type="text/x-officina-part" data-of="([\w-]+)">(.*?)</script>\n?', take_part, html, flags=re.S)
+    html = re.sub(r'(<script[^>]*?) data-parts="\d+" data-pname="([\w-]+)">(.*?)</script>', lambda m: f'{m.group(1)}>{m.group(3)}{"".join(pezzi.get(m.group(2), []))}</script>', html, flags=re.S)
     hashes = []          # impronte degli script scritti nella pagina o eseguiti dal codice (blocchi dei moduli)
     libs, data, pdfworker = {}, {}, None
 
@@ -52,6 +57,9 @@ def make_site(ROOT: pathlib.Path, html: str, out: pathlib.Path, csp_parts, site_
         if typ == 'text/x-officina-gz':
             name = re.search(r'id="lazy-([\w-]+)"', attrs).group(1)
             code = gzip.decompress(base64.b64decode(body.strip()))
+            # l'Italia d'insieme: nel file unico fino al livello 6 (apertura leggera), sul sito fino al 7 (file a parte, letto solo dalla mappa)
+            z7 = ROOT / 'src' / 'vendor' / 'mappa' / 'italia-insieme-z7.pmtiles'
+            if name == 'mappaitalia' and z7.exists(): code = z7.read_bytes()
             url = asset('lazy-' + name, code, 'js')
             if name == 'pdfworker': pdfworker = url
             elif name in LIBS: libs[name] = url
@@ -81,7 +89,8 @@ def make_site(ROOT: pathlib.Path, html: str, out: pathlib.Path, csp_parts, site_
     # 3. configurazione del sito: prima di ogni altro script (scritta nella pagina, con la sua impronta)
     cfg = ("window.OFFICINA_ENV='site';window.OFFICINA_BASE=location.origin+'/';window.OFFICINA_PWA=1;"
            f"window.OFFICINA_PDFWORKER={json.dumps(pdfworker)};window.OFFICINA_LIBS={json.dumps(libs)};window.OFFICINA_DATA={json.dumps(data)};"
-           + (f"window.OFFICINA_SITE={json.dumps(site_url.rstrip('/') + '/')};" if site_url else ''))
+           + (f"window.OFFICINA_SITE={json.dumps(site_url.rstrip('/') + '/')};" if site_url else '')
+           + (f"window.OFFICINA_MAPPA={json.dumps(mappa)};" if mappa else ''))
     hashes.append(sha256_b64(cfg))
     head_extra = (f'<script>{cfg}</script>\n<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#5B2EFF">'
                   '<link rel="apple-touch-icon" href="/icons/icon-192.png"><link rel="icon" href="/icons/icon-192.png" type="image/png">\n')
@@ -133,6 +142,8 @@ SOFTWARE = [
     ('heic2any, libheif e libde265', 'Alex Corvi, struktur AG', 'foto HEIC dell’iPhone', 'MIT · LGPL-3.0', 'https://github.com/strukturag/libheif'),
     ('UTIF.js', 'Photopea', 'immagini TIFF', 'MIT', 'https://github.com/photopea/UTIF.js'),
     ('node-forge', 'Digital Bazaar', 'lettura dei certificati delle firme digitali', 'BSD-3-Clause', 'https://github.com/digitalbazaar/forge'),
+    ('MapLibre GL JS', 'MapLibre e altri', 'mappa stradale di «Analisi delle vendite»', 'BSD-3-Clause', 'https://github.com/maplibre/maplibre-gl-js'),
+    ('PMTiles e Protomaps Basemaps', 'Protomaps', 'tessere della mappa e stile di partenza', 'BSD-3-Clause', 'https://github.com/protomaps'),
 ]
 DATA_SRC = [
     ('Liberation Sans, Serif e Mono', 'caratteri con le misure dei 14 caratteri standard dei PDF (PDF/A)', 'SIL Open Font License 1.1'),
@@ -140,6 +151,9 @@ DATA_SRC = [
     ('wordfreq (Robyn Speer)', 'frequenze delle parole italiane per il correttore dell’OCR', 'CC BY-SA 4.0'),
     ('Dizionario Hunspell it_IT (A. Pescetti e altri)', 'forme delle parole italiane per il correttore dell’OCR', 'GPL-3.0'),
     ('Elenco dei certificatori qualificati (AgID, Trusted List italiana)', 'riconoscimento dei certificati delle firme digitali', 'dati pubblici'),
+    ('© OpenStreetMap contributors', 'mappa stradale e numeri civici di «Analisi delle vendite»', 'ODbL 1.0'),
+    ('Comuni italiani (Garda Informatica) e confini ISTAT', 'posizione dei Comuni e confini delle province', 'MIT · CC BY 4.0'),
+    ('Noto Sans', 'scritte della mappa', 'SIL Open Font License 1.1'),
 ]
 
 
@@ -201,6 +215,7 @@ def info_pages(out: pathlib.Path, base_html: str, cfg: dict, cloud: bool, versio
 <p>Quando apri il sito, il browser scarica il codice degli strumenti; i documenti che scegli vengono letti ed elaborati <strong>sul tuo dispositivo</strong>. Non c’è un server che riceve i file: non vengono caricati, salvati o letti da nessuno.</p>
 <ul>
 <li>Il riconoscimento del testo (OCR) usa un motore e dei modelli di lingua scaricati da questo sito al primo uso e poi tenuti nel browser.</li>
+<li>La mappa stradale di «Analisi delle vendite» scarica da questo sito l’elenco dei numeri civici delle province dove hai clienti e i pezzi di mappa delle zone che guardi, come fa ogni mappa. Gli indirizzi e i nomi dei clienti si cercano sul tuo dispositivo e non vengono mai inviati.</li>
 <li>Dopo la prima visita il sito funziona anche senza connessione, e puoi installarlo come app dal menu del browser.</li>
 <li>Non usiamo servizi di intelligenza artificiale esterni: ogni elaborazione è codice che gira nella pagina.</li>
 <li>I risultati importanti si possono verificare: per esempio «Verifica PDF/A» controlla un file secondo le regole della norma, e i dati ricavati dai documenti mostrano sempre i controlli fatti (saldi, totali, codici).</li>

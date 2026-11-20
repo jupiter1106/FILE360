@@ -68,7 +68,7 @@ const Vendite = (() => {
     for (const f of invs) { const k = chiave(f.cedente); conta.set(k, (conta.get(k) || 0) + 1); }
     const meKey = meScelto || [...conta.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
     const meInv = invs.find(f => chiave(f.cedente) === meKey);
-    const me = meInv ? { key: meKey, nome: meInv.cedente.nome, piva: meInv.cedente.piva, luogo: luogo(meInv.cedente), sede: meInv.cedente.citta } : null;
+    const me = meInv ? { key: meKey, nome: meInv.cedente.nome, piva: meInv.cedente.piva, luogo: luogo(meInv.cedente), sede: meInv.cedente.citta, via: meInv.cedente.via || '' } : null;
     const emittenti = [...conta.entries()].map(([k, n]) => ({ key: k, n, nome: invs.find(f => chiave(f.cedente) === k)?.cedente.nome || k }));
     const fatture = [], scartate = { passive: 0, autofatture: 0, altre: 0 };
     for (const f of invs) {
@@ -126,7 +126,7 @@ const Vendite = (() => {
     const lista = [...C.values()].map(c => {
       const d = [...new Set(c.date)].sort((a, b) => a - b), gaps = d.slice(1).map((t, i) => (t - d[i]) / DAY), gapMed = gaps.length ? gaps.sort((a, b) => a - b)[Math.floor(gaps.length / 2)] : null;
       const ultimo = d[d.length - 1] || null, primo = d[0] || null, giorni = ultimo ? Math.round((oggi - ultimo) / DAY) : null;
-      return { key: c.key, nome: c.nome, piva: c.piva, persona: c.persona, pa: c.pa, luogo: c.luogo, sede: c.sede, fatt: r2(c.fatt), n: c.n, note: r2(c.note), primo, ultimo, giorni, ritmo: gapMed != null ? Math.round(gapMed) : null,
+      return { key: c.key, nome: c.nome, piva: c.piva, persona: c.persona, pa: c.pa, luogo: c.luogo, sede: c.sede, via: c.via, fatt: r2(c.fatt), n: c.n, note: r2(c.note), primo, ultimo, giorni, ritmo: gapMed != null ? Math.round(gapMed) : null,
         prossimo: ultimo && gapMed ? ultimo + gapMed * DAY : null, prodotti: [...c.prodotti.values()].sort((a, b) => b.fatt - a.fatt).map(p => ({ ...p, fatt: r2(p.fatt) })),
         termini: c.termini.length ? Math.round(c.termini.reduce((a, b) => a + b, 0) / c.termini.length) : null, modalita: [...c.modalita.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '' };
     }).sort((a, b) => b.fatt - a.fatt);
@@ -262,7 +262,7 @@ const Vendite = (() => {
     return S.sort((a, b) => b.peso - a.peso);
   }
 
-  return { prepara, analizza, filtra, luogo, km, geo, MESI, MESI3, MOD_PAG, PAESI, eur, pct, meseNome };
+  return { prepara, analizza, filtra, luogo, km, geo, lonLat, MESI, MESI3, MOD_PAG, PAESI, eur, pct, meseNome };
 })();
 
 /* ---------- lo strumento: filtri in alto, schede, mappa, dettagli nel pannello laterale ---------- */
@@ -282,7 +282,7 @@ async function startVendite(stage, files = []) {
   }
   if (files.length) await withBusy('Lettura delle fatture…', async () => { for (const [i, f] of files.entries()) { Busy.set?.(i / files.length, `File ${i + 1} di ${files.length}`); await leggi(f.name, new Uint8Array(await f.arrayBuffer())); } });
   let D = V.prepara(invs);
-  const st = { tab: 'panoramica', periodo: 'tutto', tipoCli: '', regione: '', prov: '', comune: '', estero: false, cliente: '', prodotto: '', segmento: '', sel: null, modo: 'bolle', cerca: '', ord: { clienti: ['fatt', -1], prodotti: ['fatt', -1] } };
+  const st = { tab: 'panoramica', periodo: 'tutto', tipoCli: '', regione: '', prov: '', comune: '', estero: false, cliente: '', prodotto: '', segmento: '', sel: null, modo: typeof Mappa !== 'undefined' && Mappa.webgl() ? 'strade' : 'bolle', cerca: '', ord: { clienti: ['fatt', -1], prodotti: ['fatt', -1] } };
   let A = null;
   const periodi = () => { const anni = [...new Set(D.fatture.map(f => new Date(f.t).getFullYear()))].sort(); return [['tutto', 'Tutto il periodo'], ['12', 'Ultimi 12 mesi'], ...anni.reverse().map(y => [String(y), `Anno ${y}`])]; };
   const filtro = () => { const fine = D.fatture[D.fatture.length - 1]?.t || Date.now(); let da = null, a = null; if (st.periodo === '12') { da = fine - 365 * DAY; } else if (/^\d{4}$/.test(st.periodo)) { da = Date.parse(`${st.periodo}-01-01`); a = Date.parse(`${st.periodo}-12-31T23:59:59`); } return { da, a, tipoCli: st.tipoCli, regione: st.regione, prov: st.prov, comune: st.comune, estero: st.estero, cliente: st.cliente, prodotto: st.prodotto }; };
@@ -346,7 +346,7 @@ async function startVendite(stage, files = []) {
       const s = A.distanze.sede, perKm = GEO.proj.k / 6371 / Math.cos(V.km ? (s.y && (() => { const P = GEO.proj, Y0 = Math.log(Math.tan(Math.PI / 4 + P.lat1 * Math.PI / 360)); return 2 * Math.atan(Math.exp(Y0 - s.y / P.k)) - Math.PI / 2; })()) : 0);
       for (const r of [50, 100]) g.append(S('circle', { cx: s.x, cy: s.y, r: r * perKm, class: 'vd-ring', 'stroke-width': 1.2 * sc }), S('text', { x: s.x + r * perKm * 0.72, y: s.y - r * perKm * 0.72, class: 'vd-ringl', 'font-size': 11 * sc }, `${r} km`));
     }
-    if (st.modo === 'bolle') {
+    if (st.modo !== 'province') {
       const max = Math.max(1, ...A.luoghi.map(l => l.fatt));
       for (const l of [...A.luoghi].sort((a, b) => b.fatt - a.fatt)) {
         if (!(l.fatt > 0)) continue;
@@ -378,19 +378,113 @@ async function startVendite(stage, files = []) {
   }
   let rdT = 0; const redrawSoon = () => { clearTimeout(rdT); rdT = setTimeout(() => { const old = main.querySelector('.vd-mapw'); if (old) old.replaceWith(mappa({ grande: old.querySelector('svg')?.classList.contains('big') })); }, 160); };
 
+  /* mappa stradale (MapLibre, src/mappa.js): l'Italia nello stile del prodotto; ingrandendo, strade, edifici e il cliente
+     sul civico scritto in fattura. Gli indirizzi si cercano sul dispositivo nell'indice dei civici di OpenStreetMap. */
+  const GL = { wrap: null, box: null, stato: null, avviso: null, zona: null, prec: null, modi: null, inst: null, tema: '', pronto: null, coda: Promise.resolve(), rifai: false, rilievo: false, prov: [] };
+  const geoC = new Map(); let sedeGL = null;
+  const PREC = { civico: 'al civico', stimato: 'civico stimato tra i vicini', via: 'sulla via (civico non trovato)', comune: 'al centro del Comune', cap: 'dal CAP', provincia: 'al centro della provincia' };
+  const statoGL = t => { if (GL.stato) { GL.stato.textContent = t; GL.stato.hidden = !t; } };
+  async function geocodifica() {
+    if (typeof Mappa === 'undefined') return;
+    await Mappa.riprendi(false);
+    const tutti = [...D.clienti.values()].filter(c => c.luogo && !c.luogo.estero && c.luogo.x != null);
+    const provs = [...new Set([...tutti.map(c => c.luogo.prov), D.me?.luogo?.prov].filter(Boolean))];
+    if (Mappa.haCivici()) statoGL('Cerco gli indirizzi dei clienti…');
+    const I = new Map(await Promise.all(provs.map(async p => [p, Mappa.haCivici() ? await Mappa.indice(p) : null])));
+    const pos = (L, via) => { const r = (L.prec === 'comune' || L.prec === 'cap') && via ? Mappa.cerca(I.get(L.prov), L.comune, L.prov, via) : null; if (r) return r; const [lon, lat] = V.lonLat(L.x, L.y); return { lon, lat, prec: L.prec }; };
+    geoC.clear(); const visti = new Map();
+    for (const c of tutti) {
+      const g = pos(c.luogo, c.via), k = `${g.lon.toFixed(5)},${g.lat.toFixed(5)}`, n = visti.get(k) || 0; visti.set(k, n + 1);
+      if (n) { const a = n * 2.4, r = 0.00004 * Math.sqrt(n); g.lon += r * Math.cos(a) / Math.cos(g.lat * Math.PI / 180); g.lat += r * Math.sin(a); }   // stesso edificio: i punti si affiancano
+      geoC.set(c.key, g);
+    }
+    sedeGL = D.me?.luogo?.x != null ? { ...pos(D.me.luogo, D.me.via), nome: D.me.nome } : null;
+    // le province da vedere in dettaglio: dove ci sono clienti (prima quelle con più fatturato) e la sede
+    const perProv = new Map(); for (const f of D.fatture) { const c = D.clienti.get(f.cli), pr = c?.luogo?.estero ? null : c?.luogo?.prov; if (pr) perProv.set(pr, (perProv.get(pr) || 0) + Math.abs(f.imp || 0) + 1); }
+    GL.prov = [...perProv.entries()].sort((a, b) => b[1] - a[1]).map(x => x[0]); GL.provSede = D.me?.luogo?.prov || null;
+  }
+  function puntiGL() {
+    return A.clienti.filter(c => geoC.has(c.key)).map(c => { const g = geoC.get(c.key); return { id: c.key, nome: c.nome, lon: g.lon, lat: g.lat, f: c.fatt, prec: g.prec, prov: c.luogo?.prov,
+      tip: () => h('div', { class: 'vd-popt' }, h('b', {}, c.nome), h('div', {}, `${eur(c.fatt)} · ${c.n} ${c.n === 1 ? 'fattura' : 'fatture'}`), h('div', { class: 'muted' }, `${c.luogo?.comune || ''} · ${PREC[g.prec] || ''}`)) }; });
+  }
+  function zonaGL(ps) {
+    if (!GL.zona) return;
+    const tot = ps.reduce((a, p) => a + Math.max(0, p.f), 0), top = [...ps].sort((a, b) => b.f - a.f).slice(0, 6);
+    GL.zona.replaceChildren(h('h3', {}, 'Nella zona che vedi'), h('div', { class: 'vd-big' }, eur(tot), h('small', {}, ` · ${ps.length} ${ps.length === 1 ? 'cliente' : 'clienti'} · ${pct(tot / Math.max(1, A.fatturato))} del totale`)),
+      top.length ? h('ul', { class: 'vd-cl' }, top.map(p => h('li', {}, h('button', { type: 'button', class: 'vd-clb', onclick: () => { seleziona({ tipo: 'cliente', k: p.id }); GL.inst?.vola(p.id); } }, h('b', {}, p.nome), h('span', {}, eur(p.f)))))) : h('p', { class: 'muted small' }, 'Nessun cliente in questa zona.'));
+  }
+  function precGL() {
+    if (!GL.prec) return;
+    const n = {}; for (const c of A.clienti) { const g = geoC.get(c.key); if (g) n[g.prec] = (n[g.prec] || 0) + 1; }
+    const righe = ['civico', 'stimato', 'via', 'comune', 'cap', 'provincia'].filter(k => n[k]).map(k => h('li', {}, h('b', {}, String(n[k])), ` ${PREC[k]}`));
+    const pv = GL.inst?.province || [];
+    GL.prec.replaceChildren(h('h3', {}, 'Precisione delle posizioni'), righe.length ? h('ul', { class: 'vd-precl' }, righe) : h('p', { class: 'muted small' }, '—'),
+      GL.inst?.regione ? h('p', { class: 'small vd-provd' }, h('b', {}, `Solo ${GL.inst.regione}`), `: tutti i clienti sono in questa regione, quindi la mappa mostra lei sola${pv.length ? `, con strade ed edifici delle sue ${pv.length} province` : ''}. Il resto d’Italia non si scarica.`)
+        : pv.length ? h('p', { class: 'small vd-provd' }, h('b', {}, `Strade ed edifici in ${pv.length} ${pv.length === 1 ? 'provincia' : 'province'}`), `, quelle dove hai clienti: ${pv.slice(0, 12).join(', ')}${pv.length > 12 ? '…' : ''}. Il resto d’Italia è d’insieme: si scarica solo ciò che serve.`) : null,
+      h('p', { class: 'muted small' }, Mappa.haCivici() ? 'Gli indirizzi si cercano su questo dispositivo, nell’indice dei numeri civici di OpenStreetMap: nessun indirizzo viene inviato.' : 'Senza l’indice degli indirizzi i clienti stanno al centro del Comune scritto in fattura.'));
+  }
+  function avvisoGL() {
+    if (!GL.avviso) return;
+    const det = GL.inst ? GL.inst.dettaglio : Mappa.haDettaglio(), civ = Mappa.haCivici();
+    if (det && civ) { GL.avviso.hidden = true; return; }
+    const sceglie = async () => { const n = await Mappa.scegliCartella(); if (!n) return toast('Nella cartella scelta non c’è la mappa: serve la cartella «mappa-italia» (italia.pmtiles e la cartella civici).', 'error'); GL.pronto = null; GL.rifai = true; avviaGL(); };
+    const riapri = async () => { if (await Mappa.riprendi(true)) { GL.pronto = null; GL.rifai = true; avviaGL(); } };
+    GL.avviso.hidden = false;
+    GL.avviso.replaceChildren(h('div', {}, h('b', {}, !det ? 'Vedi l’Italia d’insieme.' : 'Mappa dettagliata senza indirizzi.'), ' ',
+      !det ? 'Per strade ed edifici delle province dove vendi scegli la cartella «mappa-italia»: resta su questo dispositivo e funziona senza rete.' : 'Per mettere i clienti sul numero civico serve anche la cartella «civici».'),
+      h('div', { class: 'vd-acts' }, h('button', { type: 'button', class: 'btn sm primary', onclick: sceglie }, ic('folder', 15), 'Scegli la cartella della mappa'), GL.ricordata ? h('button', { type: 'button', class: 'btn sm', onclick: riapri }, 'Riapri l’ultima cartella') : null));
+  }
+  function vistaGL() {
+    if (!GL.wrap) {
+      GL.box = h('div', { class: 'vd-gl', role: 'region', 'aria-label': 'Mappa stradale dei clienti' });
+      GL.stato = h('div', { class: 'vd-glst', role: 'status' }, 'Preparo la mappa…');
+      GL.avviso = h('div', { class: 'vd-glav', hidden: true });
+      const modo = (on, l, t) => h('button', { type: 'button', class: 'vd-glm' + (GL.rilievo === on ? ' on' : ''), 'aria-pressed': String(GL.rilievo === on), title: t, onclick: e => { if (GL.rilievo === on) return; GL.rilievo = on; GL.inst?.rilievo(on); GL.modi.querySelectorAll('button').forEach(b => { const a = b === e.currentTarget; b.classList.toggle('on', a); b.setAttribute('aria-pressed', String(a)); }); } }, l);
+      GL.modi = h('div', { class: 'vd-glmodi', role: 'group', 'aria-label': 'Che cosa mostrare' }, modo(false, 'Clienti', 'Un punto per cliente, grande come il fatturato'), modo(true, 'Rilievo', 'Colonne in 3D, alte come il fatturato di ogni zona'));
+      GL.wrap = h('div', { class: 'vd-glw' }, GL.box, GL.modi, GL.stato);
+      GL.zona = h('section', { class: 'vd-sec vd-zona' }); GL.prec = h('section', { class: 'vd-sec' });
+    }
+    return GL.wrap;
+  }
+  function avviaGL() {
+    GL.coda = GL.coda.then(async () => {
+      if (st.tab !== 'mappa' || st.modo !== 'strade' || !GL.box?.isConnected) return;
+      try {
+        if (!GL.pronto) { GL.pronto = geocodifica(); GL.rifai = true; }
+        await GL.pronto;
+        if (GL.ricordata == null) GL.ricordata = await Mappa.ricordata();
+        const P = puntiGL(), tema = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        if (GL.inst && GL.tema === tema && !GL.rifai) { GL.inst.map.resize(); GL.inst.aggiorna(P); }
+        else {
+          GL.inst?.chiudi(); GL.inst = null; statoGL('Preparo la mappa…');
+          GL.inst = await Mappa.disegna(GL.box, { punti: P, sede: sedeGL, province: GL.prov, provSede: GL.provSede, onPunto: k => seleziona({ tipo: 'cliente', k }), onZona: zonaGL });
+          if (GL.rilievo) GL.inst.rilievo(true);
+          GL.tema = tema; GL.rifai = false; GL.box._mappa = GL.inst; GL.inst.map.resize(); GL.inst.tutta();
+        }
+        GL.inst.seleziona(st.sel?.tipo === 'cliente' ? st.sel.k : '');
+        statoGL(''); precGL(); avvisoGL();
+      } catch (e) {
+        statoGL('La mappa stradale non si può mostrare su questo dispositivo: usa la vista per Comuni.'); console.warn(e);
+      }
+    });
+    return GL.coda;
+  }
+
   /* selezione: un Comune, una provincia, un cliente o un prodotto → dettagli nel pannello */
-  function seleziona(s) { st.sel = s; if (s.tipo === 'prov') { st.modo = st.modo; } drawSide(); main.querySelectorAll('.vd-dot.sel').forEach(e => e.classList.remove('sel')); redrawSoon(); if (matchMedia('(max-width: 900px)').matches) side.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  function seleziona(s) { st.sel = s; GL.inst?.seleziona(s?.tipo === 'cliente' ? s.k : ''); if (s.tipo === 'prov') { st.modo = st.modo; } drawSide(); main.querySelectorAll('.vd-dot.sel').forEach(e => e.classList.remove('sel')); redrawSoon(); if (matchMedia('(max-width: 900px)').matches) side.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   const segInfo = { campioni: 'Comprano spesso, da poco e molto: i clienti migliori.', fedeli: 'Comprano con regolarità.', nuovi: 'Primo acquisto negli ultimi 4 mesi.', 'da coltivare': 'Comprano poco o di rado: margine per crescere.', 'a rischio': 'Non comprano da più tempo degli altri.', 'da recuperare': 'Clienti importanti fermi da molto più del loro solito: da ricontattare subito.', persi: 'Clienti abituali fermi da tempo.', note: 'Solo note di credito nel periodo.' };
   const chipSeg = s => h('span', { class: `vd-seg s-${s.replace(/\s/g, '-')}`, title: segInfo[s] || '' }, s);
   function schedaCliente(c) {
-    const comprati = c.prodotti.slice(0, 6), luogoTxt = c.luogo?.estero ? c.luogo.paese : c.luogo?.comune ? `${c.luogo.comune} (${c.luogo.prov})` : c.sede || '—';
+    const comprati = c.prodotti.slice(0, 6), luogoTxt = c.luogo?.estero ? c.luogo.paese : c.luogo?.comune ? `${c.luogo.comune} (${c.luogo.prov})` : c.sede || '—', g = geoC.get(c.key);
     return [h('div', { class: 'vd-sh' }, h('b', {}, c.nome), chipSeg(c.segmento)), h('div', { class: 'muted small' }, [c.pa ? 'Pubblica amministrazione' : c.persona ? 'Privato' : 'Azienda', c.piva ? `P.IVA ${c.piva}` : null, luogoTxt].filter(Boolean).join(' · ')),
+      c.via ? h('div', { class: 'muted small' }, c.via, g ? ` · posizione ${PREC[g.prec] || ''}` : '') : null,
       h('dl', { class: 'vd-dl' }, h('dt', {}, 'Fatturato'), h('dd', {}, `${eur(c.fatt)} (${pct(c.quota)})`), h('dt', {}, 'Fatture'), h('dd', {}, String(c.n) + (c.note ? ` · note di credito ${eur(c.note)}` : '')),
         h('dt', {}, 'Primo e ultimo acquisto'), h('dd', {}, `${data(c.primo)} → ${data(c.ultimo)}`), h('dt', {}, 'Ritmo'), h('dd', {}, c.ritmo ? `ogni ${c.ritmo} giorni circa` : '—'),
         c.prossimo ? [h('dt', {}, 'Prossimo acquisto atteso'), h('dd', {}, c.prossimo < oggi() ? `${data(c.prossimo)} (in ritardo)` : data(c.prossimo))] : null,
         c.termini != null ? [h('dt', {}, 'Termini di pagamento'), h('dd', {}, `${c.termini} giorni · ${V.MOD_PAG[c.modalita] || c.modalita || '—'}`)] : null),
       h('div', { class: 'vd-st' }, 'Che cosa ha comprato'), hbar(comprati.map(p => ({ l: p.desc, v: p.fatt, sub: p.qta ? `· ${Math.round(p.qta).toLocaleString('it-IT')}` : '' }))),
-      h('div', { class: 'vd-acts' }, h('button', { type: 'button', class: 'btn sm', onclick: () => { st.cliente = c.key; st.sel = null; ridisegna(); } }, ic('search', 15), 'Solo questo cliente'))];
+      h('div', { class: 'vd-acts' }, h('button', { type: 'button', class: 'btn sm', onclick: () => { st.cliente = c.key; st.sel = null; ridisegna(); } }, ic('search', 15), 'Solo questo cliente'),
+        geoC.has(c.key) && typeof Mappa !== 'undefined' && Mappa.webgl() ? h('button', { type: 'button', class: 'btn sm', onclick: () => { if (st.tab !== 'mappa' || st.modo !== 'strade') { st.tab = 'mappa'; st.modo = 'strade'; drawMain(); avviaGL().then(() => GL.inst?.vola(c.key)); } else GL.inst?.vola(c.key); } }, ic('pin', 15), 'Mostra sulla mappa') : null)];
   }
   function drawSide() {
     const s = st.sel, out = [];
@@ -416,9 +510,9 @@ async function startVendite(stage, files = []) {
         h('dt', {}, 'Fatture di vendita'), h('dd', {}, `${D.fatture.length.toLocaleString('it-IT')} · fino al ${data(oggi())}`), D.scartate.passive ? [h('dt', {}, 'Fatture di acquisto'), h('dd', {}, `${D.scartate.passive} (escluse)`)] : null,
         errori.length ? [h('dt', {}, 'File non letti'), h('dd', {}, String(errori.length))] : null,
         h('dt', {}, 'Clienti sulla mappa'), h('dd', {}, `${p.comune + p.cap + p.provincia} su ${A.clienti.length - p.estero}${p.cap || p.provincia ? ` (${[p.cap ? `${p.cap} dal CAP` : '', p.provincia ? `${p.provincia} dalla provincia` : ''].filter(Boolean).join(', ')})` : ''}${p.estero ? ` · ${p.estero} all'estero` : ''}`)),
-        D.emittenti.length > 1 ? h('label', { class: 'vd-f' }, h('span', {}, 'Azienda da analizzare'), h('select', { class: 'select', onchange: e => { D = V.prepara(invs, e.target.value); st.sel = null; ridisegna(); } }, D.emittenti.sort((a, b) => b.n - a.n).map(e => h('option', { value: e.key, selected: e.key === D.me?.key }, `${e.nome} (${e.n})`)))) : null,
-        h('div', { class: 'vd-st' }, 'Come leggere'), h('p', { class: 'small muted' }, 'Tocca un cerchio sulla mappa per vedere chi sono i clienti di quel Comune e che cosa hanno comprato; tocca una provincia per i suoi Comuni. Gli importi sono imponibili (senza IVA), al netto delle note di credito.'),
-        h('p', { class: 'small muted' }, 'Le posizioni sono quelle del Comune della sede scritta in fattura. Tutto avviene su questo dispositivo: nessun dato viene inviato.'));
+        D.emittenti.length > 1 ? h('label', { class: 'vd-f' }, h('span', {}, 'Azienda da analizzare'), h('select', { class: 'select', onchange: e => { D = V.prepara(invs, e.target.value); st.sel = null; GL.pronto = null; ridisegna(); } }, D.emittenti.sort((a, b) => b.n - a.n).map(e => h('option', { value: e.key, selected: e.key === D.me?.key }, `${e.nome} (${e.n})`)))) : null,
+        h('div', { class: 'vd-st' }, 'Come leggere'), h('p', { class: 'small muted' }, 'Sulla mappa stradale tocca un gruppo per ingrandire e un cliente per la sua scheda. Nella vista per Comuni tocca un cerchio per vedere chi sono i clienti di quel Comune e che cosa hanno comprato, e una provincia per i suoi Comuni. Gli importi sono imponibili (senza IVA), al netto delle note di credito.'),
+        h('p', { class: 'small muted' }, 'Sulla mappa stradale i clienti stanno all’indirizzo della sede scritta in fattura, fino al numero civico; nelle viste per Comune e provincia, al centro del Comune. Tutto avviene su questo dispositivo: nessun dato viene inviato.'));
     }
     side.replaceChildren(...out.filter(Boolean));
   }
@@ -449,8 +543,12 @@ async function startVendite(stage, files = []) {
       sez('Scoperte', scoperteEl(6)),
       h('div', { class: 'vd-two' }, sez('Dove sono i clienti', mappa()), sez('Andamento mensile', barre([...mesiDati()], { prev: prevDati(), desc: 'Fatturato per mese', meta: true }), A.previsione ? h('p', { class: 'muted small' }, 'In chiaro la stima dei prossimi 3 mesi, con l’intervallo probabile.') : null,
         h('div', { class: 'vd-st' }, 'Primi clienti'), hbar(A.clienti.slice(0, 6).map(c => ({ l: c.nome, v: c.fatt, sub: pct(c.quota), k: c.key })), { onClick: r => seleziona({ tipo: 'cliente', k: r.k }) })))];
+    const tbMappa = () => h('div', { class: 'vd-maptb' }, seg([...(typeof Mappa !== 'undefined' && Mappa.webgl() ? [['strade', 'Strade']] : []), ['bolle', 'Comuni'], ['province', 'Province']], st.modo, v => { st.modo = v; drawMain(); }), A.distanze ? h('span', { class: 'muted small' }, `Metà del fatturato entro ${A.distanze.mediana ?? '—'} km dalla sede`) : null);
+    if (t === 'mappa' && st.modo === 'strade') { setTimeout(avviaGL, 0); vistaGL(); return [tbMappa(), GL.wrap, GL.avviso, h('div', { class: 'vd-two' }, GL.zona, h('div', {}, GL.prec,
+        A.estero.length ? sez('Estero', hbar(A.estero.map(e => ({ l: e.paese, v: e.fatt, sub: `· ${e.clienti.length}` })))) : null,
+        A.senzaLuogo.n ? h('p', { class: 'muted small' }, `${A.senzaLuogo.n} clienti senza un Comune riconoscibile in fattura (${eur(A.senzaLuogo.fatt)}).`) : null))]; }
     if (t === 'mappa') return [
-      h('div', { class: 'vd-maptb' }, seg([['bolle', 'Comuni'], ['province', 'Province']], st.modo, v => { st.modo = v; drawMain(); }), A.distanze ? h('span', { class: 'muted small' }, `Metà del fatturato entro ${A.distanze.mediana ?? '—'} km dalla sede`) : null),
+      tbMappa(),
       h('div', { class: 'vd-two map' }, mappa({ grande: true }), h('div', {},
         A.distanze ? sez('Distanza dalla sede', hbar(A.distanze.fasce.filter(f => f.n).map(f => ({ l: f.r === Infinity ? 'oltre 250 km' : `entro ${f.r} km`, v: f.fatt, sub: `· ${f.n} ${f.n === 1 ? 'cliente' : 'clienti'}` })))) : null,
         sez('Regioni', hbar(A.regioni.slice(0, 10).map(r => ({ l: r.n, v: r.fatt, k: r.n })), { onClick: r => { st.regione = r.k; ridisegna(); } })),

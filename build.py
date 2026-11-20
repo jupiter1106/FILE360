@@ -28,7 +28,37 @@ def data_block(name, file):
     if not f.exists(): return ''
     return f'<script type="text/x-officina-gz" id="lazy-{name}" data-size="{f.stat().st_size}">' + base64.b64encode(gzip.compress(f.read_bytes(), 9, mtime=0)).decode() + '</script>\n'
 # caratteri liberi con le misure dei 14 standard (tools/stdfonts.py): per incorporarli in PDF/A invece di fare immagini
-def tsl_block(): return data_block('tsl', 'tsl-it.json') + data_block('stdfonts', 'stdfonts.json')
+# blocchi molto grandi (la mappa): in pezzi da 256 KB, così il browser non si ferma a lungo per leggerli all'apertura
+# (il primo pezzo porta data-parts e data-pname; gli altri sono <script type="text/x-officina-part" data-of=…>)
+PEZZO_HTML = 256 * 1024
+def a_pezzi(tag_open, b64, pname):
+    if len(b64) <= PEZZO_HTML: return f'{tag_open}>{b64}</script>\n'
+    parts = [b64[i:i + PEZZO_HTML] for i in range(0, len(b64), PEZZO_HTML)]
+    return f'{tag_open} data-parts="{len(parts)}" data-pname="{pname}">{parts[0]}</script>\n' + ''.join(f'<script type="text/x-officina-part" data-of="{pname}">{p}</script>\n' for p in parts[1:])
+def data_block_pezzi(name, file):
+    f = S / file
+    if not f.exists(): return ''
+    return a_pezzi(f'<script type="text/x-officina-gz" id="lazy-{name}" data-size="{f.stat().st_size}"', base64.b64encode(gzip.compress(f.read_bytes(), 9, mtime=0)).decode(), 'lazy-' + name)
+MAPPA_INSIEME = 'vendor/mappa/italia-insieme-z5.pmtiles'   # l'Italia d'insieme nel file unico (sul sito: z7, tools/sitegen.py)
+def tsl_block(): return data_block('tsl', 'tsl-it.json') + data_block('stdfonts', 'stdfonts.json') 
+# mappa stradale (Analisi delle vendite): MapLibre GL + PMTiles + stile nei colori del prodotto + caratteri delle scritte.
+# Un blocco rimandato, eseguito solo quando si apre la mappa (vedi Mappa in src/mappa.js).
+def mappa_lib():
+    import json
+    V = S / 'vendor' / 'mappa'
+    if not (V / 'maplibre-gl.js').exists(): return ''
+    # caratteri delle scritte: Noto Sans normale e medio (il corsivo diventa normale), lettere latine e punteggiatura;
+    # un solo blocco binario compresso con l'indice dei pezzi (decompresso alla prima apertura della mappa)
+    nomi = ['noto-sans-regular-0-255', 'noto-sans-regular-256-511', 'noto-sans-regular-8192-8447', 'noto-sans-medium-0-255', 'noto-sans-medium-256-511']
+    bins = [(V / 'glifi' / f'{n}.pbf').read_bytes() for n in nomi]; idx, o = {}, 0
+    for n, b in zip(nomi, bins): idx[n] = [o, len(b)]; o += len(b)
+    stile = (V / 'stile.json').read_text(encoding='utf-8').replace('Noto Sans Italic', 'Noto Sans Regular')
+    ris = {'css': (V / 'maplibre-gl.css').read_text(encoding='utf-8'), 'stile': json.loads(stile), 'glifi': {'idx': idx, 'gz': base64.b64encode(gzip.compress(b''.join(bins), 9, mtime=0)).decode()}}
+    if (V / 'confini.json').exists(): ris['confini'] = json.loads((V / 'confini.json').read_text(encoding='utf-8'))   # province, 80 m (tools/mappa_dati.py confini)
+    code = (V / 'maplibre-gl.js').read_text(encoding='utf-8') + '\n;' + (V / 'pmtiles.js').read_text(encoding='utf-8') + '\n;window.pmtiles=pmtiles;window.MAPPA_RISORSE=' + json.dumps(ris, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c') + ';\n'
+    for bad in ('<!--', '</script'):
+        if bad in code: sys.exit(f'ERRORE: la sequenza {bad!r} compare nella libreria della mappa')
+    return a_pezzi('<script type="text/x-officina-later" data-lib="mappa" data-gz="1"', base64.b64encode(gzip.compress(code.encode("utf-8"), 9, mtime=0)).decode(), 'lib-mappa')
 def build():
     css = '\n'.join(rd(f) for f in CSS_FILES)
     if DS_FILES:
@@ -37,7 +67,7 @@ def build():
     # i moduli dei servizi per professione (src/pro.js) stanno nei blocchi rimandati, subito prima dell'anteprima dei risultati
     if (S / 'pro.js').exists() and LATER_TO:
         L = js.split('\n'); i = next(k for k, l in enumerate(L) if l.startswith(LATER_TO)) - 1
-        js = '\n'.join(L[:i] + [rd('pro.js')] + ([rd('office.js')] if (S / 'office.js').exists() else []) + ([rd('contratti.js')] if (S / 'contratti.js').exists() else []) + ([rd('rilevaai.js')] if (S / 'rilevaai.js').exists() else []) + ([rd('rilevaai-modello.js')] if (S / 'rilevaai-modello.js').exists() else []) + ([rd('comuni-it.js')] if (S / 'comuni-it.js').exists() else []) + ([rd('geo-it.js')] if (S / 'geo-it.js').exists() else []) + ([rd('vendite.js')] if (S / 'vendite.js').exists() else []) + L[i:])
+        js = '\n'.join(L[:i] + [rd('pro.js')] + ([rd('office.js')] if (S / 'office.js').exists() else []) + ([rd('contratti.js')] if (S / 'contratti.js').exists() else []) + ([rd('rilevaai.js')] if (S / 'rilevaai.js').exists() else []) + ([rd('rilevaai-modello.js')] if (S / 'rilevaai-modello.js').exists() else []) + ([rd('comuni-it.js')] if (S / 'comuni-it.js').exists() else []) + ([rd('geo-it.js')] if (S / 'geo-it.js').exists() else []) + ([rd('mappa.js')] if (S / 'mappa.js').exists() else []) + ([rd('vendite.js')] if (S / 'vendite.js').exists() else []) + L[i:])
     later, chunks = '', []
     if LATER_FROM and LATER_FROM in js:
         L = js.split('\n'); a = next(i for i, l in enumerate(L) if l.startswith(LATER_FROM)) - 1; z = next(i for i, l in enumerate(L) if l.startswith(LATER_TO)) - 1
@@ -63,7 +93,8 @@ def build():
         vendor = vendor[:a] + vendor[z:]
     head = rd('head.html')
     if DS_FILES: head = head.replace('<html lang="it">', '<html lang="it" data-ds="2">')
-    html = '\n'.join([head, '<style>', css, '</style>', vendor, cloud_script(), '</head>', rd('body.html'), rd('lazy.html') + tsl_block(), later + '<script>', js, '</script>', rd('tail.html')])
+    html = '\n'.join([head, '<style>', css, '</style>', vendor, cloud_script(), '</head>', rd('body.html'), rd('lazy.html') + tsl_block() + mappa_lib() + data_block_pezzi('mappaitalia', MAPPA_INSIEME), later + '<script>', js, '</script>', rd('tail.html')])
+
     # il JS deve essere valido (core e blocchi rimandati): un errore di sintassi qui spegnerebbe tutto il programma
     import subprocess, tempfile
     for k, part in enumerate([js] + chunks):
@@ -134,6 +165,26 @@ def site_url():
     u = os.environ.get('FILE360_SITE_URL', '').strip()
     if not u and (ROOT / 'site.json').exists(): u = json.loads((ROOT / 'site.json').read_text(encoding='utf-8')).get('url', '').strip()
     return u.rstrip('/')
+def mappa_sito(out):
+    """dati della mappa stradale accanto alle pagine: gli indirizzi per provincia (dati/mappa/civici, nel repository) e,
+    se ci sono, strade ed edifici per provincia (dati/mappa/province/PR.pmtiles, 1,8 GB, fuori dal repository: si
+    preparano con tools/mappa_dati.py), ogni provincia in pezzi da 4 MB. Il browser scarica solo le province dove ci
+    sono clienti e, di quelle, solo i byte delle zone guardate. Restituisce la configurazione per la pagina."""
+    import shutil
+    sys.path.insert(0, str(ROOT / 'tools')); import mappa_dati
+    cfg, civ = {}, ROOT / 'dati' / 'mappa' / 'civici'
+    if civ.is_dir() and any(civ.glob('*.json.gz')):
+        shutil.copytree(civ, out / 'mappa' / 'civici'); cfg['civici'] = '/mappa/civici/'
+    prov = pathlib.Path(os.environ.get('FILE360_MAPPA_PROVINCE', '').strip() or ROOT / 'dati' / 'mappa' / 'province')
+    pezzo = int(float(os.environ.get('FILE360_MAPPA_PEZZO_MB', '4')) * 1048576)
+    files = sorted(prov.glob('*.pmtiles')) if prov.is_dir() else []
+    if files:
+        cfg['base'] = '/mappa/province/'; cfg['province'] = {}
+        import contextlib, io
+        for f in files:
+            with contextlib.redirect_stdout(io.StringIO()): m = mappa_dati.tessere(str(f), out / 'mappa' / 'province' / f.stem, pezzo)
+            cfg['province'][f.stem.upper()] = {'n': m['n'], 'pezzo': m['pezzo']}
+    return cfg
 def netlify():
     """dist/netlify/: la cartella da pubblicare su Netlify (trascinarla in «Deploys»): pagine, codice, motore OCR,
     intestazioni HTTP, app installabile. Si ricava dal file unico (tools/site.py)."""
@@ -143,7 +194,8 @@ def netlify():
     if out.exists(): shutil.rmtree(out)   # (niente file rimasti da build precedenti)
     out.mkdir(parents=True, exist_ok=True)
     url = site_url()
-    r = Site.make_site(ROOT, (ROOT / 'dist' / 'file360.html').read_text(encoding='utf-8'), out, site_csp, url)
+    mappa = mappa_sito(out)
+    r = Site.make_site(ROOT, (ROOT / 'dist' / 'file360.html').read_text(encoding='utf-8'), out, site_csp, url, mappa)
     (out / 'icons').mkdir(exist_ok=True)
     for f in (S / 'icons').glob('*.png'): shutil.copyfile(f, out / 'icons' / f.name)
     manifest = {'name': 'file360 — strumenti PDF nel tuo browser', 'short_name': 'file360', 'lang': 'it', 'start_url': '/', 'scope': '/', 'display': 'standalone', 'id': '/',
@@ -174,7 +226,8 @@ def netlify():
                                   '  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()\n'
                                   f'  Content-Security-Policy: {r["csp"]}\n'
                                   '/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n/tess/*\n  Cache-Control: public, max-age=2592000\n'
-                                  '/sw.js\n  Cache-Control: no-cache\n/cloud.json\n  Cache-Control: no-cache\n  Content-Type: application/json; charset=utf-8\n', encoding='utf-8')
+                                  '/mappa/*\n  Cache-Control: public, max-age=2592000\n/sw.js\n  Cache-Control: no-cache\n/cloud.json\n  Cache-Control: no-cache\n  Content-Type: application/json; charset=utf-8\n', encoding='utf-8')
+    print('  mappa stradale: ' + ('indirizzi per provincia' if mappa.get('civici') else 'senza indirizzi') + (f", strade ed edifici di {len(mappa['province'])} province in {sum(p['n'] for p in mappa['province'].values())} pezzi" if mappa.get('province') else ', solo l’Italia d’insieme (manca dati/mappa/province)'))
     print(f"  sito: {pg.get('pages', 0)} pagine, {len(r['assets'])} file di codice e dati, {r['hashes']} script con impronta" + ('' if url else ' (indirizzo del sito non indicato: niente sitemap, indirizzi relativi)'))
     return out
 if __name__ == '__main__':

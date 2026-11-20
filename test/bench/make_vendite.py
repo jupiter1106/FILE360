@@ -77,6 +77,71 @@ for f in random.sample([f for f in fatture if f['data'] < dt.date(2025, 9, 1)], 
     fatture.append(dict(n=f'NC{num}/{f["data"].year}', data=f['data'] + dt.timedelta(days=20), cli=f['cli'], righe=[dict(r, qta=q, tot=round(r['prezzo'] * q, 2))], tipo='TD04'))
 fatture.sort(key=lambda f: f['data'])
 def esc(s): return str(s).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+# ---- indirizzi veri (indice dei civici di OpenStreetMap, dati/mappa/civici) scritti nei modi che si trovano nelle fatture ----
+# Un generatore casuale a parte: le fatture (importi, date) restano le stesse di prima.
+import gzip, math, re as _re
+ARND = random.Random(2026)
+CANON = {'MODENA': 'Modena', "Forli'": 'Forlì'}
+TIPI = {'via', 'viale', 'piazza', 'piazzale', 'corso', 'largo', 'vicolo', 'strada', 'piazzetta', 'contrada', 'borgo', 'localita', 'frazione', 'salita'}
+ABBR_SCR = {'viale': 'V.le', 'piazza': 'P.zza', 'corso': 'C.so', 'piazzale': 'P.le', 'largo': 'L.go', 'via': 'V.'}
+_IDX = {}
+def indice(prov):
+    if prov not in _IDX:
+        f = os.path.join(os.path.dirname(__file__), '..', '..', 'dati', 'mappa', 'civici', f'{prov}.json.gz')
+        _IDX[prov] = json.loads(gzip.open(f, 'rt', encoding='utf-8').read()) if os.path.exists(f) else None
+    return _IDX[prov]
+def civ_map(r): return {k: (r[1] + int(d.split(',')[0]), r[2] + int(d.split(',')[1])) for k, d in (p.split(':') for p in r[3].split(';'))} if r[3] else {}
+def titolo(v): return ' '.join(w if w in ('di', 'del', 'della', 'dei', 'delle', 'degli', 'da', 'e') else w.capitalize() for w in v.split())
+KINDS = ['esatto', 'maiuscolo', 'abbreviato', 'iniziali', 'senza_nome', 'barra', 'numero_n', 'mancante', 'snc', 'refuso', 'inesistente', 'tutto_in_indirizzo']
+INDIRIZZI, POSIZIONI = {}, {}
+def scegli_indirizzo(k, nome, com, prov):
+    I = indice(prov)
+    if not I: return None
+    key = f'{CANON.get(com, com)}|{prov}'
+    rows = I['comuni'].get(key)
+    if not rows: return None
+    kind = KINDS[k % len(KINDS)]
+    nomi = {r[0] for r in rows}
+    def ok(r):
+        t = r[0].split(); M = civ_map(r); nums = sorted(int(x) for x in M if x.isdigit())
+        if len(nums) < 8 or t[0] not in TIPI: return False
+        sig = [w for w in t if w not in TIPI and w not in ('di', 'del', 'della', 'dei', 'delle', 'degli', 'da', 'e')]
+        if kind in ('iniziali', 'senza_nome') and (len(sig) < 2 or len(sig[0]) < 3): return False
+        if kind == 'senza_nome' and any(o != r[0] and o.split()[0] == t[0] and sig[-1] in o.split() for o in nomi): return False
+        if kind == 'abbreviato' and t[0] not in ABBR_SCR: return False
+        if kind == 'refuso' and max([len(w) for w in sig] or [0]) < 7: return False
+        if kind == 'mancante' and not any(n + 2 in nums and n + 4 not in M and n + 6 in nums and str(n + 4) not in M for n in nums): return False
+        return True
+    cand = [r for r in rows if ok(r)]
+    if not cand: return None
+    r = ARND.choice(sorted(cand, key=lambda r: r[0])); M = civ_map(r); nums = sorted(int(x) for x in M if x.isdigit())
+    t = r[0].split(); tipo = t[0]; via = titolo(r[0]); civ = str(nums[len(nums) // 2]); lon, lat = M[civ]; prec, toll = 'civico', 5
+    sig = [w for w in t if w not in TIPI and w not in ('di', 'del', 'della', 'dei', 'delle', 'degli', 'da', 'e')]
+    ind, nc = via, civ
+    if kind == 'maiuscolo': ind = via.upper()
+    elif kind == 'abbreviato': ind = ABBR_SCR[tipo] + ' ' + titolo(' '.join(t[1:]))
+    elif kind == 'iniziali': ind = titolo(r[0]).replace(sig[0].capitalize(), sig[0][0].upper() + '.', 1)
+    elif kind == 'senza_nome': ind = titolo(tipo + ' ' + sig[-1])
+    elif kind == 'barra': nc = civ + '/A'
+    elif kind == 'numero_n': ind, nc = via + ' n. ' + civ, ''
+    elif kind == 'mancante':
+        n = next(n for n in nums if n + 2 in nums and str(n + 4) not in M and n + 6 in nums); a, b = M[str(n + 2)], M[str(n + 6)]
+        civ = nc = str(n + 4); lon, lat = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2; prec = 'stimato'
+        toll = 10 + 0.6 * math.hypot((a[0] - b[0]) * 0.111 * math.cos(lat / 1e6 * math.pi / 180), (a[1] - b[1]) * 0.111)
+    elif kind == 'snc': nc = 'snc'; lon, lat = r[1], r[2]; prec = 'via'
+    elif kind == 'refuso':
+        w = max(sig, key=len); i = len(w) // 2; w2 = w[:i - 1] + w[i] + w[i - 1] + w[i + 1:]; ind = titolo(r[0].replace(w, w2, 1))
+    elif kind == 'inesistente': ind, nc = 'Via dei Ciclamini Turchesi', '3'; prec = 'comune'; lon = lat = None
+    elif kind == 'tutto_in_indirizzo': ind, nc = via + ', ' + civ, ''
+    INDIRIZZI[nome] = (ind, nc)
+    POSIZIONI[nome] = dict(tipo=kind, scritto=(ind + (' ' + nc if nc else '')).strip(), prec=prec, lon=lon / 1e6 if lon is not None else None, lat=lat / 1e6 if lat is not None else None, toll_m=round(toll, 1))
+    return True
+_k = 0
+for c in CLI:
+    nome, piva, com, prov, cap, naz, *_ = c
+    if naz != 'IT': continue
+    if nome == 'Lodi Manutenzioni': com, prov = 'Carpi', 'MO'      # solo il CAP in fattura: il Comune viene dal CAP
+    if scegli_indirizzo(_k, nome, com, prov): _k += 1
 def xml(f):
     nome, piva, com, prov, cap, naz, *_ = f['cli']; pa = nome.startswith('Comune di')
     imponibile = round(sum(r['tot'] for r in f['righe']), 2); iva = 0.0 if naz != 'IT' else round(imponibile * 0.22, 2)
@@ -85,7 +150,8 @@ def xml(f):
     else: an = f'<Anagrafica><Denominazione>{esc(nome)}</Denominazione></Anagrafica>'
     idf = f'<IdFiscaleIVA><IdPaese>{piva[:2] if naz != "IT" else "IT"}</IdPaese><IdCodice>{piva[2:] if naz != "IT" else piva}</IdCodice></IdFiscaleIVA>' if piva else ''
     cf = '<CodiceFiscale>80012345678</CodiceFiscale>' if pa else (f'<CodiceFiscale>{("PRS" + "".join(ch for ch in nome.upper() if ch.isalnum()) + "XXXXXXXXXXXXXXXX")[:16]}</CodiceFiscale>' if persona else '')
-    sede = f'<Sede><Indirizzo>Via Roma</Indirizzo><NumeroCivico>1</NumeroCivico><CAP>{cap if naz == "IT" else "00000"}</CAP>' + (f'<Comune>{esc(com)}</Comune>' if com else '<Comune>-</Comune>') + (f'<Provincia>{prov}</Provincia>' if prov else '') + f'<Nazione>{naz}</Nazione></Sede>'
+    ind, nc = INDIRIZZI.get(nome, ('Via Roma', '1'))
+    sede = f'<Sede><Indirizzo>{esc(ind)}</Indirizzo>' + (f'<NumeroCivico>{esc(nc)}</NumeroCivico>' if nc else '') + f'<CAP>{cap if naz == "IT" else "00000"}</CAP>' + (f'<Comune>{esc(com)}</Comune>' if com else '<Comune>-</Comune>') + (f'<Provincia>{prov}</Provincia>' if prov else '') + f'<Nazione>{naz}</Nazione></Sede>'
     scad = f['data'] + dt.timedelta(days=30 if not pa else 60)
     mod = 'MP05' if naz != 'IT' or pa else random.choice(['MP05', 'MP05', 'MP12', 'MP08'])
     linee = ''.join(f'<DettaglioLinee><NumeroLinea>{i + 1}</NumeroLinea><CodiceArticolo><CodiceTipo>INTERNO</CodiceTipo><CodiceValore>{r["cod"]}</CodiceValore></CodiceArticolo><Descrizione>{esc(r["desc"])}</Descrizione><Quantita>{r["qta"]:.2f}</Quantita><UnitaMisura>{r["um"]}</UnitaMisura><PrezzoUnitario>{r["prezzo"]:.2f}</PrezzoUnitario><PrezzoTotale>{r["tot"]:.2f}</PrezzoTotale><AliquotaIVA>{"22.00" if naz == "IT" else "0.00"}</AliquotaIVA>' + ('' if naz == 'IT' else '<Natura>N3.2</Natura>') + '</DettaglioLinee>' for i, r in enumerate(f['righe']))
@@ -111,6 +177,13 @@ with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
         attese['per_mese'][ym] = attese['per_mese'].get(ym, 0) + s * imp
         for r in f['righe']: attese['per_prodotto'][r['desc']] = attese['per_prodotto'].get(r['desc'], 0) + s * r['tot']
 open(os.path.join(OUT, 'vendite.zip'), 'wb').write(buf.getvalue())
+# le stesse vendite, solo ai clienti dell'Emilia-Romagna: la mappa deve mostrare solo la regione
+ER = {'BO', 'MO', 'RE', 'FE', 'FC', 'RA', 'RN', 'PR', 'PC'}
+b2 = io.BytesIO()
+with zipfile.ZipFile(b2, 'w', zipfile.ZIP_DEFLATED) as z:
+    for i, f in enumerate(fatture):
+        if f['cli'][3] in ER: z.writestr(f'IT{ME["piva"]}_{i + 1:05d}.xml', xml(f)[0])
+open(os.path.join(OUT, 'vendite-emilia.zip'), 'wb').write(b2.getvalue())
 mesi = {}
 for ym, v in attese['per_mese'].items(): mesi.setdefault(int(ym[5:]), []).append(v)
 media_mese = {m: sum(v) / len(v) for m, v in mesi.items()}
@@ -119,6 +192,7 @@ out = dict(fatturato=round(attese['fatturato'], 2), imposta=round(attese['impost
            top3=[k for k, _ in top[:3]], quota_top3=round(sum(v for _, v in top[:3]) / attese['fatturato'], 3),
            per_cliente={k: round(v, 2) for k, v in attese['per_cliente'].items()}, per_prodotto={k: round(v, 2) for k, v in attese['per_prodotto'].items()},
            per_mese={k: round(v, 2) for k, v in sorted(attese['per_mese'].items())}, mese_migliore=max(media_mese, key=media_mese.get), mese_peggiore=min(media_mese, key=media_mese.get),
-           dormiente=DORMIENTE, coppia=['Lettore di consumi LT-200', 'Sensore di temperatura SN-10'], prezzo_su='Lettore di consumi LT-200', estero=2, pa='Comune di Casalecchio di Reno', solo_cap='Lodi Manutenzioni')
+           dormiente=DORMIENTE, coppia=['Lettore di consumi LT-200', 'Sensore di temperatura SN-10'], prezzo_su='Lettore di consumi LT-200', estero=2, pa='Comune di Casalecchio di Reno', solo_cap='Lodi Manutenzioni', posizioni=POSIZIONI)
 json.dump(out, open(os.path.join(OUT, 'vendite-attese.json'), 'w'), ensure_ascii=False, indent=1)
+print(len(POSIZIONI), 'indirizzi veri:', ', '.join(f"{k} {sum(1 for p in POSIZIONI.values() if p['tipo'] == k)}" for k in KINDS))
 print(len(fatture), 'fatture,', out['clienti'], 'clienti, fatturato', out['fatturato'], 'top3', out['quota_top3'], 'mese migliore', out['mese_migliore'], 'peggiore', out['mese_peggiore'])
