@@ -1903,7 +1903,7 @@ html:not([data-cloud="on"]) .cloud-btn{display:none !important}
 .vd-bar2{fill:var(--viz-2)}
 .vd-sal{fill:none;stroke:var(--ink);stroke-width:1.6;stroke-linejoin:round}
 .vd-sald{fill:var(--ink)}
-.vd-legc{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.vd-legc{display:inline-block;width:12px;height:12px;border-radius:var(--r-xs);margin-right:var(--s-1);vertical-align:-1px}
 .vd-legc.v{background:var(--viz-1)}.vd-legc.a{background:var(--viz-2)}
 .vd-cassa td.neg,.vd-neg{color:var(--danger)}
 .vd-cassa th{padding:var(--s-2) var(--s-3);font-weight:600}
