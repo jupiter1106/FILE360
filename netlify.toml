@@ -1,7 +1,8 @@
-# Netlify: compila file360 e pubblica dist/netlify (index.html + _headers + cloud.json se presente).
-# Le chiavi del cloud si possono dare come variabili d'ambiente del sito (FILE360_GDRIVE_CLIENT_ID,
-# FILE360_GDRIVE_API_KEY, FILE360_GDRIVE_APP_ID, FILE360_DROPBOX_APP_KEY, FILE360_ONEDRIVE_CLIENT_ID)
-# oppure con un file cloud.json nella cartella principale del progetto (vedi cloud.example.json).
+# Netlify pubblica la cartella sito/ così com'è: il sito è già compilato (nessuna compilazione sul server).
+# Per aggiornarlo dopo una modifica ai sorgenti:
+#   python3 build.py --netlify && rm -rf sito && mv dist/netlify sito
+# Le province della mappa (sito/mappa/province) vengono da dati/mappa/province: vedi NETLIFY.md.
+# Le chiavi del cloud (facoltative) si mettono nel file sito/cloud.json (vedi cloud.example.json).
 [build]
-  command = "python3 build.py --netlify"
-  publish = "dist/netlify"
+  publish = "sito"
+  command = ""

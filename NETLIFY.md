@@ -1,6 +1,11 @@
 # file360 su Netlify, con Google Drive
 
 ## Pubblicare
+- **Dal repository GitHub (così è configurato):** il sito già pronto sta nella cartella `sito/` del repository e
+  `netlify.toml` dice a Netlify di pubblicarla così com'è, senza compilare nulla. Su Netlify: «Add new site» ›
+  «Import an existing project» › GitHub › `jupiter1106/file360`; i campi di build si leggono da `netlify.toml`.
+  Per aggiornare il sito dopo una modifica: `python3 build.py --netlify && rm -rf sito && mv dist/netlify sito`,
+  poi commit e push.
 - **Da Git (consigliato):** collega il repository a Netlify. `netlify.toml` fa già tutto: compila con
   `python3 build.py --netlify` e pubblica `dist/netlify` (pagina `index.html`, intestazioni HTTP in `_headers`).
 - **Trascinando una cartella:** esegui `python3 build.py --netlify` e trascina su Netlify la cartella `dist/netlify`
