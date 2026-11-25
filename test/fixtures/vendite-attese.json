@@ -581,5 +581,27 @@
    "lat": 44.898549,
    "toll_m": 5
   }
+ },
+ "acquisti": {
+  "spesa": 299261.48,
+  "iva": 65837.52,
+  "note": 1240.0,
+  "fatture": 244,
+  "fornitori": 8,
+  "per_fornitore": {
+   "Logistica Adriatica S.r.l.": 50540.0,
+   "Müller Elektronik GmbH": 19110.0,
+   "Componenti Emilia S.r.l.": 56989.48,
+   "Energia Più S.p.A.": 8740.0,
+   "Studio Bianchi Commercialisti": 10350.0,
+   "Elettroforniture Nord S.p.A.": 146768.0,
+   "Rossi Impianti S.p.A.": 4004.0,
+   "Software Cloud S.r.l.": 2760.0
+  },
+  "principale": "Elettroforniture Nord S.p.A.",
+  "rincaro": "Sensore grezzo SG-1",
+  "anche_cliente": "Rossi Impianti S.p.A.",
+  "estero": "Müller Elektronik GmbH",
+  "doppie": 5
  }
 }

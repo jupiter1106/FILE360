@@ -3,7 +3,8 @@ const { chromium, devices } = require('playwright');
 const path = require('path');
 const FIX = path.join(__dirname, 'fixtures');
 // la build da provare si legge al momento dell'uso (OFFICINA può essere impostata dopo il caricamento di questo file)
-const appUrl = () => 'file://' + path.resolve(process.env.OFFICINA || path.join(__dirname, '..', 'dist', 'file360.html'));
+// OFFICINA può essere anche l'indirizzo del sito (http://…): le stesse prove sul sito servito con le sue intestazioni
+const appUrl = () => /^https?:/.test(process.env.OFFICINA || '') ? process.env.OFFICINA : 'file://' + path.resolve(process.env.OFFICINA || path.join(__dirname, '..', 'dist', 'file360.html'));
 const APP = appUrl();
 const VIEW = {
   desk1440: { viewport: { width: 1440, height: 900 } },

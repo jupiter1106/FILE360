@@ -63,21 +63,49 @@ const Vendite = (() => {
   // descrizione della riga senza mesi, anni, date e numeri d'ordine: «Consulenza ottobre 2024» e «Consulenza novembre 2024» sono lo stesso servizio
   const pulisciDesc = d => String(d || '').replace(/\s+/g, ' ').trim();
   const chiaveProdotto = (r) => { const cod = (r.codici || []).find(c => c.v)?.v; if (cod) return 'c:' + cod.toUpperCase(); return 'd:' + norm(pulisciDesc(r.desc).toLowerCase().replace(new RegExp(`\\b(${MESI.join('|')}|${MESI3.join('|')})\\b`, 'g'), '').replace(/\b\d{1,2}[/.-]\d{1,2}([/.-]\d{2,4})?\b/g, '').replace(/\b(19|20)\d{2}\b/g, '').replace(/\b(n\.?|nr\.?|numero)\s*\d+/g, '').replace(/\s+/g, ' ')).slice(0, 60); };
+  // documenti di autofattura che non sono acquisti veri (integrazioni di fatture già presenti, autoconsumo, splafonamento):
+  // restano fuori; le integrazioni di acquisti dall'estero (TD17 servizi, TD18 beni UE, TD19 beni in Italia) sono acquisti
+  const ACQ_ESTERO = /^TD1[789]$/;
   function prepara(invs, meScelto = null) {
-    const conta = new Map();
-    for (const f of invs) { const k = chiave(f.cedente); conta.set(k, (conta.get(k) || 0) + 1); }
-    const meKey = meScelto || [...conta.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-    const meInv = invs.find(f => chiave(f.cedente) === meKey);
-    const me = meInv ? { key: meKey, nome: meInv.cedente.nome, piva: meInv.cedente.piva, luogo: luogo(meInv.cedente), sede: meInv.cedente.citta, via: meInv.cedente.via || '' } : null;
-    const emittenti = [...conta.entries()].map(([k, n]) => ({ key: k, n, nome: invs.find(f => chiave(f.cedente) === k)?.cedente.nome || k }));
-    const fatture = [], scartate = { passive: 0, autofatture: 0, altre: 0 };
+    // la stessa fattura caricata due volte (XML e PDF, ZIP e file sciolto, due copie): conta una volta
+    const viste = new Set(), uniche = []; let doppie = 0;
     for (const f of invs) {
-      if (chiave(f.cedente) !== meKey) { if (me && chiave(f.cessionario) === meKey) scartate.passive++; else scartate.altre++; continue; }
+      const k = [chiave(f.cedente), String(f.numero || '').trim().toUpperCase(), f.data, f.tipo, Math.round((f.totale ?? f.imponibile ?? 0) * 100)].join('|');
+      if (viste.has(k)) { doppie++; continue; } viste.add(k); uniche.push(f);
+    }
+    invs = uniche;
+    // l'azienda è chi compare in più fatture, come venditore o come acquirente: così si riconosce anche quando ci sono
+    // molte fatture di acquisto (prima si guardava solo chi emetteva di più, e un fornitore frequente poteva sembrare l'azienda)
+    const conta = new Map(), nomi = new Map();
+    const conto = (a, ruolo) => { const k = chiave(a); if (k === '?') return; const c = conta.get(k) || { k, ced: 0, ces: 0 }; c[ruolo]++; conta.set(k, c); if (!nomi.has(k) && a?.nome) nomi.set(k, a); };
+    for (const f of invs) { conto(f.cedente, 'ced'); if (chiave(f.cessionario) !== chiave(f.cedente)) conto(f.cessionario, 'ces'); }
+    const ordine = [...conta.values()].sort((a, b) => (b.ced + b.ces) - (a.ced + a.ces) || b.ced - a.ced);
+    const meKey = meScelto || ordine[0]?.k;
+    const meA = nomi.get(meKey);
+    const me = meA ? { key: meKey, nome: meA.nome, piva: meA.piva, luogo: luogo(meA), sede: meA.citta, via: meA.via || '' } : null;
+    // aziende che si possono scegliere: chi emette fatture a qualcuno che non sia l'azienda scelta (i fornitori, che
+    // fatturano solo all'azienda, non sono un'altra azienda da analizzare)
+    const altrove = new Set(invs.filter(f => chiave(f.cessionario) !== meKey).map(f => chiave(f.cedente)));
+    const emittenti = ordine.filter(c => c.k === meKey || (c.ced > 0 && altrove.has(c.k))).slice(0, 8).map(c => ({ key: c.k, n: c.ced + c.ces, vendite: c.ced, acquisti: c.ces, nome: nomi.get(c.k)?.nome || c.k }));
+    const fatture = [], acquisti = [], scartate = { passive: 0, autofatture: 0, altre: 0, doppie };
+    const pagDi = f => (f.pagamenti || []).flatMap(p => p.dettagli || []);
+    for (const f of invs) {
+      const ced = chiave(f.cedente), ces = chiave(f.cessionario), segno = f.tipo === 'TD04' || f.tipo === 'TD08' ? -1 : 1;
+      if (ced !== meKey) {
+        if (ces !== meKey) { scartate.altre++; continue; }
+        if (f.classe === 'auto' && !ACQ_ESTERO.test(f.tipo)) { scartate.autofatture++; continue; }
+        // fattura di acquisto (passiva): il fornitore è chi la emette
+        const c = f.cedente || {}, pag = pagDi(f);
+        acquisti.push({ id: f.id, numero: f.numero, data: f.data, t: Date.parse(f.data) || 0, tipo: f.tipo, segno, estero: ACQ_ESTERO.test(f.tipo),
+          imp: segno * (f.imponibile || 0), iva: segno * (f.imposta || 0), tot: segno * (f.totale || 0), forn: ced, fornNome: c.nome || '(senza nome)', fornDati: c,
+          righe: (f.righe || []).filter(r => r.desc || r.totale).map(r => ({ k: chiaveProdotto(r), desc: pulisciDesc(r.desc), qta: segno * (r.qta || (r.totale ? 1 : 0)), um: r.um || '', prezzo: r.prezzo || 0, tot: segno * (r.totale || 0) })),
+          modalita: pag[0]?.modalita || '', scadenze: pag.filter(d => d.scadenza).map(d => ({ data: d.scadenza, t: Date.parse(d.scadenza), imp: d.importo || 0 })), file: f.srcName });
+        scartate.passive++; continue;
+      }
       if (f.classe === 'auto') { scartate.autofatture++; continue; }
-      const segno = f.tipo === 'TD04' || f.tipo === 'TD08' ? -1 : 1;
-      const c = f.cessionario || {}, ck = chiave(c);
+      const c = f.cessionario || {}, ck = ces;
       const pa = /^FPA/.test(f.trasm?.formato || '') || (String(f.trasm?.destinatario || '').length === 6 && f.trasm?.destinatario !== '000000');
-      const pag = (f.pagamenti || []).flatMap(p => p.dettagli || []);
+      const pag = pagDi(f);
       const righe = (f.righe || []).filter(r => r.desc || r.totale).map(r => ({ k: chiaveProdotto(r), desc: pulisciDesc(r.desc), qta: segno * (r.qta || (r.totale ? 1 : 0)), um: r.um || '', prezzo: r.prezzo || 0, tot: segno * (r.totale || 0) }));
       fatture.push({
         id: f.id, numero: f.numero, data: f.data, t: Date.parse(f.data) || 0, tipo: f.tipo, segno,
@@ -87,11 +115,13 @@ const Vendite = (() => {
         file: f.srcName,
       });
     }
-    fatture.sort((a, b) => a.t - b.t);
-    // una scheda per cliente con la sua posizione
+    fatture.sort((a, b) => a.t - b.t); acquisti.sort((a, b) => a.t - b.t);
+    // una scheda per cliente e per fornitore con la sua posizione
     const clienti = new Map();
     for (const f of fatture) if (!clienti.has(f.cli)) clienti.set(f.cli, { key: f.cli, nome: f.cliNome, piva: f.cliDati.piva, cf: f.cliDati.cf, persona: f.persona, pa: f.pa, luogo: luogo(f.cliDati), sede: f.cliDati.citta || '', via: f.cliDati.via || '' });
-    return { me, emittenti, fatture, clienti, scartate };
+    const fornitori = new Map();
+    for (const f of acquisti) if (!fornitori.has(f.forn)) fornitori.set(f.forn, { key: f.forn, nome: f.fornNome, piva: f.fornDati.piva, luogo: luogo(f.fornDati), sede: f.fornDati.citta || '', via: f.fornDati.via || '' });
+    return { me, emittenti, fatture, acquisti, clienti, fornitori, scartate };
   }
 
   /* ---------- analisi: tutte le misure su un insieme filtrato ---------- */
@@ -207,7 +237,112 @@ const Vendite = (() => {
     // confronto con il periodo precedente di uguale durata
     if (A.da && A.a && !filtro.da) A.crescita = crescita(F, A.a);   // F è già filtrato senza limiti di data
     A.scoperte = scoperte(A, D, oggi);
+    // acquisti (fatture passive) e il confronto con le vendite: stesso periodo, gli altri filtri valgono solo per le vendite
+    if (D.acquisti?.length) {
+      A.acq = analizzaAcquisti(D, filtro, oggi);
+      unisci(A, D, filtro, oggi);
+      A.scoperte = [...A.scoperte, ...scoperteAcquisti(A, D)].sort((a, b) => b.peso - a.peso);
+    }
     return A;
+  }
+
+  /* ---------- acquisti: fornitori, voci di spesa, rincari, scadenze da pagare ---------- */
+  function filtraAcq(D, f = {}) { return (D.acquisti || []).filter(x => (!f.da || x.t >= f.da) && (!f.a || x.t <= f.a) && (!f.fornitore || x.forn === f.fornitore)); }
+  function analizzaAcquisti(D, filtro = {}, oggi = Date.now()) {
+    const F = filtraAcq(D, filtro), B = {}, pos = F.filter(f => f.segno > 0), neg = F.filter(f => f.segno < 0);
+    B.spesa = r2(F.reduce((s, f) => s + f.imp, 0)); B.iva = r2(F.reduce((s, f) => s + f.iva, 0)); B.note = r2(-neg.reduce((s, f) => s + f.imp, 0));
+    B.nFatture = pos.length; B.nNote = neg.length; B.media = pos.length ? r2(pos.reduce((s, f) => s + f.imp, 0) / pos.length) : 0;
+    B.da = F[0]?.t || null; B.a = F[F.length - 1]?.t || null;
+    const mesi = new Map(); for (const f of F) { const k = ym(f.t), m = mesi.get(k) || { k, spesa: 0, iva: 0, n: 0 }; m.spesa += f.imp; m.iva += f.iva; if (f.segno > 0) m.n++; mesi.set(k, m); }
+    B.mesi = [...mesi.values()].sort((a, b) => a.k < b.k ? -1 : 1).map(m => ({ ...m, nome: meseNome(m.k), spesa: r2(m.spesa), iva: r2(m.iva) }));
+    // fornitori
+    const G = new Map();
+    for (const f of F) {
+      let g = G.get(f.forn); if (!g) { g = { ...D.fornitori.get(f.forn), spesa: 0, n: 0, note: 0, date: [], voci: new Map(), termini: [], modalita: new Map() }; G.set(f.forn, g); }
+      g.spesa += f.imp; if (f.segno > 0) { g.n++; g.date.push(f.t); } else g.note -= f.imp;
+      for (const r of f.righe) { const v = g.voci.get(r.k) || { k: r.k, desc: r.desc, spesa: 0, qta: 0 }; v.spesa += r.tot; v.qta += r.qta; g.voci.set(r.k, v); }
+      for (const sc of f.scadenze) if (f.segno > 0 && sc.t && f.t) g.termini.push(Math.round((sc.t - f.t) / DAY));
+      if (f.modalita && f.segno > 0) g.modalita.set(f.modalita, (g.modalita.get(f.modalita) || 0) + f.imp);
+    }
+    const tot = Math.max(1, [...G.values()].reduce((s, g) => s + Math.max(0, g.spesa), 0)); let acc = 0;
+    B.fornitori = [...G.values()].map(g => {
+      const d = [...new Set(g.date)].sort((a, b) => a - b), gaps = d.slice(1).map((t, i) => (t - d[i]) / DAY).sort((a, b) => a - b);
+      return { key: g.key, nome: g.nome, piva: g.piva, luogo: g.luogo, sede: g.sede, via: g.via, spesa: r2(g.spesa), n: g.n, note: r2(g.note), primo: d[0] || null, ultimo: d[d.length - 1] || null,
+        ritmo: gaps.length ? Math.round(gaps[Math.floor(gaps.length / 2)]) : null, voci: [...g.voci.values()].sort((a, b) => b.spesa - a.spesa).map(v => ({ ...v, spesa: r2(v.spesa) })),
+        termini: g.termini.length ? Math.round(g.termini.reduce((a, b) => a + b, 0) / g.termini.length) : null, modalita: [...g.modalita.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '',
+        cliente: D.clienti.has(g.key) };
+    }).sort((a, b) => b.spesa - a.spesa);
+    for (const g of B.fornitori) { acc += Math.max(0, g.spesa); g.quota = Math.max(0, g.spesa) / tot; g.abc = acc / tot <= 0.8 + 1e-9 || g === B.fornitori[0] ? 'A' : acc / tot <= 0.95 ? 'B' : 'C'; }
+    B.nFornitori = B.fornitori.filter(g => g.n > 0).length;
+    B.top = B.fornitori[0] || null;
+    // voci di spesa (righe raggruppate come i prodotti venduti), con l'andamento del prezzo d'acquisto
+    const V = new Map();
+    for (const f of F) for (const r of f.righe) {
+      let v = V.get(r.k); if (!v) { v = { k: r.k, desc: r.desc, um: r.um, spesa: 0, qta: 0, fornitori: new Set(), prezzi: [] }; V.set(r.k, v); }
+      v.spesa += r.tot; v.qta += r.qta; v.fornitori.add(f.forn); if (f.segno > 0 && r.prezzo) v.prezzi.push([f.t, r.prezzo, f.forn]);
+    }
+    B.voci = [...V.values()].map(v => {
+      const pr = v.prezzi.sort((a, b) => a[0] - b[0]), q = Math.max(1, Math.floor(pr.length / 4)), m0 = pr.slice(0, q).reduce((s, x) => s + x[1], 0) / q, m1 = pr.slice(-q).reduce((s, x) => s + x[1], 0) / q;
+      return { k: v.k, desc: v.desc, um: v.um, spesa: r2(v.spesa), qta: r2(v.qta), fornitori: v.fornitori.size, nomiFornitori: [...v.fornitori].map(k => D.fornitori.get(k)?.nome || k),
+        prezzoMedio: pr.length ? r2(pr.reduce((s, x) => s + x[1], 0) / pr.length) : null, variazione: pr.length >= 6 && m0 ? (m1 - m0) / m0 : null, primo: pr.length ? r2(m0) : null, ultimo: pr.length ? r2(m1) : null };
+    }).sort((a, b) => b.spesa - a.spesa);
+    // dove sono i fornitori
+    const reg = new Map(), est = new Map(); let vicini = 0;
+    const sede = D.me?.luogo;
+    for (const g of B.fornitori) {
+      const l = g.luogo || {};
+      if (l.estero) { const e = est.get(l.naz) || { naz: l.naz, paese: l.paese, spesa: 0, n: 0 }; e.spesa += g.spesa; e.n++; est.set(l.naz, e); continue; }
+      if (l.regione) reg.set(l.regione, (reg.get(l.regione) || 0) + g.spesa);
+      if (sede?.x != null && l.x != null) { g.km = Math.round(km(sede, l)); if (g.km <= 50) vicini += Math.max(0, g.spesa); }
+    }
+    B.regioni = [...reg.entries()].map(([n, v]) => ({ n, spesa: r2(v) })).sort((a, b) => b.spesa - a.spesa);
+    B.estero = [...est.values()].map(e => ({ ...e, spesa: r2(e.spesa) })).sort((a, b) => b.spesa - a.spesa);
+    B.vicini = sede?.x != null ? vicini / tot : null;
+    // pagamenti ai fornitori: termini medi e scadenze dei prossimi mesi (dalle fatture: non sappiamo se sono state pagate)
+    let tg = 0, tw = 0; const fut = [30, 60, 90].map(d => ({ d, imp: 0, n: 0 }));
+    for (const f of pos) for (const sc of f.scadenze) { if (sc.t && f.t) { tg += (sc.t - f.t) / DAY * f.imp; tw += f.imp; } const dd = (sc.t - oggi) / DAY; if (dd >= 0) { const b = fut.find(x => dd <= x.d); if (b) { b.imp += sc.imp; b.n++; } } }
+    B.termini = tw ? Math.round(tg / tw) : null; B.futuro = fut.map(x => ({ ...x, imp: r2(x.imp) }));
+    const md = new Map(); for (const f of pos) md.set(f.modalita || '—', (md.get(f.modalita || '—') || 0) + f.imp);
+    B.modalita = [...md.entries()].map(([k, v]) => ({ k, nome: MOD_PAG[k] || (k === '—' ? 'Non indicata' : k), spesa: r2(v) })).sort((a, b) => b.spesa - a.spesa);
+    if (B.da && B.a && !filtro.da) B.crescita = crescita(F, B.a);
+    return B;
+  }
+  // vendite e acquisti insieme: mese per mese, cassa prevista, IVA stimata per trimestre. Si confrontano TUTTE le vendite
+  // del periodo con tutti gli acquisti (i filtri su clienti, territorio e prodotti valgono solo per le schede delle vendite)
+  function unisci(A, D, filtro = {}, oggi = Date.now()) {
+    const B = A.acq, per = { da: filtro.da, a: filtro.a }, Vp = filtra(D, per), Ap = filtraAcq(D, per), M = new Map();
+    const mese = k => M.get(k) || (M.set(k, { k, vendite: 0, acquisti: 0 }), M.get(k));
+    for (const f of Vp) mese(ym(f.t)).vendite += f.imp;
+    for (const f of Ap) mese(ym(f.t)).acquisti += f.imp;
+    A.confronto = [...M.values()].sort((a, b) => a.k < b.k ? -1 : 1).map(x => ({ k: x.k, nome: meseNome(x.k), vendite: r2(x.vendite), acquisti: r2(x.acquisti), saldo: r2(x.vendite - x.acquisti) }));
+    A.vendite = r2(Vp.reduce((s, f) => s + f.imp, 0)); A.saldo = r2(A.vendite - B.spesa);
+    // cassa dei prossimi 30, 60 e 90 giorni: incassi attesi dai clienti e pagamenti attesi ai fornitori
+    const fasce = lista => { const o = [30, 60, 90].map(d => ({ d, imp: 0 })); for (const f of lista) if (f.segno > 0) for (const sc of f.scadenze) { const dd = (sc.t - oggi) / DAY; if (dd >= 0) { const b = o.find(x => dd <= x.d); if (b) b.imp += sc.imp; } } return o; };
+    const E = fasce(Vp), U = fasce(Ap);
+    A.cassa = E.map((e, i) => ({ d: e.d, entrate: r2(e.imp), uscite: r2(U[i].imp), saldo: r2(e.imp - U[i].imp) }));
+    // IVA per trimestre: delle vendite (a debito) meno quella degli acquisti (a credito). È una stima: non conosce la
+    // detraibilità, la scissione dei pagamenti, l'inversione contabile, gli acconti né i crediti precedenti
+    const T = new Map(), tri = t => { const d = new Date(t); return `${d.getFullYear()}-T${Math.floor(d.getMonth() / 3) + 1}`; };
+    const q = k => T.get(k) || (T.set(k, { k, debito: 0, credito: 0 }), T.get(k));
+    for (const f of Vp) q(tri(f.t)).debito += f.iva;
+    for (const f of Ap) q(tri(f.t)).credito += f.iva;
+    A.ivaTrim = [...T.values()].sort((a, b) => a.k < b.k ? -1 : 1).map(x => ({ k: x.k, nome: `${x.k.slice(6)}° trimestre ${x.k.slice(0, 4)}`, debito: r2(x.debito), credito: r2(x.credito), saldo: r2(x.debito - x.credito) }));
+  }
+  function scoperteAcquisti(A, D) {
+    const B = A.acq, S = [], add = (tipo, peso, titolo, testo, azione = null, rif = null) => S.push({ tipo, peso, titolo, testo, azione, rif });
+    if (!B?.fornitori.length) return S;
+    const g = B.top;
+    if (g && B.fornitori.length >= 3 && g.quota >= 0.35) add('rischio', 80 + g.quota * 10, `${pct(g.quota)} degli acquisti da ${g.nome}`, `Dipendi molto da un solo fornitore: se aumenta i prezzi o ritarda le consegne, l'effetto è diretto. ${B.fornitori[1] ? `Il secondo, ${B.fornitori[1].nome}, vale ${pct(B.fornitori[1].quota)}.` : ''} Valuta un'alternativa per le voci principali.`, 'Vedi i fornitori', { tab: 'fornitori' });
+    const rv = B.voci.filter(v => v.variazione != null && v.variazione >= 0.05).sort((a, b) => b.variazione * b.spesa - a.variazione * a.spesa)[0];
+    if (rv) add('rischio', 72, `${rv.desc}: prezzo d'acquisto +${pct(rv.variazione)}`, `Da ${eur(rv.primo)} a ${eur(rv.ultimo)} di media (${rv.nomiFornitori.slice(0, 2).join(', ')}). ${A.prodotti?.length ? 'Controlla che i prezzi di vendita abbiano seguito l’aumento.' : ''}`, 'Vedi le voci di spesa', { tab: 'fornitori' });
+    if (A.vendite > 0) add(A.saldo >= 0 ? 'info' : 'rischio', 66, `Vendite meno acquisti: ${eur(A.saldo)}`, `${eur(A.vendite)} di vendite e ${eur(B.spesa)} di acquisti nel periodo (imponibili): gli acquisti valgono ${pct(B.spesa / A.vendite)} delle vendite. Non è l'utile: mancano personale, affitti e le spese senza fattura.`, 'Vedi l’andamento', { tab: 'tempo' });
+    if (A.crescita?.var != null && B.crescita?.var != null && B.crescita.var - A.crescita.var > 0.05) add('rischio', 70, `Gli acquisti crescono più delle vendite`, `Negli ultimi 12 mesi acquisti ${B.crescita.var >= 0 ? '+' : '−'}${pct(Math.abs(B.crescita.var))}, vendite ${A.crescita.var >= 0 ? '+' : '−'}${pct(Math.abs(A.crescita.var))}.`, 'Vedi l’andamento', { tab: 'tempo' });
+    const c30 = A.cassa?.[0];
+    if (c30 && (c30.entrate || c30.uscite)) add(c30.saldo < 0 ? 'rischio' : 'incassi', c30.saldo < 0 ? 78 : 40, `Prossimi 30 giorni: ${c30.saldo < 0 ? 'più pagamenti che incassi' : 'incassi sopra i pagamenti'}`, `Incassi attesi ${eur(c30.entrate)}, pagamenti attesi ${eur(c30.uscite)} (dalle scadenze in fattura; non sappiamo quali sono già stati saldati).`, 'Vedi incassi e pagamenti', { tab: 'incassi' });
+    const anche = B.fornitori.filter(x => x.cliente);
+    if (anche.length) add('info', 44, `${anche.length} ${anche.length === 1 ? 'fornitore è anche cliente' : 'fornitori sono anche clienti'}`, `${anche.slice(0, 3).map(x => x.nome).join(', ')}: a ${anche.length === 1 ? 'lui' : 'loro'} vendi e da ${anche.length === 1 ? 'lui' : 'loro'} compri. Un rapporto da guardare nel suo insieme (compensazioni, sconti reciproci).`, 'Vedi i fornitori', { tab: 'fornitori' });
+    if (B.termini != null && A.pagamenti?.termini != null && A.pagamenti.termini - B.termini >= 15) add('incassi', 62, `Paghi in ${B.termini} giorni, incassi in ${A.pagamenti.termini}`, `I clienti pagano mediamente ${A.pagamenti.termini - B.termini} giorni dopo di quanto paghi i fornitori: la differenza va finanziata con la cassa.`, 'Vedi incassi e pagamenti', { tab: 'incassi' });
+    return S;
   }
   function previsione(mesi) {
     if (mesi.length < 12) return null;
@@ -228,7 +363,7 @@ const Vendite = (() => {
   }
 
   /* ---------- scoperte: frasi con i numeri, ordinate per importanza ---------- */
-  const eur = v => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: v >= 1000 ? 0 : 2 }).format(v);
+  const eur = v => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: Math.abs(v) >= 1000 || v === 0 ? 0 : 2, minimumFractionDigits: Math.abs(v) >= 1000 || v === 0 ? 0 : undefined }).format(v);
   const pct = v => `${Math.round(v * 100)}%`;
   function scoperte(A, D, oggi) {
     const S = [], add = (tipo, peso, titolo, testo, azione = null, rif = null) => S.push({ tipo, peso, titolo, testo, azione, rif });
@@ -262,7 +397,7 @@ const Vendite = (() => {
     return S.sort((a, b) => b.peso - a.peso);
   }
 
-  return { prepara, analizza, filtra, luogo, km, geo, lonLat, MESI, MESI3, MOD_PAG, PAESI, eur, pct, meseNome };
+  return { prepara, analizza, analizzaAcquisti, filtra, filtraAcq, luogo, km, geo, lonLat, MESI, MESI3, MOD_PAG, PAESI, eur, pct, meseNome };
 })();
 
 /* ---------- lo strumento: filtri in alto, schede, mappa, dettagli nel pannello laterale ---------- */
@@ -282,12 +417,14 @@ async function startVendite(stage, files = []) {
   }
   if (files.length) await withBusy('Lettura delle fatture…', async () => { for (const [i, f] of files.entries()) { Busy.set?.(i / files.length, `File ${i + 1} di ${files.length}`); await leggi(f.name, new Uint8Array(await f.arrayBuffer())); } });
   let D = V.prepara(invs);
-  const st = { tab: 'panoramica', periodo: 'tutto', tipoCli: '', regione: '', prov: '', comune: '', estero: false, cliente: '', prodotto: '', segmento: '', sel: null, modo: typeof Mappa !== 'undefined' && Mappa.webgl() ? 'strade' : 'bolle', cerca: '', ord: { clienti: ['fatt', -1], prodotti: ['fatt', -1] } };
+  const st = { tab: D.fatture.length || !D.acquisti.length ? 'panoramica' : 'fornitori', periodo: 'tutto', fornitore: '', tipoCli: '', regione: '', prov: '', comune: '', estero: false, cliente: '', prodotto: '', segmento: '', sel: null, modo: typeof Mappa !== 'undefined' && Mappa.webgl() ? 'strade' : 'bolle', cerca: '', ord: { clienti: ['fatt', -1], prodotti: ['fatt', -1], fornitori: ['spesa', -1], voci: ['spesa', -1] } };
   let A = null;
-  const periodi = () => { const anni = [...new Set(D.fatture.map(f => new Date(f.t).getFullYear()))].sort(); return [['tutto', 'Tutto il periodo'], ['12', 'Ultimi 12 mesi'], ...anni.reverse().map(y => [String(y), `Anno ${y}`])]; };
-  const filtro = () => { const fine = D.fatture[D.fatture.length - 1]?.t || Date.now(); let da = null, a = null; if (st.periodo === '12') { da = fine - 365 * DAY; } else if (/^\d{4}$/.test(st.periodo)) { da = Date.parse(`${st.periodo}-01-01`); a = Date.parse(`${st.periodo}-12-31T23:59:59`); } return { da, a, tipoCli: st.tipoCli, regione: st.regione, prov: st.prov, comune: st.comune, estero: st.estero, cliente: st.cliente, prodotto: st.prodotto }; };
+  const tutte = () => [...D.fatture, ...D.acquisti];
+  const periodi = () => { const anni = [...new Set(tutte().map(f => new Date(f.t).getFullYear()))].sort(); return [['tutto', 'Tutto il periodo'], ['12', 'Ultimi 12 mesi'], ...anni.reverse().map(y => [String(y), `Anno ${y}`])]; };
+  const ultima = () => Math.max(D.fatture[D.fatture.length - 1]?.t || 0, D.acquisti[D.acquisti.length - 1]?.t || 0) || Date.now();
+  const filtro = () => { const fine = ultima(); let da = null, a = null; if (st.periodo === '12') { da = fine - 365 * DAY; } else if (/^\d{4}$/.test(st.periodo)) { da = Date.parse(`${st.periodo}-01-01`); a = Date.parse(`${st.periodo}-12-31T23:59:59`); } return { da, a, tipoCli: st.tipoCli, regione: st.regione, prov: st.prov, comune: st.comune, estero: st.estero, cliente: st.cliente, prodotto: st.prodotto, fornitore: st.fornitore }; };
   // «oggi» per l'analisi è il giorno dell'ultima fattura caricata: un archivio dell'anno scorso non fa sembrare fermi tutti i clienti
-  const oggi = () => D.fatture[D.fatture.length - 1]?.t || Date.now();
+  const oggi = () => ultima();
   const calcola = () => { A = V.analizza(D, filtro(), oggi()); };
 
   /* grafici (SVG): barre verticali con previsione, barre orizzontali, linea dei prezzi */
@@ -318,6 +455,29 @@ async function startVendite(stage, files = []) {
   }
   const hbar = (righe, { fmt = eur, onClick = null } = {}) => { const max = Math.max(1, ...righe.map(r => Math.abs(r.v))); return h('ol', { class: 'vd-hb' }, righe.map(r => h('li', { class: onClick ? 'cl' : '', tabindex: onClick ? '0' : null, onclick: onClick ? () => onClick(r) : null, onkeydown: onClick ? e => { if (e.key === 'Enter') onClick(r); } : null },
     h('span', { class: 'vd-hbl', title: r.l }, r.l), h('span', { class: 'vd-hbt' }, h('i', { style: `width:${Math.max(1, Math.abs(r.v) / max * 100)}%` })), h('span', { class: 'vd-hbv' }, fmt(r.v), r.sub ? h('small', {}, ' ' + r.sub) : null)))); };
+  // vendite (blu) e acquisti (arancio) per mese, una coppia di barre per mese; la linea è la differenza
+  function dueSerie(dati, { h: H = 260, desc = '' } = {}) {
+    const W = larg(), padL = 52, padB = 26, padT = 12, n = dati.length || 1, max = Math.max(1, ...dati.map(d => Math.max(d.vendite, d.acquisti))), min = Math.min(0, ...dati.map(d => d.saldo));
+    const ih = H - padB - padT, yv = v => padT + ih * (max - v) / (max - min), bw = (W - padL) / n, z = yv(0);
+    const svg = S('svg', { viewBox: `0 0 ${W} ${H}`, class: 'vd-chart', role: 'img', 'aria-label': desc });
+    for (const t of [min, 0, max / 2, max].filter((v, i, a) => a.indexOf(v) === i && (v >= 0 || -v > (max - min) * 0.12))) svg.append(S('line', { x1: padL, x2: W, y1: yv(t), y2: yv(t), class: 'vd-grid' }), S('text', { x: padL - 6, y: yv(t) + 4, class: 'vd-ax', 'text-anchor': 'end' }, corto(t)));
+    const pts = [];
+    dati.forEach((d, i) => {
+      const x = padL + i * bw, w = Math.max(1, (bw - 3) / 2);
+      if (d.vendite > 0) svg.append(S('rect', { x: x + 1, y: yv(d.vendite), width: w, height: Math.max(0, z - yv(d.vendite)), class: 'vd-bar', rx: Math.min(2, w / 2) }));
+      if (d.acquisti > 0) svg.append(S('rect', { x: x + 1 + w, y: yv(d.acquisti), width: w, height: Math.max(0, z - yv(d.acquisti)), class: 'vd-bar2', rx: Math.min(2, w / 2) }));
+      pts.push([x + bw / 2, yv(d.saldo)]);
+      if (n * 34 <= W || d.k.endsWith('-01') || i === 0) svg.append(S('text', { x: x + bw / 2, y: H - 8, class: 'vd-ax', 'text-anchor': 'middle' }, d.k.endsWith('-01') || i === 0 ? `${V.MESI3[+d.k.slice(5) - 1]} ${d.k.slice(2, 4)}` : V.MESI3[+d.k.slice(5) - 1]));
+      const hit = S('rect', { x, y: padT, width: bw, height: ih + 4, class: 'vd-hit', tabindex: '0', role: 'img', 'aria-label': `${d.nome}: vendite ${eur(d.vendite)}, acquisti ${eur(d.acquisti)}, differenza ${eur(d.saldo)}` });
+      const info = () => [h('b', {}, d.nome), h('div', {}, `Vendite ${eur(d.vendite)}`), h('div', {}, `Acquisti ${eur(d.acquisti)}`), h('div', { class: 'muted' }, `Differenza ${eur(d.saldo)}`)];
+      hit.addEventListener('pointerenter', e => mostraTip(e, info())); hit.addEventListener('pointermove', e => mostraTip(e, [...tip.childNodes])); hit.addEventListener('pointerleave', nascondiTip);
+      hit.addEventListener('focus', e => mostraTip(e, info())); hit.addEventListener('blur', nascondiTip);
+      svg.append(hit);
+    });
+    if (pts.length > 1) { svg.append(S('polyline', { points: pts.map(p => p.map(v => v.toFixed(1)).join(',')).join(' '), class: 'vd-sal' })); for (const [x, y] of pts) svg.append(S('circle', { cx: x, cy: y, r: 2.2, class: 'vd-sald' })); }
+    svg.append(S('line', { x1: padL, x2: W, y1: z, y2: z, class: 'vd-base' }));
+    return h('div', { class: 'vd-chartw' }, svg, h('div', { class: 'vd-legr' }, h('span', {}, h('i', { class: 'vd-legc v' }), 'Vendite'), h('span', {}, h('i', { class: 'vd-legc a' }), 'Acquisti'), h('span', {}, '— differenza')));
+  }
   function linea(pts, { w = 120, h: H = 28 } = {}) {
     if (pts.length < 2) return null; const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
     const X = x => 2 + (x - x0) / Math.max(1, x1 - x0) * (w - 4), Y = y => H - 3 - (y - y0) / Math.max(1e-9, y1 - y0) * (H - 6);
@@ -504,15 +664,26 @@ async function startVendite(stage, files = []) {
         h('div', { class: 'vd-acts' }, h('button', { type: 'button', class: 'btn sm', onclick: () => { st.prov = s.k; st.sel = null; ridisegna(); } }, ic('search', 15), 'Solo questa provincia')));
     } else if (s?.tipo === 'cliente') {
       const c = A.clienti.find(x => x.key === s.k); if (c) out.push(...schedaCliente(c));
+    } else if (s?.tipo === 'fornitore' && A.acq) {
+      const g = A.acq.fornitori.find(x => x.key === s.k);
+      if (g) out.push(h('div', { class: 'vd-sh' }, h('b', {}, g.nome), h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Chiudi', onclick: () => { st.sel = null; drawSide(); } }, ic('x', 16))),
+        h('div', { class: 'muted small' }, ['Fornitore', g.piva ? `P.IVA ${g.piva}` : null, g.luogo?.estero ? g.luogo.paese : g.luogo?.comune ? `${g.luogo.comune} (${g.luogo.prov})` : g.sede, g.km != null ? `${g.km} km dalla sede` : null, g.cliente ? 'è anche cliente' : null].filter(Boolean).join(' · ')),
+        h('dl', { class: 'vd-dl' }, h('dt', {}, 'Acquisti'), h('dd', {}, `${eur(g.spesa)} (${pct(g.quota)})`), h('dt', {}, 'Fatture'), h('dd', {}, String(g.n) + (g.note ? ` · note di credito ${eur(g.note)}` : '')),
+          h('dt', {}, 'Primo e ultimo acquisto'), h('dd', {}, `${data(g.primo)} → ${data(g.ultimo)}`), h('dt', {}, 'Ritmo'), h('dd', {}, g.ritmo ? `ogni ${g.ritmo} giorni circa` : '—'),
+          g.termini != null ? [h('dt', {}, 'Termini di pagamento'), h('dd', {}, `${g.termini} giorni · ${V.MOD_PAG[g.modalita] || g.modalita || '—'}`)] : null),
+        h('div', { class: 'vd-st' }, 'Che cosa gli compri'), hbar(g.voci.slice(0, 6).map(v => ({ l: v.desc, v: v.spesa, sub: v.qta ? `· ${Math.round(v.qta).toLocaleString('it-IT')}` : '' }))),
+        h('div', { class: 'vd-acts' }, h('button', { type: 'button', class: 'btn sm', onclick: () => { st.fornitore = g.key; st.sel = null; ridisegna(); } }, ic('search', 15), 'Solo questo fornitore')));
     } else {
       const p = A.precisione;
       out.push(h('div', { class: 'vd-st' }, 'Dati letti'), h('dl', { class: 'vd-dl' }, h('dt', {}, 'Azienda'), h('dd', {}, D.me ? `${D.me.nome}${D.me.luogo?.comune ? ` · ${D.me.luogo.comune}` : ''}` : '—'),
-        h('dt', {}, 'Fatture di vendita'), h('dd', {}, `${D.fatture.length.toLocaleString('it-IT')} · fino al ${data(oggi())}`), D.scartate.passive ? [h('dt', {}, 'Fatture di acquisto'), h('dd', {}, `${D.scartate.passive} (escluse)`)] : null,
+        D.fatture.length ? [h('dt', {}, 'Fatture di vendita'), h('dd', {}, `${D.fatture.length.toLocaleString('it-IT')} · fino al ${data(oggi())}`)] : null, D.acquisti.length ? [h('dt', {}, 'Fatture di acquisto'), h('dd', {}, `${D.acquisti.length.toLocaleString('it-IT')} · ${D.fornitori.size} fornitori`)] : null,
+        D.scartate.doppie ? [h('dt', {}, 'Doppioni'), h('dd', {}, `${D.scartate.doppie} ${D.scartate.doppie === 1 ? 'fattura caricata due volte, contata una volta' : 'fatture caricate due volte, contate una volta'}`)] : null,
         errori.length ? [h('dt', {}, 'File non letti'), h('dd', {}, String(errori.length))] : null,
-        h('dt', {}, 'Clienti sulla mappa'), h('dd', {}, `${p.comune + p.cap + p.provincia} su ${A.clienti.length - p.estero}${p.cap || p.provincia ? ` (${[p.cap ? `${p.cap} dal CAP` : '', p.provincia ? `${p.provincia} dalla provincia` : ''].filter(Boolean).join(', ')})` : ''}${p.estero ? ` · ${p.estero} all'estero` : ''}`)),
-        D.emittenti.length > 1 ? h('label', { class: 'vd-f' }, h('span', {}, 'Azienda da analizzare'), h('select', { class: 'select', onchange: e => { D = V.prepara(invs, e.target.value); st.sel = null; GL.pronto = null; ridisegna(); } }, D.emittenti.sort((a, b) => b.n - a.n).map(e => h('option', { value: e.key, selected: e.key === D.me?.key }, `${e.nome} (${e.n})`)))) : null,
-        h('div', { class: 'vd-st' }, 'Come leggere'), h('p', { class: 'small muted' }, 'Sulla mappa stradale tocca un gruppo per ingrandire e un cliente per la sua scheda. Nella vista per Comuni tocca un cerchio per vedere chi sono i clienti di quel Comune e che cosa hanno comprato, e una provincia per i suoi Comuni. Gli importi sono imponibili (senza IVA), al netto delle note di credito.'),
-        h('p', { class: 'small muted' }, 'Sulla mappa stradale i clienti stanno all’indirizzo della sede scritta in fattura, fino al numero civico; nelle viste per Comune e provincia, al centro del Comune. Tutto avviene su questo dispositivo: nessun dato viene inviato.'));
+        !D.fatture.length ? null : h('dt', {}, 'Clienti sulla mappa'), !D.fatture.length ? null : h('dd', {}, `${p.comune + p.cap + p.provincia} su ${A.clienti.length - p.estero}${p.cap || p.provincia ? ` (${[p.cap ? `${p.cap} dal CAP` : '', p.provincia ? `${p.provincia} dalla provincia` : ''].filter(Boolean).join(', ')})` : ''}${p.estero ? ` · ${p.estero} all'estero` : ''}`)),
+        D.emittenti.length > 1 ? h('label', { class: 'vd-f' }, h('span', {}, 'Azienda da analizzare'), h('select', { class: 'select', onchange: e => { D = V.prepara(invs, e.target.value); st.sel = null; GL.pronto = null; ridisegna(); } }, D.emittenti.sort((a, b) => b.n - a.n).map(e => h('option', { value: e.key, selected: e.key === D.me?.key }, `${e.nome} (${e.vendite} vendite, ${e.acquisti} acquisti)`)))) : null,
+        h('div', { class: 'vd-st' }, 'Come leggere'), !D.fatture.length ? h('p', { class: 'small muted' }, 'Ci sono solo fatture di acquisto: l’azienda è chi le riceve. Tocca un fornitore per vedere che cosa gli compri e a quali condizioni. Carica anche le fatture emesse per vedere clienti, mappa e vendite meno acquisti. Gli importi sono imponibili (senza IVA). Tutto avviene su questo dispositivo.') : null,
+        !D.fatture.length ? null : h('p', { class: 'small muted' }, 'Sulla mappa stradale tocca un gruppo per ingrandire e un cliente per la sua scheda. Nella vista per Comuni tocca un cerchio per vedere chi sono i clienti di quel Comune e che cosa hanno comprato, e una provincia per i suoi Comuni. Gli importi sono imponibili (senza IVA), al netto delle note di credito.'),
+        !D.fatture.length ? null : h('p', { class: 'small muted' }, 'Sulla mappa stradale i clienti stanno all’indirizzo della sede scritta in fattura, fino al numero civico; nelle viste per Comune e provincia, al centro del Comune. Tutto avviene su questo dispositivo: nessun dato viene inviato.'));
     }
     side.replaceChildren(...out.filter(Boolean));
   }
@@ -535,12 +706,14 @@ async function startVendite(stage, files = []) {
       h('tbody', {}, sorted.length ? sorted.slice(0, 500).map(r => h('tr', { tabindex: onRow ? '0' : null, class: onRow ? 'cl' : '', onclick: onRow ? () => onRow(r) : null, onkeydown: onRow ? e => { if (e.key === 'Enter') onRow(r); } : null }, cols.map(c => h('td', { class: c.num ? 'num' : '' }, c.f ? c.f(r) : r[c.k] ?? '—')))) : h('tr', {}, h('td', { colspan: cols.length, class: 'muted' }, vuoto)))));
   }
   function contenuto() {
-    if (!D.fatture.length) return [h('div', { class: 'vd-empty' }, h('h3', {}, invs.length ? 'Nessuna fattura di vendita' : 'Nessuna fattura letta'), h('p', {}, invs.length ? 'I file caricati sono fatture di acquisto o di un’altra azienda. Carica le fatture emesse (attive): XML, P7M, lo ZIP del cassetto fiscale o i PDF.' : 'Carica le fatture emesse: XML, P7M, lo ZIP scaricato dal cassetto fiscale o i PDF della fattura elettronica.'))];
+    if (!D.fatture.length && !D.acquisti.length) return [h('div', { class: 'vd-empty' }, h('h3', {}, invs.length ? 'Nessuna fattura dell’azienda' : 'Nessuna fattura letta'), h('p', {}, invs.length ? 'I file caricati non sono fatture elettroniche leggibili dell’azienda. Carica le fatture emesse e ricevute: XML, P7M, lo ZIP del cassetto fiscale o i PDF della fattura elettronica.' : 'Carica le fatture emesse (vendite) e ricevute (acquisti): XML, P7M, lo ZIP scaricato dal cassetto fiscale o i PDF della fattura elettronica.'))];
+    const B = A.acq;
     const t = st.tab;
     if (t === 'panoramica') return [
       h('div', { class: 'vd-kpis' }, kpi('Fatturato', eur(A.fatturato), 'imponibile, senza IVA'), kpi('Fatture', A.nFatture.toLocaleString('it-IT'), A.nNote ? `${A.nNote} note di credito` : null), kpi('Clienti', A.nClienti.toLocaleString('it-IT'), `80% da ${A.pareto.n80}`),
+        B ? kpi('Acquisti', eur(B.spesa), `${B.nFornitori} fornitori`) : null, B && A.vendite ? kpi('Vendite − acquisti', eur(A.saldo), `acquisti ${pct(B.spesa / A.vendite)} delle vendite`, A.saldo >= 0 ? 'up' : 'down') : null,
         kpi('Fattura media', eur(A.media)), A.crescita?.var != null ? kpi('Ultimi 12 mesi', `${A.crescita.var >= 0 ? '+' : '−'}${pct(Math.abs(A.crescita.var))}`, 'sui 12 mesi prima', A.crescita.var >= 0 ? 'up' : 'down') : kpi('Periodo', `${data(A.da)}`, `→ ${data(A.a)}`)),
-      sez('Scoperte', scoperteEl(6)),
+      sez('Scoperte', scoperteEl(A.acq ? 9 : 6)),
       h('div', { class: 'vd-two' }, sez('Dove sono i clienti', mappa()), sez('Andamento mensile', barre([...mesiDati()], { prev: prevDati(), desc: 'Fatturato per mese', meta: true }), A.previsione ? h('p', { class: 'muted small' }, 'In chiaro la stima dei prossimi 3 mesi, con l’intervallo probabile.') : null,
         h('div', { class: 'vd-st' }, 'Primi clienti'), hbar(A.clienti.slice(0, 6).map(c => ({ l: c.nome, v: c.fatt, sub: pct(c.quota), k: c.key })), { onClick: r => seleziona({ tipo: 'cliente', k: r.k }) })))];
     const tbMappa = () => h('div', { class: 'vd-maptb' }, seg([...(typeof Mappa !== 'undefined' && Mappa.webgl() ? [['strade', 'Strade']] : []), ['bolle', 'Comuni'], ['province', 'Province']], st.modo, v => { st.modo = v; drawMain(); }), A.distanze ? h('span', { class: 'muted small' }, `Metà del fatturato entro ${A.distanze.mediana ?? '—'} km dalla sede`) : null);
@@ -570,10 +743,39 @@ async function startVendite(stage, files = []) {
         A.prodotti, 'prodotti', { onRow: p => { st.prodotto = st.prodotto === p.k ? '' : p.k; ridisegna(); } }),
       h('p', { class: 'muted small' }, 'Tocca un prodotto per vedere solo le vendite che lo contengono (mappa, clienti, andamento).'),
       A.coppie.length ? sez('Comprati insieme', h('ul', { class: 'vd-pairs' }, A.coppie.slice(0, 6).map(c => h('li', {}, h('b', {}, c.nomeA), ' + ', h('b', {}, c.nomeB), h('span', { class: 'muted' }, ` · ${c.n} fatture · ${c.lift.toFixed(1)} volte più del caso`))))) : null];
+    if (t === 'fornitori') {
+      if (!B) return [h('div', { class: 'vd-empty' }, h('h3', {}, 'Nessuna fattura di acquisto'), h('p', {}, 'Carica anche le fatture ricevute dai fornitori (passive): lo ZIP del cassetto fiscale le contiene già. Qui vedrai a chi compri, che cosa, a che prezzo e quando devi pagare.'))];
+      const q = st.cerca.toLowerCase(), righe = B.fornitori.filter(g => !q || g.nome.toLowerCase().includes(q));
+      return [h('div', { class: 'vd-kpis' }, kpi('Acquisti', eur(B.spesa), 'imponibile, senza IVA'), kpi('Fatture ricevute', B.nFatture.toLocaleString('it-IT'), B.nNote ? `${B.nNote} note di credito` : null), kpi('Fornitori', B.nFornitori.toLocaleString('it-IT'), B.top ? `il primo vale ${pct(B.top.quota)}` : null),
+          kpi('IVA sugli acquisti', eur(B.iva), 'a credito, stima'), B.crescita?.var != null ? kpi('Ultimi 12 mesi', `${B.crescita.var >= 0 ? '+' : '−'}${pct(Math.abs(B.crescita.var))}`, 'sui 12 mesi prima', B.crescita.var > 0 ? 'down' : 'up') : kpi('Termini medi', B.termini != null ? `${B.termini} giorni` : '—', 'per pagare')),
+        h('input', { class: 'input vd-q', type: 'search', placeholder: 'Cerca un fornitore', value: st.cerca, 'aria-label': 'Cerca un fornitore', oninput: e => { st.cerca = e.target.value; const pos = e.target.selectionStart; drawMain(); const el = main.querySelector('.vd-q'); el?.focus(); try { el?.setSelectionRange(pos, pos); } catch { } } }),
+        tabella([{ k: 'nome', l: 'Fornitore', f: g => h('span', {}, h('b', {}, g.nome), h('small', { class: 'muted' }, ' ' + (g.luogo?.estero ? g.luogo.paese : g.luogo?.comune || '') + (g.cliente ? ' · anche cliente' : ''))) }, { k: 'spesa', l: 'Acquisti', num: true, f: g => eur(g.spesa) }, { k: 'quota', l: 'Quota', num: true, f: g => pct(g.quota) }, { k: 'n', l: 'Fatture', num: true }, { k: 'ultimo', l: 'Ultimo acquisto', num: true, f: g => data(g.ultimo) }, { k: 'termini', l: 'Termini', num: true, f: g => g.termini != null ? `${g.termini} gg` : '—' }, { k: 'abc', l: 'ABC' }],
+          righe, 'fornitori', { onRow: g => seleziona({ tipo: 'fornitore', k: g.key }), vuoto: 'Nessun fornitore con questi filtri.' }),
+        h('div', { class: 'vd-two' }, sez('Voci di spesa', hbar(B.voci.slice(0, 10).map(v => ({ l: v.desc, v: v.spesa, sub: `· ${v.fornitori} ${v.fornitori === 1 ? 'fornitore' : 'fornitori'}` })))),
+          sez('Prezzi d’acquisto che cambiano', (() => { const vv = B.voci.filter(v => v.variazione != null && Math.abs(v.variazione) >= 0.03).sort((a, b) => Math.abs(b.variazione) * b.spesa - Math.abs(a.variazione) * a.spesa).slice(0, 8);
+            return vv.length ? h('ul', { class: 'vd-pairs' }, vv.map(v => h('li', {}, h('b', {}, v.desc), h('span', { class: v.variazione > 0 ? 'vd-neg' : '' }, ` ${v.variazione > 0 ? '+' : '−'}${(Math.abs(v.variazione) * 100).toFixed(1).replace('.', ',')}%`), h('span', { class: 'muted' }, ` · da ${eur(v.primo)} a ${eur(v.ultimo)} · ${v.nomiFornitori.slice(0, 2).join(', ')}`)))) : h('p', { class: 'muted' }, 'Nessun prezzo d’acquisto cambiato di almeno il 3% (servono almeno 6 acquisti della stessa voce).'); })())),
+        h('div', { class: 'vd-two' }, sez('Dove sono i fornitori', B.regioni.length || B.estero.length ? hbar([...B.regioni.slice(0, 8).map(r => ({ l: r.n, v: r.spesa })), ...B.estero.map(e => ({ l: `${e.paese} (estero)`, v: e.spesa, sub: `· ${e.n}` }))]) : h('p', { class: 'muted' }, '—'), B.vicini != null ? h('p', { class: 'muted small' }, `${pct(B.vicini)} degli acquisti da fornitori entro 50 km dalla sede.`) : null),
+          sez('Fornitori che sono anche clienti', (() => { const l = B.fornitori.filter(g => g.cliente); return l.length ? hbar(l.map(g => ({ l: g.nome, v: g.spesa, sub: `· vendite ${corto(A.clienti.find(c => c.key === g.key)?.fatt || 0)} €`, k: g.key })), { onClick: r => seleziona({ tipo: 'fornitore', k: r.k }) }) : h('p', { class: 'muted' }, 'Nessuno.'); })()))];
+    }
+    if (t === 'tempo' && !D.fatture.length) return [sez('Acquisti per mese', barre(B.mesi.map((m, i) => ({ v: m.spesa, tit: m.nome, lbl: m.k.endsWith('-01') || i === 0 ? `${V.MESI3[+m.k.slice(5) - 1]} ${m.k.slice(2, 4)}` : V.MESI3[+m.k.slice(5) - 1], mostra: m.k.endsWith('-01') || i === 0, extra: `${m.n} fatture` })), { h: 260, desc: 'Acquisti per mese' }))];
     if (t === 'tempo') return [
+      B ? sez('Vendite e acquisti per mese', dueSerie(A.confronto, { desc: 'Vendite e acquisti per mese, con la differenza' }), h('p', { class: 'muted small' }, `Nel periodo: vendite ${eur(A.vendite)}, acquisti ${eur(B.spesa)}, differenza ${eur(A.saldo)}. Imponibili; non è l’utile (mancano personale, affitti e le spese senza fattura).`)) : null,
       sez('Fatturato per mese', barre(mesiDati(), { prev: prevDati(), h: 260, desc: 'Fatturato per mese con la stima dei prossimi tre mesi' }), A.previsione ? h('p', { class: 'muted small' }, `Stima dei prossimi 3 mesi con la tendenza (${A.previsione.tendenza >= 0 ? 'in crescita' : 'in calo'} di circa ${eur(Math.abs(A.previsione.tendenza))} al mese) e la stagionalità: ${A.previsione.mesi.map(m => `${m.nome} ${eur(m.val)}`).join(', ')}.`) : h('p', { class: 'muted small' }, 'Con almeno 12 mesi di fatture compare anche la stima dei prossimi 3 mesi.')),
       h('div', { class: 'vd-two' }, sez('Stagionalità: media di ogni mese', barre(A.stagioni.map(s => ({ v: s.media || 0, tit: s.nome, lbl: V.MESI3[s.m], extra: s.anni ? `media di ${s.anni} ${s.anni === 1 ? 'anno' : 'anni'}` : 'nessun dato' })), { h: 200, desc: 'Fatturato medio per mese dell’anno', meta: true })),
         sez('Clienti nuovi per mese', barre(A.mesi.map((m, i) => ({ v: m.nuovi, tit: m.nome, lbl: V.MESI3[+m.k.slice(5) - 1], mostra: m.k.endsWith('-01') || i === 0 })), { h: 200, fmt: v => `${v} ${v === 1 ? 'cliente nuovo' : 'clienti nuovi'}`, desc: 'Clienti nuovi per mese', meta: true })))];
+    if (t === 'incassi' && B) {
+      const cassa = h('div', { class: 'vd-tw', tabindex: '0', role: 'region', 'aria-label': 'Cassa prevista' }, h('table', { class: 'vd-t vd-cassa' }, h('thead', {}, h('tr', {}, ['Scadenze', 'Incassi attesi', 'Pagamenti attesi', 'Saldo'].map((x, i) => h('th', { class: i ? 'num' : '' }, x)))),
+        h('tbody', {}, A.cassa.map(c => h('tr', {}, h('td', {}, c.d === 30 ? 'entro 30 giorni' : `da ${c.d - 29} a ${c.d} giorni`), h('td', { class: 'num' }, eur(c.entrate)), h('td', { class: 'num' }, eur(c.uscite)), h('td', { class: 'num' + (c.saldo < 0 ? ' neg' : '') }, eur(c.saldo)))))));
+      const iva = A.ivaTrim.length ? h('div', { class: 'vd-tw', tabindex: '0', role: 'region', 'aria-label': 'IVA per trimestre' }, h('table', { class: 'vd-t vd-cassa' }, h('thead', {}, h('tr', {}, ['Trimestre', 'IVA sulle vendite', 'IVA sugli acquisti', 'Differenza'].map((x, i) => h('th', { class: i ? 'num' : '' }, x)))),
+        h('tbody', {}, A.ivaTrim.slice(-8).reverse().map(x => h('tr', {}, h('td', {}, x.nome), h('td', { class: 'num' }, eur(x.debito)), h('td', { class: 'num' }, eur(x.credito)), h('td', { class: 'num' + (x.saldo < 0 ? ' neg' : '') }, eur(x.saldo))))))) : null;
+      const V0 = !D.fatture.length, paghi = sez('Come paghi i fornitori', B.modalita.length ? hbar(B.modalita.map(m => ({ l: m.nome, v: m.spesa }))) : h('p', { class: 'muted' }, '—'));
+      if (V0) cassa.querySelectorAll('tr').forEach(tr => { tr.children[1]?.remove(); tr.children[2]?.remove(); });
+      return [h('div', { class: 'vd-kpis' }, V0 ? null : kpi('Incassi attesi a 30 giorni', eur(A.cassa[0].entrate)), kpi('Pagamenti attesi a 30 giorni', eur(A.cassa[0].uscite)), V0 ? kpi('Pagamenti attesi da 31 a 60 giorni', eur(A.cassa[1].uscite)) : kpi('Saldo a 30 giorni', eur(A.cassa[0].saldo), null, A.cassa[0].saldo >= 0 ? 'up' : 'down'),
+          V0 ? null : kpi('Incassi dai clienti', A.pagamenti.termini != null ? `${A.pagamenti.termini} giorni` : '—', 'termini medi'), kpi('Pagamenti ai fornitori', B.termini != null ? `${B.termini} giorni` : '—', 'termini medi')),
+        sez(V0 ? 'Pagamenti previsti' : 'Cassa prevista', cassa, h('p', { class: 'muted small' }, 'Dalle scadenze scritte nelle fatture: il programma non sa quali sono già state incassate o pagate.')),
+        h('div', { class: 'vd-two' }, V0 ? paghi : sez('Come pagano i clienti', A.pagamenti.modalita.length ? hbar(A.pagamenti.modalita.map(m => ({ l: m.nome, v: m.fatt }))) : h('p', { class: 'muted' }, '—')),
+          V0 ? null : sez('IVA per trimestre (stima)', iva, h('p', { class: 'muted small' }, 'IVA delle vendite meno IVA degli acquisti caricati. È una stima: non tiene conto di detraibilità, scissione dei pagamenti, inversione contabile, acconti e crediti precedenti. Per il versamento fa fede la liquidazione del commercialista.'))), V0 ? null : sez('Come paghi i fornitori', B.modalita.length ? hbar(B.modalita.map(m => ({ l: m.nome, v: m.spesa }))) : h('p', { class: 'muted' }, '—'))];
+    }
     if (t === 'incassi') return [
       h('div', { class: 'vd-kpis' }, kpi('Termini medi', A.pagamenti.termini != null ? `${A.pagamenti.termini} giorni` : '—', 'dalla data della fattura alla scadenza'), ...A.pagamenti.futuro.map((f, i) => kpi(`Scadenze entro ${f.d} giorni`, eur(f.imp), `${f.n} rate${i ? '' : ' · da verificare in banca'}`))),
       h('div', { class: 'vd-two' }, sez('Come pagano i clienti', hbar(A.pagamenti.modalita.map(m => ({ l: m.nome, v: m.fatt })))), sez('Termini di 90 giorni o più', A.pagamenti.lunghi.length ? hbar(A.pagamenti.lunghi.map(c => ({ l: c.nome, v: c.fatt, sub: `· ${c.termini} gg`, k: c.key })), { onClick: r => seleziona({ tipo: 'cliente', k: r.k }) }) : h('p', { class: 'muted' }, 'Nessun cliente con termini così lunghi.'))),
@@ -582,29 +784,30 @@ async function startVendite(stage, files = []) {
   }
 
   /* filtri in una riga sopra i contenuti; schede */
-  const TABS = [['panoramica', 'Panoramica'], ['mappa', 'Mappa'], ['clienti', 'Clienti'], ['prodotti', 'Prodotti'], ['tempo', 'Andamento'], ['incassi', 'Incassi']];
+  const TABS = () => D.fatture.length ? [['panoramica', 'Panoramica'], ['mappa', 'Mappa'], ['clienti', 'Clienti'], ...(D.acquisti.length ? [['fornitori', 'Fornitori']] : []), ['prodotti', 'Prodotti'], ['tempo', 'Andamento'], ['incassi', D.acquisti.length ? 'Incassi e pagamenti' : 'Incassi']]
+    : D.acquisti.length ? [['fornitori', 'Fornitori'], ['tempo', 'Andamento'], ['incassi', 'Pagamenti']] : [];
   function barraFiltri() {
-    const attivi = [st.regione && ['regione', st.regione], st.prov && !st.comune && ['prov', `Provincia ${st.prov}`], st.comune && ['comune', `${st.comune}${st.prov ? ` (${st.prov})` : ''}`], st.estero && ['estero', 'Estero'], st.cliente && ['cliente', D.clienti.get(st.cliente)?.nome || 'cliente'], st.prodotto && ['prodotto', A.prodotti.find(p => p.k === st.prodotto)?.desc || D.fatture.flatMap(f => f.righe).find(r => r.k === st.prodotto)?.desc || 'prodotto']].filter(Boolean);
+    const attivi = [st.regione && ['regione', st.regione], st.prov && !st.comune && ['prov', `Provincia ${st.prov}`], st.comune && ['comune', `${st.comune}${st.prov ? ` (${st.prov})` : ''}`], st.estero && ['estero', 'Estero'], st.cliente && ['cliente', D.clienti.get(st.cliente)?.nome || 'cliente'], st.fornitore && ['fornitore', `Fornitore: ${D.fornitori.get(st.fornitore)?.nome || ''}`], st.prodotto && ['prodotto', A.prodotti.find(p => p.k === st.prodotto)?.desc || D.fatture.flatMap(f => f.righe).find(r => r.k === st.prodotto)?.desc || 'prodotto']].filter(Boolean);
     return h('div', { class: 'vd-filt' },
       h('label', { class: 'vd-f' }, h('span', {}, 'Periodo'), h('select', { class: 'select', onchange: e => { st.periodo = e.target.value; ridisegna(); } }, periodi().map(([v, l]) => h('option', { value: v, selected: st.periodo === v }, l)))),
-      h('label', { class: 'vd-f' }, h('span', {}, 'Clienti'), h('select', { class: 'select', onchange: e => { st.tipoCli = e.target.value; ridisegna(); } }, [['', 'Tutti'], ['aziende', 'Aziende'], ['privati', 'Privati'], ['pa', 'Pubblica amministrazione']].map(([v, l]) => h('option', { value: v, selected: st.tipoCli === v }, l)))),
+      !D.fatture.length ? null : h('label', { class: 'vd-f' }, h('span', {}, 'Clienti'), h('select', { class: 'select', onchange: e => { st.tipoCli = e.target.value; ridisegna(); } }, [['', 'Tutti'], ['aziende', 'Aziende'], ['privati', 'Privati'], ['pa', 'Pubblica amministrazione']].map(([v, l]) => h('option', { value: v, selected: st.tipoCli === v }, l)))),
       attivi.map(([k, l]) => h('button', { type: 'button', class: 'vd-chipf', 'aria-label': `Togli il filtro ${l}`, onclick: () => { st[k] = k === 'estero' ? false : ''; if (k === 'prov' || k === 'comune') { st.comune = ''; st.prov = ''; } ridisegna(); } }, l, ic('x', 14))));
   }
   const main = h('div', { class: 'ws-main vd-main' }), side = h('div', { class: 'vd-side' });
   function drawMain() {
     nascondiTip();
-    main.replaceChildren(h('div', { class: 'toolbar vd-tb' }, barraFiltri()), D.fatture.length ? h('div', { class: 'vd-tabs', role: 'tablist', 'aria-label': 'Analisi' }, TABS.map(([k, l]) => h('button', { type: 'button', role: 'tab', class: 'vd-tab' + (st.tab === k ? ' on' : ''), 'aria-selected': String(st.tab === k), onclick: () => { st.tab = k; drawMain(); } }, l))) : null,
+    main.replaceChildren(h('div', { class: 'toolbar vd-tb' }, barraFiltri()), TABS().length ? h('div', { class: 'vd-tabs', role: 'tablist', 'aria-label': 'Analisi' }, TABS().map(([k, l]) => h('button', { type: 'button', role: 'tab', class: 'vd-tab' + (st.tab === k ? ' on' : ''), 'aria-selected': String(st.tab === k), onclick: () => { st.tab = k; drawMain(); } }, l))) : null,
       h('div', { class: 'vd-body', role: 'tabpanel' }, ...contenuto().filter(Boolean)), tip);
   }
   function ridisegna() { calcola(); drawMain(); drawSide(); }
 
   /* Excel: clienti, prodotti, mesi, luoghi, fatture e scoperte */
   async function excel() {
-    if (!D.fatture.length) return toast('Nessuna fattura di vendita da esportare', 'error');
+    if (!D.fatture.length && !D.acquisti.length) return toast('Nessuna fattura da esportare', 'error');
     await withBusy('Preparazione del file Excel…', async () => {
       const b = { bold: true, fill: '#EEF2FF' }, n = v => ({ v: +v || 0, t: 'n', fmt: '#,##0.00' }), i = v => ({ v: +v || 0, t: 'n', fmt: '0' }), p = v => ({ v: +v || 0, t: 'n', fmt: '0.0%' }), d = t => t ? { v: Math.round((t - Date.UTC(1899, 11, 30)) / DAY), t: 'd', fmt: 'dd/mm/yyyy' } : null, s = v => ({ v: v ?? '' });
       const head = l => l.map(x => ({ v: x, ...b }));
-      const sheets = [
+      const B = A.acq, sheets = [
         { name: 'Scoperte', widths: [40, 110], rows: [head(['Scoperta', 'Dettaglio']), ...A.scoperte.map(x => [s(x.titolo), { v: x.testo, wrap: true }])] },
         { name: 'Clienti', freeze: 1, widths: [34, 16, 22, 8, 16, 10, 10, 14, 14, 10, 16, 8, 30], rows: [head(['Cliente', 'P.IVA', 'Comune', 'Prov.', 'Regione', 'Fatturato', 'Quota', 'Fatture', 'Primo acquisto', 'Ultimo acquisto', 'Ritmo (giorni)', 'Segmento', 'ABC', 'Prodotto principale']),
           ...A.clienti.map(c => [s(c.nome), s(c.piva), s(c.luogo?.estero ? c.luogo.paese : c.luogo?.comune), s(c.luogo?.prov), s(c.luogo?.regione), n(c.fatt), p(c.quota), i(c.n), d(c.primo), d(c.ultimo), c.ritmo ? i(c.ritmo) : null, s(c.segmento), s(c.abc), s(c.prodotti[0]?.desc)])] },
@@ -613,15 +816,24 @@ async function startVendite(stage, files = []) {
         { name: 'Territorio', freeze: 1, widths: [26, 8, 18, 14, 10, 10, 60], rows: [head(['Comune', 'Prov.', 'Regione', 'Fatturato', 'Clienti', 'Km dalla sede', 'Clienti']), ...A.luoghi.map(l => [s(l.comune), s(l.prov), s(l.regione), n(l.fatt), i(l.clienti.length), l.km != null ? i(l.km) : null, s(l.clienti.map(c => c.nome).join(', '))]), ...A.estero.map(e => [s(e.paese), s(e.naz), s('Estero'), n(e.fatt), i(e.clienti.length), null, s(e.clienti.map(c => c.nome).join(', '))])] },
         { name: 'Fatture', freeze: 1, widths: [12, 12, 8, 34, 14, 12, 14, 30], rows: [head(['Data', 'Numero', 'Tipo', 'Cliente', 'Imponibile', 'IVA', 'Totale', 'File']), ...V.filtra(D, filtro()).map(f => [d(f.t), s(f.numero), s(f.tipo), s(f.cliNome), n(f.imp), n(f.iva), n(f.tot), s(f.file)])] },
       ];
-      const bytes = await XlsxOut.build(sheets, { title: 'Analisi delle vendite' });
-      showResult([{ name: `Analisi vendite - ${D.me?.nome || 'azienda'}.xlsx`.replace(/[\\/:*?"<>|]+/g, '-'), bytes, type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', info: '6 fogli: scoperte, clienti, prodotti, mesi, territorio, fatture' }], { title: 'Analisi pronta', note: 'Gli importi sono imponibili al netto delle note di credito. Il file resta sul tuo dispositivo.' });
+      // senza vendite restano solo i fogli degli acquisti; con gli acquisti, cinque fogli in più
+      if (!D.fatture.length) sheets.splice(0, sheets.length, sheets[0]);
+      if (B) sheets.push(
+        { name: 'Fornitori', freeze: 1, widths: [34, 16, 22, 8, 14, 10, 10, 14, 14, 12, 8, 12, 30], rows: [head(['Fornitore', 'P.IVA', 'Comune o paese', 'Prov.', 'Acquisti', 'Quota', 'Fatture', 'Primo acquisto', 'Ultimo acquisto', 'Termini (giorni)', 'ABC', 'Anche cliente', 'Voce principale']),
+          ...B.fornitori.map(g => [s(g.nome), s(g.piva), s(g.luogo?.estero ? g.luogo.paese : g.luogo?.comune), s(g.luogo?.prov), n(g.spesa), p(g.quota), i(g.n), d(g.primo), d(g.ultimo), g.termini != null ? i(g.termini) : null, s(g.abc), s(g.cliente ? 'sì' : ''), s(g.voci[0]?.desc)])] },
+        { name: 'Voci di spesa', freeze: 1, widths: [44, 14, 12, 8, 10, 14, 14, 40], rows: [head(['Voce', 'Acquisti', 'Quantità', 'U.M.', 'Fornitori', 'Prezzo medio', 'Variazione prezzo', 'Fornitori']), ...B.voci.map(v => [s(v.desc), n(v.spesa), n(v.qta), s(v.um), i(v.fornitori), v.prezzoMedio != null ? n(v.prezzoMedio) : null, v.variazione != null ? p(v.variazione) : null, s(v.nomiFornitori.join(', '))])] },
+        { name: 'Vendite e acquisti', freeze: 1, widths: [18, 14, 14, 14], rows: [head(['Mese', 'Vendite', 'Acquisti', 'Differenza']), ...(A.confronto || []).map(m => [s(m.nome), n(m.vendite), n(m.acquisti), n(m.saldo)])] },
+        { name: 'Cassa e IVA', widths: [26, 16, 16, 16], rows: [head(['Scadenze', 'Incassi attesi', 'Pagamenti attesi', 'Saldo']), ...(A.cassa || []).map(c => [s(c.d === 30 ? 'entro 30 giorni' : `da ${c.d - 29} a ${c.d} giorni`), n(c.entrate), n(c.uscite), n(c.saldo)]), [], head(['Trimestre', 'IVA vendite', 'IVA acquisti', 'Differenza (stima)']), ...(A.ivaTrim || []).map(x => [s(x.nome), n(x.debito), n(x.credito), n(x.saldo)])] },
+        { name: 'Fatture di acquisto', freeze: 1, widths: [12, 14, 8, 34, 14, 12, 14, 30], rows: [head(['Data', 'Numero', 'Tipo', 'Fornitore', 'Imponibile', 'IVA', 'Totale', 'File']), ...V.filtraAcq(D, filtro()).map(f => [d(f.t), s(f.numero), s(f.tipo), s(f.fornNome), n(f.imp), n(f.iva), n(f.tot), s(f.file)])] });
+      const bytes = await XlsxOut.build(sheets, { title: 'Analisi di vendite e acquisti' });
+      showResult([{ name: `Analisi vendite e acquisti - ${D.me?.nome || 'azienda'}.xlsx`.replace(/[\\/:*?"<>|]+/g, '-'), bytes, type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', info: `${sheets.length} fogli: ${sheets.map(x => x.name.toLowerCase()).join(', ')}` }], { title: 'Analisi pronta', note: 'Gli importi sono imponibili al netto delle note di credito. Il file resta sul tuo dispositivo.' });
     });
   }
 
-  const ws = workspace(stage, main, [side], [h('button', { class: 'btn primary big btn-run', onclick: excel }, ic('download', 18), 'Scarica l’analisi in Excel'), h('div', { class: 'muted small vd-foot' }, 'Clienti, prodotti, mesi, territorio e fatture in un file.')]);
+  const ws = workspace(stage, main, [side], [h('button', { class: 'btn primary big btn-run', onclick: excel }, ic('download', 18), 'Scarica l’analisi in Excel'), h('div', { class: 'muted small vd-foot' }, 'Clienti, fornitori, prodotti, mesi, cassa e fatture in un file.')]);
   ws.classList.add('vd-ws');
   // se la finestra cambia larghezza, i grafici si ridisegnano sulla misura nuova
   let lw = 0, rz = 0; const onRz = () => { if (!ws.isConnected) return removeEventListener('resize', onRz); clearTimeout(rz); rz = setTimeout(() => { const w = main.clientWidth; if (Math.abs(w - lw) > 40) { lw = w; drawMain(); } }, 200); }; addEventListener('resize', onRz);
-  if (errori.length && !D.fatture.length) toast(`${errori.length} file non letti: ${errori[0][1]}`, 'error');
+  if (errori.length && !D.fatture.length && !D.acquisti.length) toast(`${errori.length} file non letti: ${errori[0][1]}`, 'error');
   ridisegna();
 }

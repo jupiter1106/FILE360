@@ -165,6 +165,61 @@ def xml(f):
 <DatiBeniServizi>{linee}{riep}</DatiBeniServizi>
 <DatiPagamento><CondizioniPagamento>TP02</CondizioniPagamento><DettaglioPagamento><ModalitaPagamento>{mod}</ModalitaPagamento><DataScadenzaPagamento>{scad.isoformat()}</DataScadenzaPagamento><ImportoPagamento>{imponibile + iva:.2f}</ImportoPagamento></DettaglioPagamento></DatiPagamento></FatturaElettronicaBody>
 </p:FatturaElettronica>''', imponibile, iva
+# ---- acquisti (fatture passive): i fornitori dell'azienda, con fatti noti da scoprire ----
+# generatore casuale a parte: le fatture di vendita (e i loro valori attesi) non cambiano
+PRND = random.Random(77)
+FORN = [  # nome, piva, comune, prov, cap, naz, voci (codice, descrizione, prezzo, um), ritmo in giorni, termini in giorni
+  ('Elettroforniture Nord S.p.A.', '04411220150', 'Milano', 'MI', '20126', 'IT', [('QD-B', 'Quadro elettrico base', 620.0, 'pz'), ('CV-R', 'Cavo FG16 rotolo 100 m', 185.0, 'pz'), ('INT-M', 'Interruttore magnetotermico', 38.0, 'pz')], 18, 60),
+  ('Componenti Emilia S.r.l.', '03322110364', 'Modena', 'MO', '41122', 'IT', [('SG-1', 'Sensore grezzo SG-1', 14.0, 'pz'), ('SCH-1', 'Scheda elettronica LT', 95.0, 'pz')], 14, 30),
+  ('Rossi Impianti S.p.A.', '02345678901', 'Milano', 'MI', '20121', 'IT', [('POSA', 'Posa in opera in subappalto', 52.0, 'ore')], 45, 30),
+  ('Logistica Adriatica S.r.l.', '02233440428', 'Ancona', 'AN', '60121', 'IT', [('TRASP', 'Trasporto merci', 140.0, 'viaggio')], 12, 30),
+  ('Studio Bianchi Commercialisti', '01122330378', 'Bologna', 'BO', '40121', 'IT', [('CONT', 'Consulenza contabile mensile', 450.0, 'mese')], 30, 15),
+  ('Energia Più S.p.A.', '05566770580', 'Roma', 'RM', '00144', 'IT', [('EN', 'Fornitura di energia elettrica', 380.0, 'mese')], 30, 20),
+  ('Software Cloud S.r.l.', '06677880014', 'Torino', 'TO', '10128', 'IT', [('SAAS', 'Abbonamento gestionale in cloud', 120.0, 'mese')], 30, 30),
+]
+ESTERO = ('Müller Elektronik GmbH', 'DE811223344', 'Stuttgart', '', '70173', 'DE', [('MOD-DE', 'Modulo di misura MX', 210.0, 'pz')], 40, 30)
+acquisti, attese_acq = [], dict(spesa=0.0, iva=0.0, per_fornitore={}, fatture=0, note=0.0)
+anum = 0
+def acq_riga(cod, voci, qta, data):
+    c = next(v for v in voci if v[0] == cod)
+    prezzo = c[2] * (1.12 if cod == 'SG-1' and data >= dt.date(2025, 4, 1) else 1.0)   # rincaro del 12% del sensore grezzo
+    return dict(cod=cod, desc=c[1], qta=qta, um=c[3], prezzo=round(prezzo, 2), tot=round(prezzo * qta, 2))
+for fz in FORN + [ESTERO]:
+    nome, piva, com, prov, cap, naz, voci, ritmo, termini = fz
+    d = START + dt.timedelta(days=PRND.randrange(0, 20))
+    while d <= END:
+        if nome.startswith('Elettroforniture'): righe = [acq_riga(v[0], voci, PRND.randint(6, 14) if v[0] != 'QD-B' else PRND.randint(2, 4), d) for v in voci]
+        elif nome.startswith('Componenti'): righe = [acq_riga('SG-1', voci, PRND.randint(40, 90), d)] + ([acq_riga('SCH-1', voci, PRND.randint(3, 8), d)] if PRND.random() < 0.5 else [])
+        else: righe = [acq_riga(voci[0][0], voci, 1 if voci[0][3] in ('mese',) else PRND.randint(2, 10), d)]
+        anum += 1
+        acquisti.append(dict(n=f'A{anum}/{d.year}', data=d, forn=fz, righe=righe, tipo='TD18' if naz != 'IT' else 'TD01', termini=termini))
+        d += dt.timedelta(days=max(5, int(PRND.gauss(ritmo, ritmo / 5))))
+for f in PRND.sample([f for f in acquisti if f['forn'][0].startswith('Elettroforniture')], 2):   # due note di credito del fornitore principale
+    anum += 1; r = f['righe'][0]; q = max(1, r['qta'] // 2)
+    acquisti.append(dict(n=f'NCA{anum}/{f["data"].year}', data=f['data'] + dt.timedelta(days=15), forn=f['forn'], righe=[dict(r, qta=q, tot=round(r['prezzo'] * q, 2))], tipo='TD04', termini=0))
+acquisti.sort(key=lambda f: f['data'])
+# un'integrazione per inversione contabile (TD16): duplica un acquisto già presente, non va contata
+TD16 = dict(n='INT1/2025', data=dt.date(2025, 6, 10), forn=FORN[1], righe=[acq_riga('SG-1', FORN[1][6], 50, dt.date(2025, 6, 10))], tipo='TD16', termini=0)
+def xml_acq(f):
+    nome, piva, com, prov, cap, naz = f['forn'][:6]
+    imponibile = round(sum(r['tot'] for r in f['righe']), 2); iva = round(imponibile * 0.22, 2)
+    idf = f'<IdFiscaleIVA><IdPaese>{piva[:2] if naz != "IT" else "IT"}</IdPaese><IdCodice>{piva[2:] if naz != "IT" else piva}</IdCodice></IdFiscaleIVA>'
+    scad = f['data'] + dt.timedelta(days=f['termini'])
+    linee = ''.join(f'<DettaglioLinee><NumeroLinea>{i + 1}</NumeroLinea><CodiceArticolo><CodiceTipo>FORN</CodiceTipo><CodiceValore>{r["cod"]}</CodiceValore></CodiceArticolo><Descrizione>{esc(r["desc"])}</Descrizione><Quantita>{r["qta"]:.2f}</Quantita><UnitaMisura>{r["um"]}</UnitaMisura><PrezzoUnitario>{r["prezzo"]:.2f}</PrezzoUnitario><PrezzoTotale>{r["tot"]:.2f}</PrezzoTotale><AliquotaIVA>22.00</AliquotaIVA></DettaglioLinee>' for i, r in enumerate(f['righe']))
+    pag = '' if f['tipo'] in ('TD04', 'TD16', 'TD18') else f'<DatiPagamento><CondizioniPagamento>TP02</CondizioniPagamento><DettaglioPagamento><ModalitaPagamento>MP05</ModalitaPagamento><DataScadenzaPagamento>{scad.isoformat()}</DataScadenzaPagamento><ImportoPagamento>{imponibile + iva:.2f}</ImportoPagamento></DettaglioPagamento></DatiPagamento>'
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<p:FatturaElettronica versione="FPR12" xmlns:p="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2">
+<FatturaElettronicaHeader><DatiTrasmissione><IdTrasmittente><IdPaese>IT</IdPaese><IdCodice>{piva if naz == "IT" else ME["piva"]}</IdCodice></IdTrasmittente><ProgressivoInvio>{len(f["n"]):05d}</ProgressivoInvio><FormatoTrasmissione>FPR12</FormatoTrasmissione><CodiceDestinatario>0000000</CodiceDestinatario></DatiTrasmissione>
+<CedentePrestatore><DatiAnagrafici>{idf}<Anagrafica><Denominazione>{esc(nome)}</Denominazione></Anagrafica><RegimeFiscale>RF01</RegimeFiscale></DatiAnagrafici><Sede><Indirizzo>Via Industria</Indirizzo><NumeroCivico>5</NumeroCivico><CAP>{cap}</CAP><Comune>{esc(com)}</Comune>{f"<Provincia>{prov}</Provincia>" if prov else ""}<Nazione>{naz}</Nazione></Sede></CedentePrestatore>
+<CessionarioCommittente><DatiAnagrafici><IdFiscaleIVA><IdPaese>IT</IdPaese><IdCodice>{ME["piva"]}</IdCodice></IdFiscaleIVA><Anagrafica><Denominazione>{ME["nome"]}</Denominazione></Anagrafica></DatiAnagrafici><Sede><Indirizzo>{ME["via"]}</Indirizzo><NumeroCivico>{ME["civ"]}</NumeroCivico><CAP>{ME["cap"]}</CAP><Comune>{ME["comune"]}</Comune><Provincia>{ME["prov"]}</Provincia><Nazione>IT</Nazione></Sede></CessionarioCommittente></FatturaElettronicaHeader>
+<FatturaElettronicaBody><DatiGenerali><DatiGeneraliDocumento><TipoDocumento>{f["tipo"]}</TipoDocumento><Divisa>EUR</Divisa><Data>{f["data"].isoformat()}</Data><Numero>{f["n"]}</Numero><ImportoTotaleDocumento>{imponibile + iva:.2f}</ImportoTotaleDocumento></DatiGeneraliDocumento></DatiGenerali>
+<DatiBeniServizi>{linee}<DatiRiepilogo><AliquotaIVA>22.00</AliquotaIVA><ImponibileImporto>{imponibile:.2f}</ImponibileImporto><Imposta>{iva:.2f}</Imposta></DatiRiepilogo></DatiBeniServizi>{pag}</FatturaElettronicaBody>
+</p:FatturaElettronica>""", imponibile, iva
+for f in acquisti:
+    _, imp, iva = xml_acq(f); sg = -1 if f['tipo'] == 'TD04' else 1; nome = f['forn'][0]
+    attese_acq['spesa'] += sg * imp; attese_acq['iva'] += sg * iva; attese_acq['per_fornitore'][nome] = attese_acq['per_fornitore'].get(nome, 0) + sg * imp
+    if sg > 0: attese_acq['fatture'] += 1
+    else: attese_acq['note'] += imp
 buf = io.BytesIO()
 with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
     for i, f in enumerate(fatture):
@@ -176,6 +231,11 @@ with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
         attese['per_cliente'][nome] = attese['per_cliente'].get(nome, 0) + s * imp
         attese['per_mese'][ym] = attese['per_mese'].get(ym, 0) + s * imp
         for r in f['righe']: attese['per_prodotto'][r['desc']] = attese['per_prodotto'].get(r['desc'], 0) + s * r['tot']
+    # gli acquisti nello stesso archivio, con un'integrazione TD16 (da escludere) e alcuni doppioni (da contare una volta)
+    for k, f in enumerate(acquisti): z.writestr(f'acquisti/IT{f["forn"][1]}_{k + 1:05d}.xml', xml_acq(f)[0])
+    z.writestr('acquisti/integrazione_TD16.xml', xml_acq(TD16)[0])
+    for k in (3, 40, 120): z.writestr(f'copia-{k}.xml', xml(fatture[k])[0].replace('<ProgressivoInvio>', '<ProgressivoInvio>9'))
+    for k in (5, 60): z.writestr(f'acquisti/copia-{k}.xml', xml_acq(acquisti[k])[0])
 open(os.path.join(OUT, 'vendite.zip'), 'wb').write(buf.getvalue())
 # le stesse vendite, solo ai clienti dell'Emilia-Romagna: la mappa deve mostrare solo la regione
 ER = {'BO', 'MO', 'RE', 'FE', 'FC', 'RA', 'RN', 'PR', 'PC'}
@@ -184,6 +244,11 @@ with zipfile.ZipFile(b2, 'w', zipfile.ZIP_DEFLATED) as z:
     for i, f in enumerate(fatture):
         if f['cli'][3] in ER: z.writestr(f'IT{ME["piva"]}_{i + 1:05d}.xml', xml(f)[0])
 open(os.path.join(OUT, 'vendite-emilia.zip'), 'wb').write(b2.getvalue())
+# solo le fatture di acquisto: l'azienda va riconosciuta lo stesso (è chi le riceve tutte)
+b3 = io.BytesIO()
+with zipfile.ZipFile(b3, 'w', zipfile.ZIP_DEFLATED) as z:
+    for k, f in enumerate(acquisti): z.writestr(f'IT{f["forn"][1]}_{k + 1:05d}.xml', xml_acq(f)[0])
+open(os.path.join(OUT, 'acquisti-solo.zip'), 'wb').write(b3.getvalue())
 mesi = {}
 for ym, v in attese['per_mese'].items(): mesi.setdefault(int(ym[5:]), []).append(v)
 media_mese = {m: sum(v) / len(v) for m, v in mesi.items()}
@@ -192,7 +257,10 @@ out = dict(fatturato=round(attese['fatturato'], 2), imposta=round(attese['impost
            top3=[k for k, _ in top[:3]], quota_top3=round(sum(v for _, v in top[:3]) / attese['fatturato'], 3),
            per_cliente={k: round(v, 2) for k, v in attese['per_cliente'].items()}, per_prodotto={k: round(v, 2) for k, v in attese['per_prodotto'].items()},
            per_mese={k: round(v, 2) for k, v in sorted(attese['per_mese'].items())}, mese_migliore=max(media_mese, key=media_mese.get), mese_peggiore=min(media_mese, key=media_mese.get),
-           dormiente=DORMIENTE, coppia=['Lettore di consumi LT-200', 'Sensore di temperatura SN-10'], prezzo_su='Lettore di consumi LT-200', estero=2, pa='Comune di Casalecchio di Reno', solo_cap='Lodi Manutenzioni', posizioni=POSIZIONI)
+           dormiente=DORMIENTE, coppia=['Lettore di consumi LT-200', 'Sensore di temperatura SN-10'], prezzo_su='Lettore di consumi LT-200', estero=2, pa='Comune di Casalecchio di Reno', solo_cap='Lodi Manutenzioni', posizioni=POSIZIONI,
+           acquisti=dict(spesa=round(attese_acq['spesa'], 2), iva=round(attese_acq['iva'], 2), note=round(attese_acq['note'], 2), fatture=attese_acq['fatture'], fornitori=len(attese_acq['per_fornitore']),
+                         per_fornitore={k: round(v, 2) for k, v in attese_acq['per_fornitore'].items()}, principale='Elettroforniture Nord S.p.A.', rincaro='Sensore grezzo SG-1', anche_cliente='Rossi Impianti S.p.A.', estero='Müller Elektronik GmbH', doppie=5))
 json.dump(out, open(os.path.join(OUT, 'vendite-attese.json'), 'w'), ensure_ascii=False, indent=1)
 print(len(POSIZIONI), 'indirizzi veri:', ', '.join(f"{k} {sum(1 for p in POSIZIONI.values() if p['tipo'] == k)}" for k in KINDS))
+print(len(acquisti), 'acquisti,', round(attese_acq['spesa'], 2), 'di spesa; quota del principale', round(attese_acq['per_fornitore']['Elettroforniture Nord S.p.A.'] / attese_acq['spesa'], 3))
 print(len(fatture), 'fatture,', out['clienti'], 'clienti, fatturato', out['fatturato'], 'top3', out['quota_top3'], 'mese migliore', out['mese_migliore'], 'peggiore', out['mese_peggiore'])

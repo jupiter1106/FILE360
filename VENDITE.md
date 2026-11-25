@@ -1,4 +1,4 @@
-# Analisi delle vendite dalle fatture attive
+# Analisi di vendite e acquisti dalle fatture
 
 *20 novembre 2026. Nuovo strumento «Analisi delle vendite». Si caricano le fatture emesse e lo strumento mostra:*
 - *dove sono i clienti, su una mappa stradale dall'Italia intera fino al numero civico;*
@@ -15,12 +15,13 @@
 - lo ZIP scaricato dal cassetto fiscale;
 - i PDF della fattura elettronica (con l'XML incorporato o nel formato del foglio di stile).
 
-Il programma riconosce l'azienda: è chi ha emesso più fatture. Analizza solo le sue vendite:
-- le fatture di acquisto vengono contate ed escluse;
-- le autofatture sono escluse;
+Il programma riconosce l'azienda: è chi compare in più fatture, come venditore o come acquirente. Così la si trova anche quando le fatture di acquisto sono molte, o ci sono solo quelle. Prima contava solo chi emetteva più fatture, e un fornitore frequente poteva essere scambiato per l'azienda.
+- le fatture emesse sono le **vendite**, quelle ricevute gli **acquisti**;
+- la stessa fattura caricata due volte (XML e PDF, ZIP e file sciolto) conta una volta;
+- le autofatture sono escluse, tranne le integrazioni degli acquisti dall'estero (TD17, TD18, TD19), che sono acquisti veri; le integrazioni per inversione contabile (TD16) restano fuori perché duplicano una fattura già presente;
 - le note di credito si sottraggono.
 
-Se nei file ci sono più aziende, si sceglie quale analizzare.
+Se nei file ci sono più aziende (chi emette fatture a qualcuno che non sia l'azienda), si sceglie quale analizzare.
 
 **Panoramica:**
 - fatturato (imponibile, senza IVA), fatture, clienti, fattura media, crescita sui 12 mesi precedenti;
@@ -73,7 +74,22 @@ Un tocco su un prodotto filtra tutto il resto.
 - tipo di cliente (aziende, privati, pubblica amministrazione);
 - territorio, cliente e prodotto, ognuno con il suo filtro che si toglie con un tocco.
 
-**Excel** con 6 fogli: scoperte, clienti, prodotti, mesi (con la stima), territorio e fatture.
+**Fornitori** (con le fatture di acquisto, cioè passive; lo ZIP del cassetto fiscale le contiene già):
+- acquisti, fatture ricevute, fornitori, IVA sugli acquisti, crescita sui 12 mesi precedenti;
+- tabella dei fornitori ordinabile e con ricerca: quota, fatture, ultimo acquisto, termini di pagamento, classe ABC, «anche cliente»;
+- la scheda di ogni fornitore: che cosa gli compri, ritmo, termini e modalità di pagamento, distanza dalla sede;
+- voci di spesa (righe raggruppate come i prodotti venduti) e **prezzi d'acquisto che cambiano** (prime contro ultime forniture);
+- dove sono i fornitori (regioni, estero, quota entro 50 km) e quali fornitori sono anche clienti.
+
+**Vendite e acquisti insieme:**
+- in Panoramica, gli acquisti e «vendite meno acquisti» accanto al fatturato;
+- in Andamento, vendite (blu) e acquisti (arancio) mese per mese, con la linea della differenza;
+- in «Incassi e pagamenti», la **cassa prevista** entro 30, da 31 a 60 e da 61 a 90 giorni (incassi attesi dai clienti, pagamenti attesi ai fornitori, saldo), i termini medi delle due parti e l'**IVA per trimestre** (vendite meno acquisti), dichiarata come stima;
+- il confronto usa tutte le vendite del periodo, anche quando un filtro restringe le schede delle vendite a un cliente o a un territorio.
+
+Con le sole fatture di acquisto lo strumento mostra Fornitori, Andamento e Pagamenti, senza voci vuote sulle vendite.
+
+**Excel** con 11 fogli: scoperte, clienti, prodotti, mesi, territorio, fatture e, con gli acquisti, fornitori, voci di spesa, vendite e acquisti, cassa e IVA, fatture di acquisto.
 
 ### Le scoperte (frasi con i numeri, ordinate per importanza)
 
@@ -154,6 +170,7 @@ Le fatture di prova vengono da `test/bench/make_vendite.py`: 465 fatture di un'a
 - Comuni scritti in modi diversi;
 - un cliente con il solo CAP;
 - note di credito;
+- **246 fatture di acquisto** da 8 fornitori: uno vale il 49% degli acquisti, un sensore rincara del 12% da aprile 2025, un fornitore è anche cliente, uno è tedesco (integrazioni TD18), due note di credito, un'integrazione TD16 da escludere e 5 doppioni da contare una volta (`acquisti-solo.zip` ha le sole fatture di acquisto);
 - **indirizzi veri** (dall'indice dei civici), scritti in 12 modi diversi: esatto, in maiuscolo, abbreviato, con l'iniziale del nome, senza nome proprio, con «/A», con «n.», civico assente in OpenStreetMap, «snc», con un refuso, via inesistente, via e civico nello stesso campo.
 
 I valori giusti stanno in `vendite-attese.json`.
@@ -164,20 +181,24 @@ I valori giusti stanno in `vendite-attese.json`.
 | | C2 Importi per cliente, prodotto e mese al centesimo | 100% → 5 · ≥98% → 4 | **89/89** → 5 |
 | | C3 Clienti sul Comune giusto e clienti italiani sulla mappa | 100% → 5 · ≥97% → 4 | **9/9** casi difficili, **57/57** sulla mappa → 5 |
 | | C4 Richieste di rete | 0 → 5 | **0** → 5 |
+| | C9 Acquisti: spesa, IVA, note, fatture e fornitori esatti; importo per fornitore al centesimo; doppioni e integrazioni esclusi | 100% → 5 · ≥97% → 4 | **3/3 · 8/8** → 5 |
+| | C10 Solo fatture di acquisto: l'azienda è chi le riceve | sì → 5 | **sì** → 5 |
 | | C5 Clienti all'indirizzo giusto, nei 12 modi di scriverlo (civico esatto entro 5 m; civico mancante tra i vicini; «snc» sulla via; via inesistente al centro del Comune) | 100% → 5 · ≥95% → 4 · ≥90% → 3 | **57/57** → 5 |
 | | C6 Richieste di rete con la mappa stradale (cartella sul dispositivo) | 0 → 5 | **0** → 5 |
 | | C8 Clienti tutti in Emilia-Romagna (fatture di prova `vendite-emilia.zip`): solo la regione, spostamento limitato attorno, Italia d'insieme mai letta | sì → 5 | **sì** → 5 |
 | | C7 Strade ed edifici letti solo per le province con clienti (nella cartella di prova c'è anche una provincia senza clienti: non deve mai essere letta) | sì → 5 | **sì** (letti: Italia d'insieme e BO) → 5 |
 | **Scoperte (25%)** | D1 Fatti nascosti trovati | 7/7 → 5 · 6 → 4 · 5 → 3 | **7/7** → 5 |
+| | D2 Fatti nascosti negli acquisti: fornitore principale, rincaro, fornitore anche cliente, fornitore estero, cassa e IVA | 5/5 → 5 · 4 → 4 | **5/5** → 5 |
 | **Velocità (15%)** | S1 Dal file ZIP alla panoramica (465 fatture) | ≤2 s → 5 | **0,8 s** → 5 |
 | | S2 Analisi completa di 5.000 fatture | ≤500 ms → 5 | **15–23 ms** → 5 |
 | | S3 Cambio di filtro su 5.000 fatture | ≤300 ms → 5 | **3–6 ms** → 5 |
 | | S4 Mappa stradale pronta: Italia d'insieme, poi dalla cartella ai clienti sul civico | ≤3 s → 5 · ≤6 s → 4 | **1,2 s · 1,5 s** → 5 |
 | | S5 Fluidità: blocco più lungo del programma durante 16 scatti di rotella e 4 trascinamenti | ≤100 ms → 5 · ≤200 ms → 4 | **80 ms** → 5 |
 | **Facilità (15%)** | I1 Dal file alla panoramica senza altri passaggi; Comune → chi sono e che cosa hanno comprato; il periodo cambia i numeri; Excel con 6 fogli e tutti i clienti | 4/4 → 5 | **4/4** → 5 |
+| | I4 Fornitori: elenco e scheda del fornitore con che cosa gli compri | sì → 5 | **sì** → 5 |
 | | I3 Rotella del mouse: zoom avanti e indietro, trascinamento | sì → 5 | **sì** (zoom 5,0 → 8,7 → 5,0) → 5 |
 | | I2 Mappa stradale: un gruppo si apre ingrandendo; dall'elenco della zona al volo sull'edificio con la scheda e l'indirizzo; tocco sul punto → scheda; dalla scheda «Mostra sulla mappa» | 4/4 → 5 | **4/4** → 5 |
-| **Aspetto (15%)** | B1 Violazioni WCAG 2.2 AA (axe): computer e telefono, chiaro e scuro, Panoramica, Clienti e Mappa | 0 → 5 | **0** → 5 |
+| **Aspetto (15%)** | B1 Violazioni WCAG 2.2 AA (axe): computer e telefono, chiaro e scuro, Panoramica, Clienti, Mappa, Fornitori, Incassi e pagamenti | 0 → 5 | **0** → 5 |
 | | B2 Telefono senza scorrimento laterale | nessun difetto → 5 | **nessun difetto** → 5 |
 | | B3 Pixel colorati della mappa nella tavolozza viola (tonalità 225°–295°), Italia e Bologna, chiaro e scuro | ≥97% → 5 · ≥90% → 4 | **100%** in tutte e 4 → 5 |
 | | B4 Dettaglio a zoom 17: edifici, strade e nomi delle vie, chiaro e scuro | 3/3 → 5 | **3/3** → 5 |
@@ -208,6 +229,8 @@ Il primo giro del banco (prima della mappa stradale) aveva dato 4,55 e ha trovat
 - **Strade ed edifici pesano 1,8 GB** (tutta Italia, per provincia). Non possono stare nel file unico. Sul sito vanno pubblicati una volta; chi usa la mappa scarica solo pochi MB. Senza, la vista Strade mostra l'Italia d'insieme con i clienti comunque al civico.
 - **Fuori dalle province con clienti** la mappa resta d'insieme anche ingrandendo: è voluto, si scarica solo ciò che serve, e quelle zone sono velate.
 - **Nelle viste Comuni e Province** la posizione è il centro del Comune. Con il solo CAP o la sola provincia lo strumento lo dice nella scheda del luogo.
-- **Incassi.** Le scadenze vengono dalle fatture: il programma non sa quali sono state pagate.
+- **Incassi e pagamenti.** Le scadenze vengono dalle fatture: il programma non sa quali sono state incassate o pagate.
+- **Vendite meno acquisti non è l'utile.** Mancano personale, affitti e tutte le spese senza fattura elettronica.
+- **IVA per trimestre.** È una stima (IVA delle vendite meno IVA degli acquisti caricati): non conosce detraibilità, scissione dei pagamenti, inversione contabile, acconti e crediti precedenti. Fa fede la liquidazione.
 - **Prodotti senza codice.** Si raggruppano per descrizione, senza mesi, anni, date e numeri d'ordine. Descrizioni molto diverse dello stesso servizio restano separate.
 - **Stima.** È statistica (tendenza e stagionalità), non una previsione certa; lo strumento lo scrive.

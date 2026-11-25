@@ -1288,6 +1288,20 @@ test('Analisi delle vendite: insieme a fatture di altre aziende e a PDF analizza
   const p2 = (await open(b, 'desk1280')).page; await openTool(p2, 'vendite', ['rotto.pdf']); await p2.waitForSelector('.vd-empty, .toast', { timeout: 60000 });
   ok(/Nessuna fattura/.test(await p2.locator('.tool').innerText()), 'nessun messaggio per i file non validi');
 });
+test('Analisi di vendite e acquisti: con le fatture passive compaiono fornitori, rincari, cassa e IVA; con sole fatture di acquisto l’azienda è chi le riceve', async b => {
+  const { page } = await open(b, 'desk1440'); await openTool(page, 'vendite', ['vendite.zip']); await page.waitForSelector('.vd-kpis', { timeout: 60000 });
+  ok(/Acquisti/.test(await page.locator('.vd-kpis').innerText()) && /Doppioni/.test(await page.locator('.vd-side').innerText()), 'mancano gli acquisti in panoramica o i doppioni');
+  await page.locator('.vd-tab', { hasText: 'Fornitori' }).click();
+  const t = await page.locator('.vd-body').innerText();
+  ok(/Elettroforniture Nord/.test(t) && /Sensore grezzo SG-1/.test(t) && /anche cliente/.test(t), 'fornitori, rincari o fornitori-clienti mancanti: ' + t.slice(0, 200));
+  await page.locator('.vd-tab', { hasText: 'Incassi e pagamenti' }).click();
+  ok(/Cassa prevista/.test(await page.locator('.vd-body').innerText()) && /IVA per trimestre/.test(await page.locator('.vd-body').innerText()), 'manca la cassa o l’IVA');
+  ok(page.errs.length === 0, page.errs.join(' | '));
+  const p2 = (await open(b, 'desk1280')).page; await openTool(p2, 'vendite', ['acquisti-solo.zip']); await p2.waitForSelector('.vd-tabs', { timeout: 60000 });
+  const tabs = await p2.locator('.vd-tab').allInnerTexts(), side = await p2.locator('.vd-side').innerText();
+  ok(tabs.join() === 'Fornitori,Andamento,Pagamenti' && /Alfa Forniture/.test(side) && !/Fatture di vendita/.test(side), JSON.stringify({ tabs, side: side.slice(0, 120) }));
+  ok(p2.errs.length === 0, p2.errs.join(' | '));
+});
 test('Analisi delle vendite: mappa stradale dall’Italia al civico con la cartella della mappa, rilievo in 3D; senza WebGL resta la mappa per Comuni', async b => {
   const os = require('os'), fs = require('fs'), path = require('path'), dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mappa-italia-'));
   fs.mkdirSync(path.join(dir, 'province')); fs.copyFileSync(path.join(__dirname, '..', 'fixtures', 'mappa', 'BO.pmtiles'), path.join(dir, 'province', 'BO.pmtiles')); fs.mkdirSync(path.join(dir, 'civici'));
