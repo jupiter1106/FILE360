@@ -1,0 +1,8 @@
+# Netlify pubblica la cartella sito/ così com'è: il sito è già compilato (nessuna compilazione sul server).
+# Per aggiornarlo dopo una modifica ai sorgenti:
+#   python3 build.py --netlify && rm -rf sito && mv dist/netlify sito
+# Le province della mappa (sito/mappa/province) vengono da dati/mappa/province: vedi NETLIFY.md.
+# Le chiavi del cloud (facoltative) si mettono nel file sito/cloud.json (vedi cloud.example.json).
+[build]
+  publish = "sito"
+  command = ""

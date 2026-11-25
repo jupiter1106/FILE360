@@ -1,0 +1,607 @@
+{
+ "fatturato": 2449545.9,
+ "imposta": 535969.01,
+ "note": 26355.0,
+ "fatture": 465,
+ "clienti": 59,
+ "top3": [
+  "Rossi Impianti S.p.A.",
+  "Bianchi Elettrotecnica S.r.l.",
+  "Verdi Costruzioni S.r.l."
+ ],
+ "quota_top3": 0.662,
+ "per_cliente": {
+  "Cliente Lecce 25 S.r.l.": 4212.5,
+  "Moretti Impianti": 38625.2,
+  "Cliente Pavia 22 S.r.l.": 14466.2,
+  "Cliente Varese 32": 13680.0,
+  "Cliente Arezzo 34 S.r.l.": 11176.5,
+  "Cliente Siena 35 S.r.l.": 7860.3,
+  "Santoro Solar S.r.l.": 26769.8,
+  "Verdi Costruzioni S.r.l.": 432960.8,
+  "Cliente Cagliari 27 S.r.l.": 5871.6,
+  "Comune di Casalecchio di Reno": 2123.3,
+  "Cliente Monza 33 S.r.l.": 14100.0,
+  "Cliente Cesena 05": 1056.5,
+  "Lombardi Tecnica": 9120.4,
+  "Cliente Sassuolo 16 S.r.l.": 15235.4,
+  "Cliente Carpi 17 S.r.l.": 6575.0,
+  "Cliente Parma 01 S.r.l.": 11968.3,
+  "Cliente Como 31 S.r.l.": 11717.0,
+  "Esposito Service S.n.c.": 34762.5,
+  "Cliente Treviso 08 S.r.l.": 18180.0,
+  "Rizzo Clima": 28128.1,
+  "Cliente Rimini 04 S.r.l.": 8345.0,
+  "Fontana Elettrica": 52639.5,
+  "Rossi Impianti S.p.A.": 667861.5,
+  "Barbieri S.r.l.": 5989.4,
+  "Giordano Impianti": 43094.0,
+  "Cliente Livorno 15 S.r.l.": 3497.0,
+  "Conti Energia S.r.l.": 29080.0,
+  "Cliente Asti 38 S.r.l.": 2695.0,
+  "Cliente Pescara 28 S.r.l.": 4432.5,
+  "Costa Facility": 10220.0,
+  "Cliente Pesaro 11 S.r.l.": 11267.5,
+  "Cliente Udine 23": 3827.0,
+  "Bianchi Elettrotecnica S.r.l.": 521194.1,
+  "Marino Building": 37171.1,
+  "Gallo Termoidraulica": 36955.9,
+  "Mancini Group S.r.l.": 55757.7,
+  "Cliente Palermo 26 S.r.l.": 9316.6,
+  "Ferraro Automazioni S.r.l.": 64261.9,
+  "Cliente Piacenza 02 S.r.l.": 15293.3,
+  "Cliente Pisa 14": 25521.5,
+  "Cliente Bolzano 29 S.r.l.": 827.0,
+  "Cliente Perugia 12 S.r.l.": 18180.8,
+  "Cliente Latina 37 S.r.l.": 2162.5,
+  "Cliente Terni 36 S.r.l.": 10590.0,
+  "Cliente Cremona 21 S.r.l.": 9774.5,
+  "Cliente Ancona 10 S.r.l.": 11975.0,
+  "Cliente Faenza 18 S.r.l.": 662.5,
+  "Cliente Mantova 20 S.r.l.": 12400.0,
+  "Lodi Manutenzioni": 16802.0,
+  "Müller Haustechnik GmbH": 5736.8,
+  "Cliente Ravenna 03 S.r.l.": 2432.5,
+  "Greco Automation": 13269.0,
+  "Cliente Trento 09 S.r.l.": 900.0,
+  "Dupont Énergie SARL": 7586.4,
+  "Cliente Vicenza 07 S.r.l.": 7045.8,
+  "Cliente Salerno 24 S.r.l.": 355.0,
+  "Cliente Lucca 13 S.r.l.": 5565.8,
+  "Cliente Brescia 06 S.r.l.": 3750.0,
+  "Cliente Novara 30 S.r.l.": 2520.4
+ },
+ "per_prodotto": {
+  "Quadro elettrico QE-01": 396250.0,
+  "Installazione e collaudo": 87425.0,
+  "Kit fotovoltaico 3 kW": 1454700.0,
+  "Termostato smart TRM-2": 54955.0,
+  "Cavo schermato 5 m": 10337.5,
+  "Lettore di consumi LT-200": 305702.4,
+  "Sensore di temperatura SN-10": 96976.0,
+  "Assistenza annuale": 43200.0
+ },
+ "per_mese": {
+  "2024-01": 75846.5,
+  "2024-02": 95505.0,
+  "2024-03": 117738.5,
+  "2024-04": 149396.5,
+  "2024-05": 211811.0,
+  "2024-06": 58388.5,
+  "2024-07": 54996.5,
+  "2024-08": 45086.0,
+  "2024-09": 95893.5,
+  "2024-10": 272448.5,
+  "2024-11": 155254.5,
+  "2024-12": 116255.5,
+  "2025-01": 107592.5,
+  "2025-02": 114868.5,
+  "2025-03": 135263.6,
+  "2025-04": 100827.6,
+  "2025-05": 177016.7,
+  "2025-06": 64375.6,
+  "2025-07": 40335.1,
+  "2025-08": 9764.4,
+  "2025-09": 81319.9,
+  "2025-10": 169561.5
+ },
+ "mese_migliore": 10,
+ "mese_peggiore": 8,
+ "dormiente": "Verdi Costruzioni S.r.l.",
+ "coppia": [
+  "Lettore di consumi LT-200",
+  "Sensore di temperatura SN-10"
+ ],
+ "prezzo_su": "Lettore di consumi LT-200",
+ "estero": 2,
+ "pa": "Comune di Casalecchio di Reno",
+ "solo_cap": "Lodi Manutenzioni",
+ "posizioni": {
+  "Rossi Impianti S.p.A.": {
+   "tipo": "esatto",
+   "scritto": "Via Budua 6",
+   "prec": "civico",
+   "lon": 9.194718,
+   "lat": 45.498196,
+   "toll_m": 5
+  },
+  "Verdi Costruzioni S.r.l.": {
+   "tipo": "maiuscolo",
+   "scritto": "VIA GIOVANNI BATTISTA SCANAROLI 71",
+   "prec": "civico",
+   "lon": 10.939965,
+   "lat": 44.639249,
+   "toll_m": 5
+  },
+  "Bianchi Elettrotecnica S.r.l.": {
+   "tipo": "abbreviato",
+   "scritto": "V. Luigi Sormani Moretti 22",
+   "prec": "civico",
+   "lon": 10.606406,
+   "lat": 44.685158,
+   "toll_m": 5
+  },
+  "Ferraro Automazioni S.r.l.": {
+   "tipo": "iniziali",
+   "scritto": "Via M. Vodice 11",
+   "prec": "civico",
+   "lon": 7.63195,
+   "lat": 45.063445,
+   "toll_m": 5
+  },
+  "Esposito Service S.n.c.": {
+   "tipo": "senza_nome",
+   "scritto": "Via Depretis 88",
+   "prec": "civico",
+   "lon": 14.254122,
+   "lat": 40.841297,
+   "toll_m": 5
+  },
+  "Gallo Termoidraulica": {
+   "tipo": "barra",
+   "scritto": "Via Francesco Lami 34/A",
+   "prec": "civico",
+   "lon": 12.072528,
+   "lat": 44.204007,
+   "toll_m": 5
+  },
+  "Conti Energia S.r.l.": {
+   "tipo": "numero_n",
+   "scritto": "Via Ugo Bassi n. 30",
+   "prec": "civico",
+   "lon": 11.890494,
+   "lat": 45.411997,
+   "toll_m": 5
+  },
+  "Mancini Group S.r.l.": {
+   "tipo": "mancante",
+   "scritto": "Via Mondovi 9",
+   "prec": "stimato",
+   "lon": 12.5155285,
+   "lat": 41.877967,
+   "toll_m": 22.6
+  },
+  "Lombardi Tecnica": {
+   "tipo": "snc",
+   "scritto": "Via Rosolino Pilo snc",
+   "prec": "via",
+   "lon": 9.67057,
+   "lat": 45.715721,
+   "toll_m": 5
+  },
+  "Moretti Impianti": {
+   "tipo": "refuso",
+   "scritto": "Via Val Pusetria 46",
+   "prec": "civico",
+   "lon": 12.551802,
+   "lat": 45.640586,
+   "toll_m": 5
+  },
+  "Barbieri S.r.l.": {
+   "tipo": "inesistente",
+   "scritto": "Via dei Ciclamini Turchesi 3",
+   "prec": "comune",
+   "lon": null,
+   "lat": null,
+   "toll_m": 5
+  },
+  "Fontana Elettrica": {
+   "tipo": "tutto_in_indirizzo",
+   "scritto": "Via Giulio Piazzi, 21",
+   "prec": "civico",
+   "lon": 11.637874,
+   "lat": 44.843168,
+   "toll_m": 5
+  },
+  "Santoro Solar S.r.l.": {
+   "tipo": "esatto",
+   "scritto": "Via San Francesco D Assisi 35",
+   "prec": "civico",
+   "lon": 16.864424,
+   "lat": 41.126941,
+   "toll_m": 5
+  },
+  "Marino Building": {
+   "tipo": "maiuscolo",
+   "scritto": "VIALE ENRICO CIALDINI 12",
+   "prec": "civico",
+   "lon": 11.287342,
+   "lat": 43.776883,
+   "toll_m": 5
+  },
+  "Greco Automation": {
+   "tipo": "abbreviato",
+   "scritto": "V.le Bummacaro 13",
+   "prec": "civico",
+   "lon": 15.044964,
+   "lat": 37.481923,
+   "toll_m": 5
+  },
+  "Rizzo Clima": {
+   "tipo": "iniziali",
+   "scritto": "Viale A. Pacinotti 11",
+   "prec": "civico",
+   "lon": 11.714569,
+   "lat": 44.347579,
+   "toll_m": 5
+  },
+  "Lodi Manutenzioni": {
+   "tipo": "senza_nome",
+   "scritto": "Via Iseo 10",
+   "prec": "civico",
+   "lon": 10.892298,
+   "lat": 44.791436,
+   "toll_m": 5
+  },
+  "Costa Facility": {
+   "tipo": "barra",
+   "scritto": "Via delle Grazie 13/A",
+   "prec": "civico",
+   "lon": 8.928379,
+   "lat": 44.406492,
+   "toll_m": 5
+  },
+  "Giordano Impianti": {
+   "tipo": "numero_n",
+   "scritto": "Contrada Duello n. 7",
+   "prec": "civico",
+   "lon": 11.108081,
+   "lat": 45.512394,
+   "toll_m": 5
+  },
+  "Comune di Casalecchio di Reno": {
+   "tipo": "mancante",
+   "scritto": "Via Guido Guinizelli 7",
+   "prec": "stimato",
+   "lon": 11.276147,
+   "lat": 44.4723225,
+   "toll_m": 32.1
+  },
+  "Cliente Parma 01 S.r.l.": {
+   "tipo": "snc",
+   "scritto": "Strada Battibue snc",
+   "prec": "via",
+   "lon": 10.279973,
+   "lat": 44.820222,
+   "toll_m": 5
+  },
+  "Cliente Piacenza 02 S.r.l.": {
+   "tipo": "refuso",
+   "scritto": "Via Carlo Laevlli 6",
+   "prec": "civico",
+   "lon": 9.73673,
+   "lat": 45.032966,
+   "toll_m": 5
+  },
+  "Cliente Ravenna 03 S.r.l.": {
+   "tipo": "inesistente",
+   "scritto": "Via dei Ciclamini Turchesi 3",
+   "prec": "comune",
+   "lon": null,
+   "lat": null,
+   "toll_m": 5
+  },
+  "Cliente Rimini 04 S.r.l.": {
+   "tipo": "tutto_in_indirizzo",
+   "scritto": "Via Carpegna, 12",
+   "prec": "civico",
+   "lon": 12.539928,
+   "lat": 44.056049,
+   "toll_m": 5
+  },
+  "Cliente Cesena 05": {
+   "tipo": "esatto",
+   "scritto": "Via Giuseppe Ungaretti 346",
+   "prec": "civico",
+   "lon": 12.272478,
+   "lat": 44.133563,
+   "toll_m": 5
+  },
+  "Cliente Brescia 06 S.r.l.": {
+   "tipo": "maiuscolo",
+   "scritto": "CONTRADA DELLE BASSICHE 28",
+   "prec": "civico",
+   "lon": 10.212454,
+   "lat": 45.54002,
+   "toll_m": 5
+  },
+  "Cliente Vicenza 07 S.r.l.": {
+   "tipo": "abbreviato",
+   "scritto": "V.le del Cimitero 10",
+   "prec": "civico",
+   "lon": 11.556475,
+   "lat": 45.557758,
+   "toll_m": 5
+  },
+  "Cliente Treviso 08 S.r.l.": {
+   "tipo": "iniziali",
+   "scritto": "Via G. Modena 10",
+   "prec": "civico",
+   "lon": 12.242458,
+   "lat": 45.657855,
+   "toll_m": 5
+  },
+  "Cliente Trento 09 S.r.l.": {
+   "tipo": "senza_nome",
+   "scritto": "Via Medici 18",
+   "prec": "civico",
+   "lon": 11.122982,
+   "lat": 46.052682,
+   "toll_m": 5
+  },
+  "Cliente Ancona 10 S.r.l.": {
+   "tipo": "barra",
+   "scritto": "Via Conca 37/A",
+   "prec": "civico",
+   "lon": 13.455086,
+   "lat": 43.606346,
+   "toll_m": 5
+  },
+  "Cliente Pesaro 11 S.r.l.": {
+   "tipo": "numero_n",
+   "scritto": "Via Flaminia n. 146",
+   "prec": "civico",
+   "lon": 12.920124,
+   "lat": 43.898952,
+   "toll_m": 5
+  },
+  "Cliente Perugia 12 S.r.l.": {
+   "tipo": "mancante",
+   "scritto": "Piazza Matteotti 11",
+   "prec": "stimato",
+   "lon": 12.389832,
+   "lat": 43.1116305,
+   "toll_m": 26.6
+  },
+  "Cliente Lucca 13 S.r.l.": {
+   "tipo": "snc",
+   "scritto": "Via Matteo Trenta snc",
+   "prec": "via",
+   "lon": 10.521002,
+   "lat": 43.847756,
+   "toll_m": 5
+  },
+  "Cliente Pisa 14": {
+   "tipo": "refuso",
+   "scritto": "Via Luchcese 29",
+   "prec": "civico",
+   "lon": 10.403415,
+   "lat": 43.72593,
+   "toll_m": 5
+  },
+  "Cliente Livorno 15 S.r.l.": {
+   "tipo": "inesistente",
+   "scritto": "Via dei Ciclamini Turchesi 3",
+   "prec": "comune",
+   "lon": null,
+   "lat": null,
+   "toll_m": 5
+  },
+  "Cliente Sassuolo 16 S.r.l.": {
+   "tipo": "tutto_in_indirizzo",
+   "scritto": "Via Sibilla Aleramo, 21",
+   "prec": "civico",
+   "lon": 10.790872,
+   "lat": 44.5468,
+   "toll_m": 5
+  },
+  "Cliente Carpi 17 S.r.l.": {
+   "tipo": "esatto",
+   "scritto": "Via Mulino Vecchio 10",
+   "prec": "civico",
+   "lon": 10.836839,
+   "lat": 44.807238,
+   "toll_m": 5
+  },
+  "Cliente Faenza 18 S.r.l.": {
+   "tipo": "maiuscolo",
+   "scritto": "VIA PIERO DELLA FRANCESCA 13",
+   "prec": "civico",
+   "lon": 11.877955,
+   "lat": 44.299405,
+   "toll_m": 5
+  },
+  "Cliente Cento 19 S.r.l.": {
+   "tipo": "abbreviato",
+   "scritto": "V. Bondenese Casumaro 141",
+   "prec": "civico",
+   "lon": 11.359026,
+   "lat": 44.833822,
+   "toll_m": 5
+  },
+  "Cliente Mantova 20 S.r.l.": {
+   "tipo": "iniziali",
+   "scritto": "Via T. Vecchio 8",
+   "prec": "civico",
+   "lon": 10.799025,
+   "lat": 45.158598,
+   "toll_m": 5
+  },
+  "Cliente Cremona 21 S.r.l.": {
+   "tipo": "senza_nome",
+   "scritto": "Via Patecchio 15",
+   "prec": "civico",
+   "lon": 10.02433,
+   "lat": 45.132201,
+   "toll_m": 5
+  },
+  "Cliente Pavia 22 S.r.l.": {
+   "tipo": "barra",
+   "scritto": "Strada Scagliona 260/A",
+   "prec": "civico",
+   "lon": 9.205611,
+   "lat": 45.171872,
+   "toll_m": 5
+  },
+  "Cliente Udine 23": {
+   "tipo": "numero_n",
+   "scritto": "Via Sedegliano n. 7",
+   "prec": "civico",
+   "lon": 13.221298,
+   "lat": 46.044681,
+   "toll_m": 5
+  },
+  "Cliente Salerno 24 S.r.l.": {
+   "tipo": "mancante",
+   "scritto": "Via Giacinto Vicinanza 14",
+   "prec": "stimato",
+   "lon": 14.770488,
+   "lat": 40.6744605,
+   "toll_m": 14.9
+  },
+  "Cliente Lecce 25 S.r.l.": {
+   "tipo": "snc",
+   "scritto": "Via Don Luigi Sturzo snc",
+   "prec": "via",
+   "lon": 18.181621,
+   "lat": 40.357328,
+   "toll_m": 5
+  },
+  "Cliente Palermo 26 S.r.l.": {
+   "tipo": "refuso",
+   "scritto": "Via Giuesppe Giusti 24",
+   "prec": "civico",
+   "lon": 13.34573,
+   "lat": 38.137773,
+   "toll_m": 5
+  },
+  "Cliente Cagliari 27 S.r.l.": {
+   "tipo": "inesistente",
+   "scritto": "Via dei Ciclamini Turchesi 3",
+   "prec": "comune",
+   "lon": null,
+   "lat": null,
+   "toll_m": 5
+  },
+  "Cliente Pescara 28 S.r.l.": {
+   "tipo": "tutto_in_indirizzo",
+   "scritto": "Via Silvio Spaventa, 51",
+   "prec": "civico",
+   "lon": 14.223762,
+   "lat": 42.459422,
+   "toll_m": 5
+  },
+  "Cliente Bolzano 29 S.r.l.": {
+   "tipo": "esatto",
+   "scritto": "Via Roen Roenstrae 21",
+   "prec": "civico",
+   "lon": 11.336961,
+   "lat": 46.497596,
+   "toll_m": 5
+  },
+  "Cliente Novara 30 S.r.l.": {
+   "tipo": "maiuscolo",
+   "scritto": "VIALE FRANCESCO FERRUCCI 16",
+   "prec": "civico",
+   "lon": 8.629389,
+   "lat": 45.444865,
+   "toll_m": 5
+  },
+  "Cliente Como 31 S.r.l.": {
+   "tipo": "abbreviato",
+   "scritto": "V. Olginati 7",
+   "prec": "civico",
+   "lon": 9.080271,
+   "lat": 45.811306,
+   "toll_m": 5
+  },
+  "Cliente Varese 32": {
+   "tipo": "iniziali",
+   "scritto": "Via G. Gozzi 55",
+   "prec": "civico",
+   "lon": 8.844247,
+   "lat": 45.805388,
+   "toll_m": 5
+  },
+  "Cliente Monza 33 S.r.l.": {
+   "tipo": "senza_nome",
+   "scritto": "Via Aleardi 13",
+   "prec": "civico",
+   "lon": 9.286449,
+   "lat": 45.577816,
+   "toll_m": 5
+  },
+  "Cliente Arezzo 34 S.r.l.": {
+   "tipo": "barra",
+   "scritto": "Via Francesco Baracca 42/A",
+   "prec": "civico",
+   "lon": 11.845378,
+   "lat": 43.461553,
+   "toll_m": 5
+  },
+  "Cliente Siena 35 S.r.l.": {
+   "tipo": "numero_n",
+   "scritto": "Strada di Peragna n. 5",
+   "prec": "civico",
+   "lon": 11.311131,
+   "lat": 43.336274,
+   "toll_m": 5
+  },
+  "Cliente Terni 36 S.r.l.": {
+   "tipo": "mancante",
+   "scritto": "Viale della Stazione 16",
+   "prec": "stimato",
+   "lon": 12.649318,
+   "lat": 42.5671165,
+   "toll_m": 15.2
+  },
+  "Cliente Latina 37 S.r.l.": {
+   "tipo": "snc",
+   "scritto": "Via Luigi Boccherini snc",
+   "prec": "via",
+   "lon": 12.869611,
+   "lat": 41.456257,
+   "toll_m": 5
+  },
+  "Cliente Asti 38 S.r.l.": {
+   "tipo": "refuso",
+   "scritto": "Piazza Sttauto 17",
+   "prec": "civico",
+   "lon": 8.203912,
+   "lat": 44.898549,
+   "toll_m": 5
+  }
+ },
+ "acquisti": {
+  "spesa": 299261.48,
+  "iva": 65837.52,
+  "note": 1240.0,
+  "fatture": 244,
+  "fornitori": 8,
+  "per_fornitore": {
+   "Logistica Adriatica S.r.l.": 50540.0,
+   "Müller Elektronik GmbH": 19110.0,
+   "Componenti Emilia S.r.l.": 56989.48,
+   "Energia Più S.p.A.": 8740.0,
+   "Studio Bianchi Commercialisti": 10350.0,
+   "Elettroforniture Nord S.p.A.": 146768.0,
+   "Rossi Impianti S.p.A.": 4004.0,
+   "Software Cloud S.r.l.": 2760.0
+  },
+  "principale": "Elettroforniture Nord S.p.A.",
+  "rincaro": "Sensore grezzo SG-1",
+  "anche_cliente": "Rossi Impianti S.p.A.",
+  "estero": "Müller Elektronik GmbH",
+  "doppie": 5
+ }
+}

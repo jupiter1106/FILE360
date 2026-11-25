@@ -1,0 +1,336 @@
+[
+ {
+  "kind": "stessi glifi",
+  "note": "paragrafo: riga di mezzo",
+  "font": "Serif",
+  "size": 12,
+  "cs": 0,
+  "hz": 100,
+  "target": "4580",
+  "repl": "8054",
+  "before": {
+   "n": 1317,
+   "mx": 132,
+   "ink": 4442
+  },
+  "after": {
+   "n": 544,
+   "mx": 132,
+   "ink": 935
+  },
+  "word": {
+   "n": 793,
+   "mx": 255,
+   "ink": 593
+  },
+  "ca": [
+   31,
+   31,
+   31,
+   471
+  ],
+  "cb": [
+   31,
+   31,
+   31,
+   480
+  ],
+  "ha": [
+   222,
+   243
+  ],
+  "hb": [
+   222,
+   243
+  ],
+  "fixed": [],
+  "others": [
+   2231,
+   2414
+  ]
+ },
+ {
+  "kind": "stessi glifi",
+  "note": "crenatura (TJ)",
+  "font": "Serif",
+  "size": 12,
+  "cs": 0,
+  "hz": 100,
+  "target": "7391",
+  "repl": "1937",
+  "before": {
+   "n": 5267,
+   "mx": 255,
+   "ink": 3726
+  },
+  "after": {
+   "n": 1751,
+   "mx": 255,
+   "ink": 1147
+  },
+  "word": {
+   "n": 870,
+   "mx": 255,
+   "ink": 451
+  },
+  "ca": [
+   31,
+   31,
+   31,
+   381
+  ],
+  "cb": [
+   33,
+   33,
+   33,
+   334
+  ],
+  "ha": [
+   400,
+   421
+  ],
+  "hb": [
+   400,
+   421
+  ],
+  "fixed": [],
+  "others": []
+ },
+ {
+  "kind": "stessi glifi",
+  "note": "tabella in un TJ: cella 1",
+  "font": "Serif",
+  "size": 12,
+  "cs": 0,
+  "hz": 100,
+  "target": "3",
+  "repl": "2",
+  "before": {
+   "n": 123,
+   "mx": 71,
+   "ink": 1219
+  },
+  "after": {
+   "n": 0,
+   "mx": 0,
+   "ink": 2003
+  },
+  "word": {
+   "n": 121,
+   "mx": 255,
+   "ink": 130
+  },
+  "ca": [
+   38,
+   38,
+   38,
+   103
+  ],
+  "cb": [
+   43,
+   43,
+   43,
+   106
+  ],
+  "ha": [
+   539,
+   560
+  ],
+  "hb": [
+   539,
+   560
+  ],
+  "fixed": [],
+  "others": []
+ },
+ {
+  "kind": "larghezza diversa",
+  "note": "tabella in un TJ: la cella si allunga, le altre restano",
+  "font": "Serif",
+  "size": 12,
+  "cs": 0,
+  "hz": 100,
+  "target": "spesa",
+  "repl": "spesa straordinaria",
+  "before": {
+   "n": 0,
+   "mx": 0,
+   "ink": 660
+  },
+  "after": {
+   "n": 340,
+   "mx": 255,
+   "ink": 125
+  },
+  "word": {
+   "n": 123,
+   "mx": 71,
+   "ink": 559
+  },
+  "ca": [
+   32,
+   32,
+   32,
+   442
+  ],
+  "cb": [
+   32,
+   32,
+   32,
+   1055
+  ],
+  "ha": [
+   656,
+   678
+  ],
+  "hb": [
+   656,
+   678
+  ],
+  "fixed": [
+   0
+  ],
+  "others": []
+ },
+ {
+  "kind": "stessi glifi",
+  "note": "parole posizionate una per una",
+  "font": "Sans",
+  "size": 11,
+  "cs": 0,
+  "hz": 100,
+  "target": "30/09/2026",
+  "repl": "09/03/2026",
+  "before": {
+   "n": 355,
+   "mx": 71,
+   "ink": 2209
+  },
+  "after": {
+   "n": 979,
+   "mx": 191,
+   "ink": 1535
+  },
+  "word": {
+   "n": 895,
+   "mx": 255,
+   "ink": 1313
+  },
+  "ca": [
+   27,
+   27,
+   27,
+   1102
+  ],
+  "cb": [
+   27,
+   27,
+   27,
+   1095
+  ],
+  "ha": [
+   789,
+   810
+  ],
+  "hb": [
+   789,
+   810
+  ],
+  "fixed": [],
+  "others": []
+ },
+ {
+  "kind": "stessi glifi",
+  "note": "corpo nella matrice del testo",
+  "font": "Serif",
+  "size": 14,
+  "cs": 0,
+  "hz": 100,
+  "target": "15.250,84",
+  "repl": "51.520,48",
+  "before": {
+   "n": 513,
+   "mx": 62,
+   "ink": 2666
+  },
+  "after": {
+   "n": 874,
+   "mx": 118,
+   "ink": 1378
+  },
+  "word": {
+   "n": 1691,
+   "mx": 229,
+   "ink": 1236
+  },
+  "ca": [
+   43,
+   43,
+   138,
+   970
+  ],
+  "cb": [
+   39,
+   39,
+   135,
+   940
+  ],
+  "ha": [
+   924,
+   954
+  ],
+  "hb": [
+   924,
+   955
+  ],
+  "fixed": [],
+  "others": []
+ },
+ {
+  "kind": "stessi glifi",
+  "note": "giustificata (Tw)",
+  "font": "Serif",
+  "size": 12,
+  "cs": 0,
+  "hz": 100,
+  "target": "2026",
+  "repl": "6202",
+  "before": {
+   "n": 6463,
+   "mx": 255,
+   "ink": 3865
+  },
+  "after": {
+   "n": 2065,
+   "mx": 255,
+   "ink": 1445
+  },
+  "word": {
+   "n": 907,
+   "mx": 255,
+   "ink": 543
+  },
+  "ca": [
+   36,
+   36,
+   36,
+   461
+  ],
+  "cb": [
+   36,
+   36,
+   36,
+   338
+  ],
+  "ha": [
+   1067,
+   1088
+  ],
+  "hb": [
+   1067,
+   1088
+  ],
+  "fixed": [],
+  "others": []
+ }
+]

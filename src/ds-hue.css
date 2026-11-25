@@ -1,0 +1,52 @@
+/* GENERATO da tools/gen_hue.py — non modificare a mano */
+.rail-btn.on{background:var(--hue-soft);color:var(--hue-ink)}
+.btn.primary{background:var(--accent-fill)}
+.tool-card .t-ic{background:var(--hue-soft);color:var(--hue-ink)}
+.tool-card:hover .t-go{color:var(--hue-ink)}
+.toolhead .t-ic{background:var(--hue-soft);color:var(--hue-ink)}
+.dropzone.over{background:var(--hue-soft)}
+.dz-ic{background:var(--hue-soft);color:var(--hue-ink)}
+.add-card:hover{color:var(--hue-ink)}
+.v-th.on{background:var(--hue-soft);color:var(--hue-ink)}
+.rbox .rx{background:var(--accent-fill)}
+.pos-grid button.on i{background:var(--accent-fill)}
+.tool-card:hover .t-ic,.wb-tool:hover .t-ic{background:var(--hue-fill)}
+.wb-tool .t-ic{background:var(--hue-soft);color:var(--hue-ink)}
+.wb-tool:hover .wb-go{color:var(--hue-ink)}
+.db-t:hover{background:var(--hue-soft);color:var(--hue-ink)}
+.db-t.on{background:var(--hue-fill)}
+.ver.on .ver-n{background:var(--accent-fill)}
+.wb-tool .t-ic,.toolhead .t-ic,.rail-btn.on{background:var(--hue-soft)}
+.ver-cur::before{background:var(--accent-fill)}
+.ft-table th.ord:hover,.ft-table th.ord:focus-visible{color:var(--hue-ink)}
+.ft-table th .fr{color:var(--hue-ink)}
+.ft-table tbody tr.sel td{background:var(--hue-soft)}
+.ft-orig{background:var(--hue-soft);color:var(--hue-ink)}
+.ft-mode.on{background:var(--hue-soft)}
+.ft-mode.on svg{color:var(--hue-ink)}
+.tool-card .t-drop{background:var(--hue-soft);color:var(--hue-ink)}
+.seo-link svg{color:var(--hue-ink)}
+.seo-link:hover{background:var(--hue-soft)}
+:root[data-theme="dark"] :is(.tool-card .t-ic,.wb-tool .t-ic,.toolhead .t-ic,.dz-ic,.rail-btn.on,.seo-steps b,.seo-link svg,.seo-rel-a svg,.res-next .chip .ic){color:var(--hue-ink)}
+@media (prefers-color-scheme: dark){
+:root:not([data-theme="light"]) :is(.tool-card .t-ic,.wb-tool .t-ic,.toolhead .t-ic,.dz-ic,.rail-btn.on,.seo-steps b,.seo-link svg,.seo-rel-a svg,.res-next .chip .ic){color:var(--hue-ink)}
+}
+.seo-rel-a svg{color:var(--hue-ink)}
+.wb-ins-row{background:var(--hue-soft)}
+.wb-ins-row .t-ic{background:var(--hue-soft);color:var(--hue-ink)}
+.cf-add:hover,.cf-add.over{color:var(--hue-ink);background:var(--hue-soft)}
+.home-quick .chip .ic{color:var(--hue-ink)}
+.cmd-item .t-ic{background:var(--hue-soft);color:var(--hue-ink)}
+.skip:focus-visible{background:var(--accent-fill)}
+.home-search-submit{background:var(--accent-fill)}
+.rail-page .ic{color:var(--hue-ink)}
+.inst-ic{background:var(--accent-fill)}
+.wk-ic{background:var(--hue-soft);color:var(--hue-ink)}
+.wk-n{background:var(--hue-soft);color:var(--hue-ink)}
+.wk:hover .wk-go{color:var(--hue-ink)}
+:root[data-theme="dark"] :is(.wk-ic,.wk-n,.tw-btn .ic,.tw-btn.on){color:var(--hue-ink)}
+@media (prefers-color-scheme: dark){
+:root:not([data-theme="light"]) :is(.wk-ic,.wk-n,.tw-btn .ic,.tw-btn.on){color:var(--hue-ink)}
+}
+.tw-btn .ic{color:var(--hue-ink)}
+.tw-btn.on{background:var(--hue-soft);color:var(--hue-ink)}

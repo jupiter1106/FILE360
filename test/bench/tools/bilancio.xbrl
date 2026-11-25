@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xbrli:xbrl xmlns:xbrli="http://www.xbrl.org/2003/instance" xmlns:link="http://www.xbrl.org/2003/linkbase" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:iso4217="http://www.xbrl.org/2003/iso4217" xmlns:itcc-ci="http://www.infocamere.it/itnn/fr/itcc/ci/2018-11-04">
+  <link:schemaRef xlink:type="simple" xlink:href="itcc-ci-2018-11-04.xsd"/>
+  <xbrli:context id="i2025"><xbrli:entity><xbrli:identifier scheme="http://www.infocamere.it">01234567897</xbrli:identifier></xbrli:entity><xbrli:period><xbrli:instant>2025-12-31</xbrli:instant></xbrli:period></xbrli:context>
+  <xbrli:context id="d2025"><xbrli:entity><xbrli:identifier scheme="http://www.infocamere.it">01234567897</xbrli:identifier></xbrli:entity><xbrli:period><xbrli:startDate>2025-01-01</xbrli:startDate><xbrli:endDate>2025-12-31</xbrli:endDate></xbrli:period></xbrli:context>
+  <xbrli:unit id="eur"><xbrli:measure>iso4217:EUR</xbrli:measure></xbrli:unit>
+  <itcc-ci:DatiAnagraficiDenominazione contextRef="d2025">PROVA BILANCI SRL</itcc-ci:DatiAnagraficiDenominazione>
+  <itcc-ci:DatiAnagraficiCodiceFiscale contextRef="d2025">01234567897</itcc-ci:DatiAnagraficiCodiceFiscale>
+  <itcc-ci:TotaleImmobilizzazioniMateriali contextRef="i2025" unitRef="eur" decimals="0">420000</itcc-ci:TotaleImmobilizzazioniMateriali>
+  <itcc-ci:TotaleImmobilizzazioni contextRef="i2025" unitRef="eur" decimals="0">480000</itcc-ci:TotaleImmobilizzazioni>
+  <itcc-ci:TotaleImmobilizzazioniImmateriali contextRef="i2025" unitRef="eur" decimals="0">60000</itcc-ci:TotaleImmobilizzazioniImmateriali>
+  <itcc-ci:TotaleRimanenze contextRef="i2025" unitRef="eur" decimals="0">90000</itcc-ci:TotaleRimanenze>
+  <itcc-ci:TotaleCrediti contextRef="i2025" unitRef="eur" decimals="0">310000</itcc-ci:TotaleCrediti>
+  <itcc-ci:TotaleDisponibilitaLiquide contextRef="i2025" unitRef="eur" decimals="0">120000</itcc-ci:TotaleDisponibilitaLiquide>
+  <itcc-ci:TotaleAttivoCircolante contextRef="i2025" unitRef="eur" decimals="0">520000</itcc-ci:TotaleAttivoCircolante>
+  <itcc-ci:TotaleAttivo contextRef="i2025" unitRef="eur" decimals="0">1000000</itcc-ci:TotaleAttivo>
+  <itcc-ci:PatrimonioNettoCapitale contextRef="i2025" unitRef="eur" decimals="0">100000</itcc-ci:PatrimonioNettoCapitale>
+  <itcc-ci:PatrimonioNettoUtilePerditaEsercizio contextRef="i2025" unitRef="eur" decimals="0">60000</itcc-ci:PatrimonioNettoUtilePerditaEsercizio>
+  <itcc-ci:TotalePatrimonioNetto contextRef="i2025" unitRef="eur" decimals="0">400000</itcc-ci:TotalePatrimonioNetto>
+  <itcc-ci:TrattamentoFineRapportoLavoroSubordinato contextRef="i2025" unitRef="eur" decimals="0">50000</itcc-ci:TrattamentoFineRapportoLavoroSubordinato>
+  <itcc-ci:TotaleDebiti contextRef="i2025" unitRef="eur" decimals="0">550000</itcc-ci:TotaleDebiti>
+  <itcc-ci:DebitiEsigibiliEntroEsercizioSuccessivo contextRef="i2025" unitRef="eur" decimals="0">350000</itcc-ci:DebitiEsigibiliEntroEsercizioSuccessivo>
+  <itcc-ci:DebitiEsigibiliOltreEsercizioSuccessivo contextRef="i2025" unitRef="eur" decimals="0">200000</itcc-ci:DebitiEsigibiliOltreEsercizioSuccessivo>
+  <itcc-ci:TotalePassivo contextRef="i2025" unitRef="eur" decimals="0">1000000</itcc-ci:TotalePassivo>
+  <itcc-ci:ValoreProduzioneRicaviVenditePrestazioni contextRef="d2025" unitRef="eur" decimals="0">1500000</itcc-ci:ValoreProduzioneRicaviVenditePrestazioni>
+  <itcc-ci:TotaleValoreProduzione contextRef="d2025" unitRef="eur" decimals="0">1520000</itcc-ci:TotaleValoreProduzione>
+  <itcc-ci:CostiProduzioneMateriePrimeSussidiarieConsumoMerci contextRef="d2025" unitRef="eur" decimals="0">600000</itcc-ci:CostiProduzioneMateriePrimeSussidiarieConsumoMerci>
+  <itcc-ci:CostiProduzioneServizi contextRef="d2025" unitRef="eur" decimals="0">300000</itcc-ci:CostiProduzioneServizi>
+  <itcc-ci:CostiProduzionePersonaleTotaleCostiPersonale contextRef="d2025" unitRef="eur" decimals="0">400000</itcc-ci:CostiProduzionePersonaleTotaleCostiPersonale>
+  <itcc-ci:CostiProduzioneAmmortamentiSvalutazioniTotaleAmmortamentiSvalutazioni contextRef="d2025" unitRef="eur" decimals="0">80000</itcc-ci:CostiProduzioneAmmortamentiSvalutazioniTotaleAmmortamentiSvalutazioni>
+  <itcc-ci:TotaleCostiProduzione contextRef="d2025" unitRef="eur" decimals="0">1420000</itcc-ci:TotaleCostiProduzione>
+  <itcc-ci:DifferenzaValoreCostiProduzione contextRef="d2025" unitRef="eur" decimals="0">100000</itcc-ci:DifferenzaValoreCostiProduzione>
+  <itcc-ci:TotaleProventiOneriFinanziari contextRef="d2025" unitRef="eur" decimals="0">-12000</itcc-ci:TotaleProventiOneriFinanziari>
+  <itcc-ci:RisultatoPrimaImposte contextRef="d2025" unitRef="eur" decimals="0">88000</itcc-ci:RisultatoPrimaImposte>
+  <itcc-ci:ImposteRedditoEsercizioCorrentiDifferiteAnticipateTotaleImposteRedditoEsercizioCorrentiDifferiteAnticipate contextRef="d2025" unitRef="eur" decimals="0">28000</itcc-ci:ImposteRedditoEsercizioCorrentiDifferiteAnticipateTotaleImposteRedditoEsercizioCorrentiDifferiteAnticipate>
+  <itcc-ci:UtilePerditaEsercizio contextRef="d2025" unitRef="eur" decimals="0">60000</itcc-ci:UtilePerditaEsercizio>
+</xbrli:xbrl>
