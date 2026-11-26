@@ -20,6 +20,7 @@ print(('✓' if not bad else '✗'), 'nel JS non compaiono «<!--» e «</script
 ext = sorted(set(re.findall(r'https?://[a-z0-9.-]+', body)))
 print('  indirizzi citati nel codice (nessun file dell’utente viene inviato; servono a OCR al primo uso, cloud facoltativo, sito):', len(ext))
 run('codice in moduli: nessun file sorgente oltre 3.000 righe', ['python3', '-c', "import pathlib,sys; m=max((len(p.read_text(encoding='utf-8').split(chr(10))),p.name) for p in pathlib.Path('src').rglob('*.js')); print(m); sys.exit(m[0] > 3000)"])
+run('icone: ogni strumento ha un’icona che esiste (nessuna casella vuota)', ['python3', 'tools/icone.py'])
 run('sistema visivo: dimensioni, pesi, raggi, ombre e colori sulle scale dei token', ['python3', 'tools/tokens.py'])
 run('interfaccia (104 comportamenti)', ['node', 'test/suite/ui.test.js'], lambda o: 'tutti verdi' in o)
 run('ricerca: 70 domande tipiche portano allo strumento giusto (≥ 95%)', ['node', 'test/suite/search.test.js'], lambda o: 'tutti verdi' in o)
