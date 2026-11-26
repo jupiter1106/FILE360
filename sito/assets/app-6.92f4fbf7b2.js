@@ -200,6 +200,7 @@ const ICONS = {
   checkbox:'<rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
   comb:'<rect x="2.5" y="7" width="19" height="10" rx="1.5"/><path d="M7.25 7v10M12 7v10M16.75 7v10"/>',
   wand:'<path d="m15.5 3.5 1.1 2.4 2.4 1.1-2.4 1.1-1.1 2.4-1.1-2.4L12 7l2.4-1.1z"/><path d="M4 20l9-9"/><path d="M19 14.5v3M17.5 16h3"/>',
+  pdf:'<path d="M9 9V5a2 2 0 0 1 2-2h5l5 5v11a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-1"/><path d="M16 3v5h5"/><path d="M3 13.5h9"/><path d="m9 10.5 3 3-3 3"/>',
   pdfa:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="m9 14.5 2 2 4-4.5"/>',
   pdfacheck:'<path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4"/><path d="M13 3v5h5v2"/><circle cx="16" cy="16" r="3.5"/><path d="m18.6 18.6 2.9 2.9"/>',
   merge:'<rect x="3" y="3" width="7.5" height="10" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="10" rx="1.5"/><path d="M6.75 13v2.5a2 2 0 0 0 2 2h6.5a2 2 0 0 0 2-2V13"/><path d="M12 17.5V21"/>',
