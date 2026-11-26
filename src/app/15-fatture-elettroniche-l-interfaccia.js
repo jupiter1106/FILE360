@@ -864,10 +864,10 @@ const Promo = (() => {
 .pv-ok{width:22px;height:22px;border-radius:50%;background:#16A34A;color:#fff;display:grid;place-items:center;box-shadow:0 4px 10px rgba(22,163,74,.4)}
 .pv-dl{display:flex;align-items:center;gap:5px;background:var(--hue);color:#fff;border-radius:99px;padding:6px 11px;font:750 10px/1 var(--font);box-shadow:0 6px 14px color-mix(in srgb,var(--hue) 40%,transparent);white-space:nowrap}
 .pv-cur{width:18px;height:18px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35));z-index:9;left:0;top:0}
-.pv-row{display:grid;font:600 7px/1 var(--font);color:#333;background:#fff}
-.pv-row span{border-right:1px solid #E3E6EA;border-bottom:1px solid #E3E6EA;padding:3.5px 4px;white-space:nowrap;overflow:hidden}
-.pv-row span.n{text-align:right;font-variant-numeric:tabular-nums}
-.pv-row.h span{background:#17181C;color:#fff;font-weight:800;border-color:#2c2e35}
+.pv-scene .pv-row{display:grid;font:600 7px/1 var(--font);color:#333;background:#fff}
+.pv-scene .pv-row span{border-right:1px solid #E3E6EA;border-bottom:1px solid #E3E6EA;padding:3.5px 4px;white-space:nowrap;overflow:hidden}
+.pv-scene .pv-row span.n{text-align:right;font-variant-numeric:tabular-nums}
+.pv-scene .pv-row.h span{background:#17181C;color:#fff;font-weight:800;border-color:#2c2e35}
 .pv-sheet{border-radius:6px;overflow:hidden;box-shadow:0 6px 16px rgba(20,20,30,.16)}
 .pv-spin{display:block;width:12px;height:12px;border-radius:50%;border:2px solid color-mix(in srgb,var(--hue) 25%,#fff);border-top-color:var(--hue);animation:pvSpin .7s linear infinite}
 .pv-cap{position:relative;height:40px;margin:10px 4px 0}

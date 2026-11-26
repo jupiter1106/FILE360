@@ -318,6 +318,8 @@ const ICONS = {
   building:'<rect x="4.5" y="3.5" width="10" height="17" rx="1"/><path d="M14.5 9.5h5v11h-5M8 7.5h3M8 11h3M8 14.5h3M10 20.5v-2.5"/>',
   stamp:'<path d="M9.5 3.5h5l-.8 6.5h3.3a2 2 0 0 1 2 2v2.5H5V12a2 2 0 0 1 2-2h3.3z"/><path d="M5 18h14M7 20.5h10"/>',
   blank:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9 14h6"/>',
+  // un documento che entra nel PDF (Word, Excel, PowerPoint in PDF)
+  pdf:'<path d="M14 3H7a2 2 0 0 0-2 2v4"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M2 12h10"/><path d="m9 9 3 3-3 3"/>',
 };
 function ic(name, size = 20, sw = 1.9) {
   const s = document.createElement('span');
@@ -598,33 +600,45 @@ const Privacy = (() => {
     });
   }
   async function open() {
-    const body = h('div', { class: 'pv-body' });
-    const m = modal([h('h3', {}, 'Privacy e dati sul dispositivo'), body], { width: 620, cls: 'pv-modal' });
+    // tre parti: in alto titolo e chiusura, al centro l'elenco che scorre, in basso le due azioni sempre visibili
+    const body = h('div', { class: 'pd-scroll' }), foot = h('div', { class: 'pd-foot' });
+    let m = null;
+    const head = h('div', { class: 'pd-head' },
+      h('span', { class: 'pd-mark', 'aria-hidden': 'true' }, ic('shield', 20)),
+      h('div', { class: 'pd-ht' }, h('h3', {}, 'Privacy e dati sul dispositivo'),
+        h('p', {}, 'I documenti non vengono mai caricati su internet. Qui sotto trovi quello che resta in questo browser: puoi cancellarlo quando vuoi.')),
+      h('button', { type: 'button', class: 'icon-btn pd-x', title: 'Chiudi', 'aria-label': 'Chiudi', onclick: () => m?.close() }, ic('x', 18)));
+    m = modal([head, body, foot], { width: 600, cls: 'pd-modal' });
     const kb = b => b > 1048576 ? (b / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
     async function draw() {
       const z = await sizes(), c = cfg(), locked = vaultOn() && !key;
-      const row = (title, desc, info, act) => h('div', { class: 'pv-row' }, h('div', { class: 'grow' }, h('div', { class: 'pv-t' }, title), h('div', { class: 'muted small' }, desc)), h('span', { class: 'pv-n small' }, info), act);
-      const del = (label, fn, ok) => h('button', { class: 'btn sm', onclick: async () => { await fn(); toast(ok); draw(); } }, ic('trash', 14), label);
+      const item = (icon, title, desc, info, label, fn, ok) => h('div', { class: 'pd-item' + (info ? '' : ' is-empty') },
+        h('span', { class: 'pd-ic', 'aria-hidden': 'true' }, ic(icon, 17)),
+        h('div', { class: 'pd-txt' }, h('b', {}, title), h('span', {}, desc)),
+        h('div', { class: 'pd-side' }, h('span', { class: 'pd-size' }, info || 'Vuoto'),
+          info ? h('button', { type: 'button', class: 'btn sm ghost pd-del', 'aria-label': `${label}: ${title}`, onclick: async () => { await fn(); toast(ok); draw(); } }, label) : null));
+      const sec = (title, ...kids) => h('section', { class: 'pd-sec' }, h('h4', {}, title), ...kids);
       body.replaceChildren(
-        h('p', { class: 'muted', style: { margin: '0 0 12px' } }, 'I documenti si elaborano solo in questo browser: non vengono mai caricati su internet. Sul dispositivo restano soltanto le cose elencate qui sotto, e puoi cancellarle quando vuoi.'),
-        row('Progetti e versioni', 'I file aperti, le versioni e i risultati, per riprendere il lavoro.', z.projects ? `${z.projects} · ${kb(z.blobBytes)}` : 'vuoto', del('Cancella', clearProjects, 'Progetti cancellati')),
-        row('Registro delle attività', 'Le operazioni fatte, con l’impronta dei file (non il loro contenuto).', z.log ? `${z.log} voci` : 'vuoto', del('Cancella', clearLog, 'Registro cancellato')),
-        row('Dati personali per i moduli', 'Profilo (nome, codice fiscale, IBAN…), valori ricordati, firme e timbri salvati, correzioni imparate, bozza del contratto di affitto.' + (vaultOn() ? (locked ? ' Protetti e bloccati.' : ' Protetti e sbloccati.') : ''), z.personal ? kb(z.personal) : 'vuoto', del('Cancella', async () => clearPersonal(), 'Dati personali cancellati')),
-        row('Preferenze', 'Preferiti, ricette, scelte degli strumenti, ultimo file aperto nel cloud.', z.prefs ? kb(z.prefs) : 'vuoto', del('Cancella', async () => clearPrefs(), 'Preferenze cancellate')),
-        row('Letture in memoria', 'Il testo letto dalle scansioni in questa scheda, per non rileggerlo in ogni strumento. Sparisce chiudendo la scheda.', z.mem ? `${z.mem} pagine` : 'vuoto', del('Svuota', async () => memClear(), 'Memoria svuotata')),
-        h('div', { class: 'pv-sec' }, h('b', {}, 'Cancellazione automatica'),
-          h('div', { class: 'muted small', style: { margin: '2px 0 8px' } }, 'Progetti, lavori da riprendere e registro più vecchi di così si cancellano da soli all’apertura.'),
-          seg([[7, '7 giorni'], [30, '30 giorni'], [90, '90 giorni'], [0, 'Mai']], c.days ?? 90, v => { setCfg({ ...cfg(), days: +v }); toast(+v ? `Cancellazione dopo ${v} giorni` : 'Cancellazione automatica spenta'); })),
-        h('div', { class: 'pv-sec' }, checkbox('Nessuna traccia', !!c.temp, v => { setCfg({ ...cfg(), temp: !!v }); toast(v ? 'Nessuna traccia: tutto si cancella alla chiusura della scheda' : 'I progetti si conservano di nuovo'); }, 'Per i computer condivisi: tutto ciò che salvi (progetti, registro, dati personali, preferenze) si cancella quando chiudi la scheda.')),
-        typeof crypto !== 'undefined' && crypto.subtle ? h('div', { class: 'pv-sec' }, h('b', {}, 'Frase segreta per i dati personali'),
-          h('div', { class: 'muted small', style: { margin: '2px 0 8px' } }, vaultOn() ? 'I dati personali salvati sono cifrati (AES-GCM 256). Senza la frase non si leggono: se la dimentichi, quei dati vanno persi (il resto no).' : 'Cifra i dati personali salvati (AES-GCM 256): senza la frase restano illeggibili, anche per chi usa questo computer.'),
-          h('div', { class: 'row', style: { gap: '8px', flexWrap: 'wrap' } }, ...(vaultOn() ? [
-            locked ? h('button', { class: 'btn sm primary', onclick: async () => { const p = await askPass('Sblocca i dati personali'); if (p == null) return; if (await unlock(p)) { toast('Dati personali sbloccati'); draw(); } else toast('Frase non corretta', 'error'); } }, ic('key', 14), 'Sblocca') : h('button', { class: 'btn sm', onclick: () => { lock(); toast('Dati personali bloccati'); draw(); } }, ic('key', 14), 'Blocca'),
+        sec('Cosa resta su questo dispositivo',
+          h('div', { class: 'pd-list' },
+            item('project', 'Progetti e versioni', 'File aperti, versioni e risultati, per riprendere il lavoro.', z.projects ? `${z.projects} · ${kb(z.blobBytes)}` : '', 'Cancella', clearProjects, 'Progetti cancellati'),
+            item('activity', 'Registro delle attività', 'Le operazioni fatte, con l’impronta dei file (mai il contenuto).', z.log ? `${z.log} voci` : '', 'Cancella', clearLog, 'Registro cancellato'),
+            item('form', 'Dati personali per i moduli', 'Profilo, valori ricordati, firme e timbri, bozza del contratto.' + (vaultOn() ? (locked ? ' Protetti e bloccati.' : ' Protetti.') : ''), z.personal ? kb(z.personal) : '', 'Cancella', async () => clearPersonal(), 'Dati personali cancellati'),
+            item('star', 'Preferenze', 'Preferiti, ricette e scelte degli strumenti.', z.prefs ? kb(z.prefs) : '', 'Cancella', async () => clearPrefs(), 'Preferenze cancellate'),
+            item('ocr', 'Letture in memoria', 'Testo letto dalle scansioni in questa scheda: sparisce chiudendola.', z.mem ? `${z.mem} pagine` : '', 'Svuota', async () => memClear(), 'Memoria svuotata'))),
+        sec('Cancellazione automatica',
+          h('p', { class: 'pd-note' }, 'Progetti e registro più vecchi di così si cancellano da soli all’apertura.'),
+          seg([[7, '7 giorni'], [30, '30 giorni'], [90, '90 giorni'], [0, 'Mai']], c.days ?? 90, v => { setCfg({ ...cfg(), days: +v }); toast(+v ? `Cancellazione dopo ${v} giorni` : 'Cancellazione automatica spenta'); }),
+          h('div', { class: 'pd-check' }, checkbox('Nessuna traccia', !!c.temp, v => { setCfg({ ...cfg(), temp: !!v }); toast(v ? 'Nessuna traccia: tutto si cancella alla chiusura della scheda' : 'I progetti si conservano di nuovo'); }, 'Per i computer condivisi: tutto si cancella quando chiudi la scheda.'))),
+        typeof crypto !== 'undefined' && crypto.subtle ? sec('Frase segreta per i dati personali',
+          h('p', { class: 'pd-note' }, vaultOn() ? 'I dati personali sono cifrati (AES-GCM 256). Se dimentichi la frase, quei dati vanno persi; il resto no.' : 'Cifra i dati personali salvati (AES-GCM 256): senza la frase restano illeggibili.'),
+          h('div', { class: 'pd-acts' }, ...(vaultOn() ? [
+            locked ? h('button', { class: 'btn sm primary', onclick: async () => { const p = await askPass('Sblocca i dati personali'); if (p == null) return; if (await unlock(p)) { toast('Dati personali sbloccati'); draw(); } else toast('Frase non corretta', 'error'); } }, ic('key', 15), 'Sblocca') : h('button', { class: 'btn sm', onclick: () => { lock(); toast('Dati personali bloccati'); draw(); } }, ic('key', 15), 'Blocca'),
             h('button', { class: 'btn sm ghost', onclick: async () => { const p = locked ? await askPass('Frase segreta attuale') : ''; if (p == null) return; if (await unprotect(p)) { toast('Protezione tolta'); draw(); } else toast('Frase non corretta', 'error'); } }, 'Togli la protezione')] : [
-            h('button', { class: 'btn sm primary', onclick: async () => { const p = await askPass('Scegli una frase segreta', { confirm: true }); if (p == null) return; await protect(p); toast('Dati personali protetti'); draw(); } }, ic('key', 14), 'Proteggi con una frase segreta')]))) : null,
-        h('div', { class: 'row', style: { justifyContent: 'space-between', marginTop: '16px', gap: '8px', flexWrap: 'wrap' } },
-          h('button', { class: 'btn danger', onclick: async () => { if (!confirm('Cancellare tutto ciò che file360 tiene in questo browser? Progetti, registro, dati personali e preferenze non si potranno recuperare.')) return; await clearAll(); toast('Tutto cancellato'); draw(); } }, ic('trash', 16), 'Cancella tutto'),
-          h('button', { class: 'btn', onclick: () => m.close() }, 'Chiudi')));
+            h('button', { class: 'btn sm', onclick: async () => { const p = await askPass('Scegli una frase segreta', { confirm: true }); if (p == null) return; await protect(p); toast('Dati personali protetti'); draw(); } }, ic('key', 15), 'Proteggi con una frase segreta')]))) : null);
+      foot.replaceChildren(
+        h('button', { class: 'btn ghost pd-all', onclick: async () => { if (!confirm('Cancellare tutto ciò che file360 tiene in questo browser? Progetti, registro, dati personali e preferenze non si potranno recuperare.')) return; await clearAll(); toast('Tutto cancellato'); draw(); } }, ic('trash', 16), 'Cancella tutto'),
+        h('button', { class: 'btn primary', onclick: () => m.close() }, 'Fatto'));
     }
     draw();
   }
