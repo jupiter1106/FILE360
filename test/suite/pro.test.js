@@ -171,8 +171,12 @@ test('nessuna domanda all’avvio: lavoro e animazioni si scelgono solo dal menu
   ok(!/che lavoro fai/i.test(await page.locator('#main').innerText()), 'la home chiede ancora che lavoro fai');
   ok(await page.evaluate(() => typeof ICONS.pdf === 'string' && ICONS.pdf.length > 20), 'manca l’icona di «Word, Excel, PowerPoint in PDF»');
   await page.click('#menu-btn'); await page.waitForSelector('.dr-set');
-  await page.locator('.dr-anim .dr-chip', { hasText: 'Nessuna' }).click();
-  ok(await page.evaluate(() => document.documentElement.dataset.anim) === 'off', 'animazioni dal menu');
+  ok((await page.locator('.dr-anim .dr-chip').allInnerTexts()).join() === 'Sì,No', 'le animazioni non sono una scelta sì/no');
+  const prima = await page.evaluate(() => ({ tela: !!document.querySelector('canvas.bg-flow'), logo: !!document.querySelector('svg.logo-live') }));
+  await page.locator('.dr-anim .dr-chip', { hasText: 'No' }).click(); await page.waitForTimeout(200);
+  const dopo = await page.evaluate(() => ({ anim: document.documentElement.dataset.anim, tela: !!document.querySelector('canvas.bg-flow'), logo: !!document.querySelector('svg.logo-live'),
+    led: [...document.querySelectorAll('.led')].every(e => getComputedStyle(e).display === 'none') }));
+  ok(prima.tela && dopo.anim === 'off' && !dopo.tela && !dopo.logo && dopo.led, 'con «No» gli effetti restano nella pagina: ' + JSON.stringify({ prima, dopo }));
   await page.locator('.dr-set .dr-row').click(); await page.waitForSelector('.ob-p');
   await page.locator('.ob-p', { hasText: 'Studente' }).click(); await page.waitForTimeout(500);
   const r = await page.evaluate(() => ({ you: [...document.querySelectorAll('.pf-you .qk')].map(a => a.dataset.id).join(), all: document.querySelectorAll('.pf-all .qk').length }));

@@ -1004,7 +1004,7 @@ const Busy = {
       onCancel ? h('button', { class: 'btn ghost sm', onclick: onCancel }, 'Annulla') : null].filter(Boolean);
     // l'animazione dello strumento al lavoro (o, se non c'è, il logo che gira)
     const ldId = (this.job && this.job.tool) || (typeof CURRENT_TOOL !== 'undefined' && CURRENT_TOOL) || (typeof routeId === 'function' ? routeId() : '');
-    let anim = null; try { anim = typeof Loader !== 'undefined' && ldId ? Loader.el(ldId) : null; } catch (e) { console.warn('animazione', e); }
+    let anim = null; try { anim = typeof Loader !== 'undefined' && ldId && document.documentElement.dataset.anim !== 'off' ? Loader.el(ldId) : null; } catch (e) { console.warn('animazione', e); }
     this.pctEl = h('span', { class: 'busy-pct' });
     this.barBox = h('div', { class: 'bar', role: 'progressbar', 'aria-label': title, 'aria-valuemin': '0', 'aria-valuemax': '100' }, this.barEl);
     const card = h('div', { class: 'modal busy-card' + (anim ? ' with-ld' : ''), role: 'dialog', 'aria-modal': 'true', 'aria-label': title }, anim || (typeof Brand !== 'undefined' ? h('div', { class: 'spinner-brand', html: Brand.spinnerSvg(58) }) : h('div', { class: 'spinner' })), this.titleEl, this.msgEl,
@@ -1273,9 +1273,11 @@ function showResultNow(outputs, { note, title, zipName, extra, primary = null, v
   if (stat && stat.celebrate) resConfetti(m.box);
   resFly(m.box);
 }
+// niente movimenti decorativi: «riduci movimento» del dispositivo o «Animazioni: No» nel menu
+const senzaMoto = () => matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.dataset.anim === 'off';
 /* la miniatura del risultato parte da dove si vedeva il documento (l'anteprima dello strumento) e si posa nella finestra */
 function resFly(box) {
-  const art = box.querySelector('.res-art'); if (!art || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const art = box.querySelector('.res-art'); if (!art || senzaMoto()) return;
   const src = [...document.querySelectorAll('.tool .v-page, .tool .thumb canvas, .tool .ws canvas, .tool .ws img')].find(e => { const r = e.getBoundingClientRect(); return r.width > 60 && r.height > 60 && r.bottom > 0 && r.top < innerHeight; });
   if (!src) return;
   requestAnimationFrame(() => {
@@ -1318,7 +1320,7 @@ function resStat(outputs, { multi, primary }) {
   if (samePdf && inB > 0 && outB < inB * 0.95) {
     const pct = Math.round((1 - outB / inB) * 100), big = h('b', { class: 'tnum' }, `−${pct}%`);
     // il numero sale da zero (in un attimo): si vede il risparmio «accadere»
-    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) { const t0 = performance.now(), step = t => { const k = Math.min(1, (t - t0) / 700), e = 1 - (1 - k) ** 3; big.textContent = `−${Math.round(pct * e)}%`; if (k < 1 && big.isConnected) requestAnimationFrame(step); }; big.textContent = '−0%'; requestAnimationFrame(step); }
+    if (!senzaMoto()) { const t0 = performance.now(), step = t => { const k = Math.min(1, (t - t0) / 700), e = 1 - (1 - k) ** 3; big.textContent = `−${Math.round(pct * e)}%`; if (k < 1 && big.isConnected) requestAnimationFrame(step); }; big.textContent = '−0%'; requestAnimationFrame(step); }
     const el = h('div', {}, h('div', { class: 'res-stat', role: 'img', 'aria-label': `Peso ridotto del ${pct} per cento: da ${fmtSize(inB)} a ${fmtSize(outB)}` }, big, h('span', {}, `da ${fmtSize(inB)} a ${fmtSize(outB)}`)),
       h('div', { class: 'res-meter', 'aria-hidden': 'true' }, h('i', { style: { '--to': String(Math.max(0.03, outB / inB)) } })));
     return { el, celebrate: pct >= 60, saving: true };
@@ -1334,7 +1336,7 @@ function resStat(outputs, { multi, primary }) {
 }
 /* coriandoli di carta: pochi, una volta, solo quando il risultato lo merita (peso più che dimezzato) */
 function resConfetti(box) {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (senzaMoto()) return;
   const art = box.querySelector('.res-art'); if (!art) return;
   const cols = ['var(--accent)', 'var(--gold)', 'var(--ok)', 'var(--sel)', 'var(--line-3)'], wrap = h('div', { class: 'confetti', 'aria-hidden': 'true' });
   // a ventaglio verso l'alto e a sinistra del timbro: il testo, a destra, resta pulito
@@ -1792,6 +1794,39 @@ class Viewer {
 }
 function iconBtn(icon, title, onclick, cls = 'icon-btn') {
   return h('button', { class: cls, title, 'aria-label': title, onclick }, ic(icon, 18));
+}
+/* annulla, ripeti e «ripristina tutto» per gli strumenti che modificano. get() dà lo stato (copiabile in JSON), set(s) lo
+   rimette e ridisegna. Si chiama prima() PRIMA di ogni modifica. Ctrl+Z, Ctrl+Y e Ctrl+Maiusc+Z finché lo strumento è aperto
+   (non dentro un campo di testo). «Ripristina tutto» torna allo stato dell'apertura e si annulla a sua volta. */
+function storiaModifiche({ get, set, cosa = 'documento' }) {
+  const hist = [], fut = [], cur = () => JSON.stringify(get()), orig = cur(); const btns = {};
+  const agg = () => { if (btns.u) btns.u.disabled = !hist.some(x => x !== cur()); if (btns.r) btns.r.disabled = !fut.length; if (btns.t) btns.t.disabled = cur() === orig; };
+  const H = {
+    prima() { const c = cur(); if (hist[hist.length - 1] === c) return; hist.push(c); if (hist.length > 100) hist.shift(); fut.length = 0; setTimeout(agg, 0); },
+    // un'istantanea uguale allo stato attuale (presa entrando in un campo senza poi cambiare nulla) non è un passo: si salta
+    undo() { const c = cur(); while (hist.length && hist[hist.length - 1] === c) hist.pop(); if (!hist.length) { agg(); return false; } fut.push(c); set(JSON.parse(hist.pop())); agg(); return true; },
+    redo() { const c = cur(); while (fut.length && fut[fut.length - 1] === c) fut.pop(); if (!fut.length) { agg(); return false; } hist.push(c); set(JSON.parse(fut.pop())); agg(); return true; },
+    async tutto() {
+      const c = cur(); if (c === orig) return toast(`Il ${cosa} è già com’era all’apertura`);
+      if (typeof confirmDlg === 'undefined') Later.all();
+      if (!(await confirmDlg(`Tolgo tutte le modifiche e torno al ${cosa} com’era all’apertura? Puoi rimetterle con Annulla (Ctrl+Z).`, { ok: 'Ripristina tutto' }))) return;
+      hist.push(c); fut.length = 0; set(JSON.parse(orig)); agg(); toast(`Ripristinato com’era all’apertura`);
+    },
+    agg,
+    bottoni() {
+      btns.u = toolBtn('undo', 'Annulla', 'Annulla l’ultima modifica (Ctrl+Z)', () => H.undo()); btns.r = toolBtn('redo', 'Ripeti', 'Ripeti (Ctrl+Y)', () => H.redo());
+      btns.t = toolBtn('reset', 'Ripristina', `Ripristina tutto: il ${cosa} com’era all’apertura`, () => H.tutto()); agg(); return [btns.u, btns.r, btns.t];
+    },
+  };
+  const key = e => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || document.querySelector('.scrim')) return;
+    const a = document.activeElement; if (a && (a.isContentEditable || a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && /^(text|search|email|url|tel|password|number)$/.test(a.type || 'text')))) return;
+    const k = e.key.toLowerCase();
+    if (k === 'z' && !e.shiftKey ? H.undo() : (k === 'y' || (k === 'z' && e.shiftKey)) && H.redo()) e.preventDefault();
+  };
+  document.addEventListener('keydown', key);
+  if (typeof onLeave === 'function') onLeave(() => document.removeEventListener('keydown', key));
+  return H;
 }
 function toolBtn(icon, label, title, onclick) {
   // al telefono si legge la prima parola sotto l'icona («Anteprima», «Svuota»): mai icone mute

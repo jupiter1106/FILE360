@@ -17,6 +17,16 @@ async function startEdit(stage, files) {
   function restore(s) { const arr = JSON.parse(s); arr.forEach((a, i) => items[i] = a); lastSnap = s; selId = null; syncUi(); render(); drawProps(); schedulePreview(viewer.page - 1); }
   function undo() { finishEdit(); if (!hist.length) return; fut.push(lastSnap); restore(hist.pop()); }
   function redo() { finishEdit(); if (!fut.length) return; hist.push(lastSnap); restore(fut.pop()); }
+  // il documento com'era all'apertura (nessuna modifica): anche questo si annulla con Ctrl+Z
+  const ORIG = JSON.stringify(Array.from({ length: N }, () => []));
+  async function restoreAll() {
+    finishEdit(); if (lastSnap === ORIG) return toast('Il documento è già com’era all’apertura');
+    if (typeof confirmDlg === 'undefined') Later.all();
+    if (!(await confirmDlg('Tolgo tutte le modifiche e torno al documento com’era all’apertura? Puoi rimetterle con Annulla (Ctrl+Z).', { ok: 'Ripristina tutto' }))) return;
+    hist.push(lastSnap); fut.length = 0; restore(ORIG); toast('Documento ripristinato com’era all’apertura');
+  }
+  // mentre scrivi in una casella: Ctrl+Z annulla le lettere scritte; se nella casella non hai ancora cambiato nulla, annulla l'azione precedente
+  const undoNow = () => { if (editing && editing.el.innerText !== editing.t0) return document.execCommand('undo'); undo(); };
   const find = id => { for (let i = 0; i < N; i++) { const it = items[i].find(x => x.id === id); if (it) return { it, pi: i }; } return null; };
   const removeItem = id => { for (let i = 0; i < N; i++) items[i] = items[i].filter(x => x.id !== id && x.coverOf !== id); };
 
@@ -990,9 +1000,9 @@ async function startEdit(stage, files) {
   const imgInput = h('input', { type: 'file', accept: IMG_ACCEPT, hidden: true, onchange: async () => { const f = imgInput.files[0]; imgInput.value = ''; if (f) { try { await addImage(f); } catch (e) { Busy.hide(); toast(e.message || 'Immagine non leggibile', 'error'); } } } });
   const SYMBOLS = ['€', '£', '$', '©', '®', '™', '§', '¶', '°', '±', '×', '÷', '≤', '≥', '≠', '≈', '½', '¼', '¾', '•', '–', '—', '…', '«', '»', '“', '”', '‘', '’', '✓', '✗', '☐', '☑', '→', '←', '↑', '↓', 'Ω', 'µ', 'à', 'è', 'é', 'ì', 'ò', 'ù', 'À', 'È', 'É'];
   let rbText = () => {};
-  const undoBtn = rbtn('undo', 'Annulla (Ctrl+Z)', () => editing ? document.execCommand('undo') : undo()), redoBtn = rbtn('redo', 'Ripeti (Ctrl+Y)', () => editing ? document.execCommand('redo') : redo());
+  const undoBtn = rbtn('undo', 'Annulla (Ctrl+Z)', undoNow), resetAllBtn = rbtn('reset', 'Ripristina tutto: il documento com’era all’apertura', restoreAll), redoBtn = rbtn('redo', 'Ripeti (Ctrl+Y)', () => editing ? document.execCommand('redo') : redo());
   rib.append(
-    group(null, undoBtn, redoBtn),
+    group(null, undoBtn, redoBtn, resetAllBtn),
     group('Strumenti', modeBtn('edittext', 'textedit', 'Modifica testo', 'Modifica il testo del documento: clicca su un paragrafo, una cella o una riga (M)'), modeBtn('select', 'cursor', 'Seleziona', 'Seleziona, sposta e ridimensiona (V)'), modeBtn('text', 'type', 'Casella di testo', 'Aggiungi testo: clicca o trascina per una casella larga quanto vuoi (T)')),
     group('Carattere', h('div', { class: 'rcol' }, h('div', { class: 'rg-row' }, fontSel, h('span', { class: 'rsel-w' }, sizeIn, h('span', { class: 'rsel-u', 'aria-hidden': 'true' }, 'pt')), sizeList, rbtn('growfont', 'Aumenta dimensione', () => stepSize(1)), rbtn('shrinkfont', 'Riduci dimensione', () => stepSize(-1))),
       h('div', { class: 'rg-row' }, togBtn('bold', 'b', 'Grassetto (Ctrl+B)'), togBtn('italic', 'i', 'Corsivo (Ctrl+I)'), togBtn('underline', 'u', 'Sottolineato (Ctrl+U)'), togBtn('strike', 's', 'Barrato'), vaBtn('sup', 'sup', 'Apice'), vaBtn('sub', 'sub', 'Pedice'), colorBtn, hlBtn, caseBtn, clearBtn))),
@@ -1247,7 +1257,7 @@ async function startEdit(stage, files) {
     tog.va_sup.classList.toggle('on', ps.every(x => x.va === 'sup')); tog.va_sub.classList.toggle('on', ps.every(x => x.va === 'sub'));
     const al = it?.type === 'text' ? it.align || 'left' : st.align;
     for (const [k, b] of Object.entries(alBtn)) b.classList.toggle('on', k === al);
-    undoBtn.disabled = !editing && !hist.length; redoBtn.disabled = !editing && !fut.length;
+    undoBtn.disabled = !editing && !hist.length; resetAllBtn.disabled = !editing && lastSnap === ORIG; redoBtn.disabled = !editing && !fut.length;
   }
   function pageFontsList(pi) {
     const used = new Set();
@@ -1898,7 +1908,7 @@ async function startEdit(stage, files) {
     el.querySelector('.handle')?.remove();
     el.contentEditable = 'true';
     el.spellcheck = true; el.classList.add('editing');
-    editing = { it, el };
+    editing = { it, el, t0: el.innerText };
     el.focus();
     const sel = getSelection();
     let placed = false;
@@ -2193,10 +2203,14 @@ async function startEdit(stage, files) {
   /* ---------- tastiera ---------- */
   const deleteSelected = () => { const it = selected(); if (!it) return; if (it.type === 'text' && it.srcs?.length) { it.runs = []; relayout(it); } else if (it.type === 'scanobj') { it.del = true; } else { removeItem(it.id); selId = null; } commit(); render(); drawProps(); };
   const keyh = e => {
-    if (editing) return;
-    const tag = document.activeElement?.tagName;
-    if (/INPUT|TEXTAREA|SELECT/.test(tag) || document.querySelector('.scrim')) return;
-    const k = e.key.toLowerCase();
+    const k = e.key.toLowerCase(), z = (e.ctrlKey || e.metaKey) && k === 'z' && !e.shiftKey;
+    if (editing) { if (z && editing.el.innerText === editing.t0) { e.preventDefault(); undo(); } return; }
+    const a = document.activeElement, tag = a?.tagName;
+    if (document.querySelector('.scrim')) return;
+    // un comando della barra ha il fuoco (carattere, dimensione, colore…): Ctrl+Z annulla l'ultima modifica del documento
+    const comando = a && (tag === 'SELECT' || (tag === 'INPUT' && !/^(text|search|email|url|tel|password)$/.test(a.type || 'text'))) && a.closest('.tool');
+    if (comando && (e.ctrlKey || e.metaKey) && (k === 'z' || k === 'y')) { a.blur(); e.preventDefault(); k === 'y' || e.shiftKey ? redo() : undo(); return; }
+    if (/INPUT|TEXTAREA|SELECT/.test(tag)) return;
     if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
     if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); redo(); return; }
     if ((e.ctrlKey || e.metaKey) && k === 'f') { e.preventDefault(); findReplace(); return; }

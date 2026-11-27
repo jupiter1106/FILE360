@@ -251,7 +251,20 @@ const RilevaAI = (() => {
       // nomi dei caratteri scritti in chiaro nel file (dizionari dei font non compressi)
       const raw = new TextDecoder('latin1').decode(bytes.subarray(0, Math.min(bytes.length, 30e6)));
       for (const m of raw.matchAll(/\/(?:BaseFont|FontName)\s*\/(?:[A-Z]{6}\+)?([^\s/<>\[\]()]+)/g)) fonts.add(m[1].replace(/#20/g, ' ').replace(/[-,](?:Bold|Italic|Regular|Medium|Light|BoldItalic|Semibold)$/i, ''));
-      if (R0.text.replace(/\s/g, '').length < 40 && doc.numPages) R0.nota = 'Il PDF non contiene testo (è una scansione): restano i controlli sul file; per il testo, rendilo prima ricercabile con «PDF OCR».';
+      // scansione: le pagine si migliorano e si leggono con l'OCR (motore condiviso), poi l'analisi lavora sul testo letto
+      if (R0.text.replace(/\s/g, '').length < 40 && doc.numPages && typeof makeOcrWorker !== 'function') try { Later.all(); } catch { }
+      if (R0.text.replace(/\s/g, '').length < 40 && doc.numPages && typeof makeOcrWorker === 'function') {
+        let w = null;
+        try {
+          if (typeof Tesseract === 'undefined') await need('tesseract');
+          w = await makeOcrWorker(new Set(['ita', 'eng']), 300); const t = [], M = Math.min(N, 40);
+          for (let p = 1; p <= M; p++) { try { Busy.set?.((p - 1) / M, `Pagina ${p} di ${M}: lettura della scansione (OCR)…`); } catch { } const rec = await ocrRecognizePage(w, doc, p, { dpi: 300, langs: new Set(['ita', 'eng']) }); t.push((rec.data.lines || []).map(L => (L.words || []).filter(x => (x.confidence ?? 100) >= 30).map(x => x.text).join(' ')).join('\n')); }
+          R0.text = t.join('\n\n'); R0.ocr = true;
+          R0.nota = `Il PDF è una scansione: ${M < N ? `le prime ${M} pagine sono state lette` : 'il testo è stato letto'} con il riconoscimento ottico (OCR). Gli errori di lettura pesano poco sugli indizi di stile, ma l'esito è meno certo che su un file con il testo.`;
+        } catch (e) { console.warn('OCR', e); }
+        finally { try { await w?.terminate(); } catch { } }
+      }
+      if (R0.text.replace(/\s/g, '').length < 40 && doc.numPages) R0.nota = 'Il PDF non contiene testo (è una scansione) e la lettura del testo non è riuscita: restano i controlli sul file.';
       try { doc.destroy(); } catch { }
     } else if (/^(html?|xhtml)$/.test(ext)) {
       const h = new TextDecoder().decode(bytes), d = new DOMParser().parseFromString(h, 'text/html');

@@ -326,7 +326,6 @@ const ICONS = {
   stamp:'<path d="M9.5 3.5h5l-.8 6.5h3.3a2 2 0 0 1 2 2v2.5H5V12a2 2 0 0 1 2-2h3.3z"/><path d="M5 18h14M7 20.5h10"/>',
   blank:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9 14h6"/>',
   // un documento che entra nel PDF (Word, Excel, PowerPoint in PDF)
-  pdf:'<path d="M14 3H7a2 2 0 0 0-2 2v4"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M2 12h10"/><path d="m9 9 3 3-3 3"/>',
 };
 function ic(name, size = 20, sw = 1.9) {
   const s = document.createElement('span');
@@ -1006,7 +1005,7 @@ const Busy = {
       onCancel ? h('button', { class: 'btn ghost sm', onclick: onCancel }, 'Annulla') : null].filter(Boolean);
     // l'animazione dello strumento al lavoro (o, se non c'è, il logo che gira)
     const ldId = (this.job && this.job.tool) || (typeof CURRENT_TOOL !== 'undefined' && CURRENT_TOOL) || (typeof routeId === 'function' ? routeId() : '');
-    let anim = null; try { anim = typeof Loader !== 'undefined' && ldId ? Loader.el(ldId) : null; } catch (e) { console.warn('animazione', e); }
+    let anim = null; try { anim = typeof Loader !== 'undefined' && ldId && document.documentElement.dataset.anim !== 'off' ? Loader.el(ldId) : null; } catch (e) { console.warn('animazione', e); }
     this.pctEl = h('span', { class: 'busy-pct' });
     this.barBox = h('div', { class: 'bar', role: 'progressbar', 'aria-label': title, 'aria-valuemin': '0', 'aria-valuemax': '100' }, this.barEl);
     const card = h('div', { class: 'modal busy-card' + (anim ? ' with-ld' : ''), role: 'dialog', 'aria-modal': 'true', 'aria-label': title }, anim || (typeof Brand !== 'undefined' ? h('div', { class: 'spinner-brand', html: Brand.spinnerSvg(58) }) : h('div', { class: 'spinner' })), this.titleEl, this.msgEl,
@@ -1275,9 +1274,11 @@ function showResultNow(outputs, { note, title, zipName, extra, primary = null, v
   if (stat && stat.celebrate) resConfetti(m.box);
   resFly(m.box);
 }
+// niente movimenti decorativi: «riduci movimento» del dispositivo o «Animazioni: No» nel menu
+const senzaMoto = () => matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.dataset.anim === 'off';
 /* la miniatura del risultato parte da dove si vedeva il documento (l'anteprima dello strumento) e si posa nella finestra */
 function resFly(box) {
-  const art = box.querySelector('.res-art'); if (!art || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const art = box.querySelector('.res-art'); if (!art || senzaMoto()) return;
   const src = [...document.querySelectorAll('.tool .v-page, .tool .thumb canvas, .tool .ws canvas, .tool .ws img')].find(e => { const r = e.getBoundingClientRect(); return r.width > 60 && r.height > 60 && r.bottom > 0 && r.top < innerHeight; });
   if (!src) return;
   requestAnimationFrame(() => {
@@ -1320,7 +1321,7 @@ function resStat(outputs, { multi, primary }) {
   if (samePdf && inB > 0 && outB < inB * 0.95) {
     const pct = Math.round((1 - outB / inB) * 100), big = h('b', { class: 'tnum' }, `−${pct}%`);
     // il numero sale da zero (in un attimo): si vede il risparmio «accadere»
-    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) { const t0 = performance.now(), step = t => { const k = Math.min(1, (t - t0) / 700), e = 1 - (1 - k) ** 3; big.textContent = `−${Math.round(pct * e)}%`; if (k < 1 && big.isConnected) requestAnimationFrame(step); }; big.textContent = '−0%'; requestAnimationFrame(step); }
+    if (!senzaMoto()) { const t0 = performance.now(), step = t => { const k = Math.min(1, (t - t0) / 700), e = 1 - (1 - k) ** 3; big.textContent = `−${Math.round(pct * e)}%`; if (k < 1 && big.isConnected) requestAnimationFrame(step); }; big.textContent = '−0%'; requestAnimationFrame(step); }
     const el = h('div', {}, h('div', { class: 'res-stat', role: 'img', 'aria-label': `Peso ridotto del ${pct} per cento: da ${fmtSize(inB)} a ${fmtSize(outB)}` }, big, h('span', {}, `da ${fmtSize(inB)} a ${fmtSize(outB)}`)),
       h('div', { class: 'res-meter', 'aria-hidden': 'true' }, h('i', { style: { '--to': String(Math.max(0.03, outB / inB)) } })));
     return { el, celebrate: pct >= 60, saving: true };
@@ -1336,7 +1337,7 @@ function resStat(outputs, { multi, primary }) {
 }
 /* coriandoli di carta: pochi, una volta, solo quando il risultato lo merita (peso più che dimezzato) */
 function resConfetti(box) {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (senzaMoto()) return;
   const art = box.querySelector('.res-art'); if (!art) return;
   const cols = ['var(--accent)', 'var(--gold)', 'var(--ok)', 'var(--sel)', 'var(--line-3)'], wrap = h('div', { class: 'confetti', 'aria-hidden': 'true' });
   // a ventaglio verso l'alto e a sinistra del timbro: il testo, a destra, resta pulito
@@ -1794,6 +1795,39 @@ class Viewer {
 }
 function iconBtn(icon, title, onclick, cls = 'icon-btn') {
   return h('button', { class: cls, title, 'aria-label': title, onclick }, ic(icon, 18));
+}
+/* annulla, ripeti e «ripristina tutto» per gli strumenti che modificano. get() dà lo stato (copiabile in JSON), set(s) lo
+   rimette e ridisegna. Si chiama prima() PRIMA di ogni modifica. Ctrl+Z, Ctrl+Y e Ctrl+Maiusc+Z finché lo strumento è aperto
+   (non dentro un campo di testo). «Ripristina tutto» torna allo stato dell'apertura e si annulla a sua volta. */
+function storiaModifiche({ get, set, cosa = 'documento' }) {
+  const hist = [], fut = [], cur = () => JSON.stringify(get()), orig = cur(); const btns = {};
+  const agg = () => { if (btns.u) btns.u.disabled = !hist.some(x => x !== cur()); if (btns.r) btns.r.disabled = !fut.length; if (btns.t) btns.t.disabled = cur() === orig; };
+  const H = {
+    prima() { const c = cur(); if (hist[hist.length - 1] === c) return; hist.push(c); if (hist.length > 100) hist.shift(); fut.length = 0; setTimeout(agg, 0); },
+    // un'istantanea uguale allo stato attuale (presa entrando in un campo senza poi cambiare nulla) non è un passo: si salta
+    undo() { const c = cur(); while (hist.length && hist[hist.length - 1] === c) hist.pop(); if (!hist.length) { agg(); return false; } fut.push(c); set(JSON.parse(hist.pop())); agg(); return true; },
+    redo() { const c = cur(); while (fut.length && fut[fut.length - 1] === c) fut.pop(); if (!fut.length) { agg(); return false; } hist.push(c); set(JSON.parse(fut.pop())); agg(); return true; },
+    async tutto() {
+      const c = cur(); if (c === orig) return toast(`Il ${cosa} è già com’era all’apertura`);
+      if (typeof confirmDlg === 'undefined') Later.all();
+      if (!(await confirmDlg(`Tolgo tutte le modifiche e torno al ${cosa} com’era all’apertura? Puoi rimetterle con Annulla (Ctrl+Z).`, { ok: 'Ripristina tutto' }))) return;
+      hist.push(c); fut.length = 0; set(JSON.parse(orig)); agg(); toast(`Ripristinato com’era all’apertura`);
+    },
+    agg,
+    bottoni() {
+      btns.u = toolBtn('undo', 'Annulla', 'Annulla l’ultima modifica (Ctrl+Z)', () => H.undo()); btns.r = toolBtn('redo', 'Ripeti', 'Ripeti (Ctrl+Y)', () => H.redo());
+      btns.t = toolBtn('reset', 'Ripristina', `Ripristina tutto: il ${cosa} com’era all’apertura`, () => H.tutto()); agg(); return [btns.u, btns.r, btns.t];
+    },
+  };
+  const key = e => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || document.querySelector('.scrim')) return;
+    const a = document.activeElement; if (a && (a.isContentEditable || a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && /^(text|search|email|url|tel|password|number)$/.test(a.type || 'text')))) return;
+    const k = e.key.toLowerCase();
+    if (k === 'z' && !e.shiftKey ? H.undo() : (k === 'y' || (k === 'z' && e.shiftKey)) && H.redo()) e.preventDefault();
+  };
+  document.addEventListener('keydown', key);
+  if (typeof onLeave === 'function') onLeave(() => document.removeEventListener('keydown', key));
+  return H;
 }
 function toolBtn(icon, label, title, onclick) {
   // al telefono si legge la prima parola sotto l'icona («Anteprima», «Svuota»): mai icone mute
@@ -4103,7 +4137,7 @@ const Drawer = (() => {
         h('p', {}, ic('keyboard', 16), h('span', {}, 'Premi ', h('kbd', {}, '?'), ' per tutte le scorciatoie da tastiera'))),
       h('section', { class: 'dr-sec dr-set', 'aria-label': 'Impostazioni' }, h('h3', {}, 'Impostazioni'),
         row(Prefs.profile()?.[2] || 'user', 'Il tuo lavoro', Prefs.profile() ? Prefs.profile()[1] + ' · cambia' : 'Facoltativo: metto in cima i tuoi strumenti', () => { close(); Onboard.show(); }),
-        h('div', { class: 'dr-theme dr-anim', role: 'radiogroup', 'aria-label': 'Animazioni' }, h('span', { class: 'dr-lab' }, 'Animazioni'), [['full', 'Complete'], ['light', 'Leggere'], ['off', 'Nessuna']].map(([v, l]) =>
+        h('div', { class: 'dr-theme dr-anim', role: 'radiogroup', 'aria-label': 'Animazioni' }, h('span', { class: 'dr-lab' }, 'Animazioni'), [['full', 'Sì'], ['off', 'No']].map(([v, l]) =>
           h('button', { type: 'button', role: 'radio', 'aria-checked': String(Prefs.anim === v), class: 'dr-chip' + (Prefs.anim === v ? ' on' : ''), onclick: () => { Prefs.set({ anim: v, asked: true }); build(); } }, l)))),
       h('div', { class: 'dr-foot' },
         themeBtn && !themeBtn.hidden && window.Theme ? h('div', { class: 'dr-theme', role: 'radiogroup', 'aria-label': 'Tema' }, [['auto', 'Automatico'], ['light', 'Chiaro'], ['dark', 'Scuro']].map(([v, l]) =>
@@ -4353,13 +4387,15 @@ const Prefs = (() => {
   const K = 'file360-prefs'; let p = {};
   try { p = JSON.parse(localStorage.getItem(K) || '{}'); } catch { }
   const apply = () => {
-    const a = p.anim || 'full';   // «riduci movimento» del dispositivo vale comunque (logo e sfondo fermi)
+    // due scelte: «Sì» (tutto com'è) o «No»: gli effetti decorativi spariscono dalla pagina (sfondo di documenti, bagliore
+    // attorno agli strumenti, caselle che tremano, orbite, apertura animata), non restano fermi. La vecchia «Leggere» vale «No».
+    const a = p.anim === 'off' || p.anim === 'light' ? 'off' : 'full';
     document.documentElement.dataset.anim = a;
     try { if (typeof BgFlow !== 'undefined') BgFlow.apply(); } catch (e) { console.warn(e); }
-    document.querySelectorAll('svg.logo-live').forEach(s => { try { a === 'off' ? s.pauseAnimations() : s.unpauseAnimations(); } catch { } });
+    document.querySelectorAll('svg.logo-live').forEach(s => { try { if (a === 'off') s.outerHTML = Brand.logoSvg(+s.getAttribute('width') || 32, { title: s.getAttribute('aria-label') || 'file360' }); } catch { } });
   };
   return {
-    get prof() { return p.prof || null; }, get anim() { return p.anim || 'full'; }, get asked() { return !!p.asked; },
+    get prof() { return p.prof || null; }, get anim() { return p.anim === 'off' || p.anim === 'light' ? 'off' : 'full'; }, get asked() { return !!p.asked; },
     profile() { return PROFILES.find(x => x[0] === p.prof) || null; },
     set(o) { Object.assign(p, o); try { localStorage.setItem(K, JSON.stringify(p)); } catch { } apply(); },
     apply,
@@ -6335,6 +6371,8 @@ async function startOrder(stage, files) {
   let seq = 0;
   const initial = () => Array.from({ length: N }, (_, i) => ({ key: 'p' + (++seq), src: i }));
   let entries = initial();
+  // annulla, ripeti, ripristina tutto: ogni spostamento, copia, pagina bianca o eliminazione
+  const storia = storiaModifiche({ get: () => entries, set: v => { entries = v; elFor.clear(); render(); }, cosa: 'documento' });
   const elFor = new Map(), sel = new Set();   // sel: chiavi delle pagine selezionate
   const xs = { remove: false };                // estrai: tieni le pagine nel documento, oppure toglile
   const grid = h('div', { class: 'cards' });
@@ -6360,17 +6398,17 @@ async function startOrder(stage, files) {
     chk.addEventListener('pointerdown', ev => startPaint(ev, e.key));
     c.el.append(h('div', { class: 'card-acts' },
       iconBtn('left', 'Sposta indietro', () => move(e, -1)),
-      iconBtn('copy', 'Duplica', () => { const i = entries.indexOf(e); entries.splice(i + 1, 0, { key: 'p' + (++seq), src: e.src, size: e.size }); render(); }),
+      iconBtn('copy', 'Duplica', () => { storia.prima(); const i = entries.indexOf(e); entries.splice(i + 1, 0, { key: 'p' + (++seq), src: e.src, size: e.size }); render(); }),
       iconBtn('extract', 'Estrai questa pagina in un PDF a sé', () => extract([e])),
       // una pagina bianca subito dopo questa, dello stesso formato
-      iconBtn('blank', 'Aggiungi una pagina bianca dopo questa', () => { const i = entries.indexOf(e), nb = { key: 'p' + (++seq), src: 'blank', size: e.src === 'blank' ? e.size : sizes[e.src] }; entries.splice(i + 1, 0, nb); render(); const el = elFor.get(nb.key); el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); el?.classList.add('just-added'); setTimeout(() => el?.classList.remove('just-added'), 1200); }),
-      iconBtn('trash', 'Elimina', () => { entries.splice(entries.indexOf(e), 1); sel.delete(e.key); render(); }),
+      iconBtn('blank', 'Aggiungi una pagina bianca dopo questa', () => { storia.prima(); const i = entries.indexOf(e), nb = { key: 'p' + (++seq), src: 'blank', size: e.src === 'blank' ? e.size : sizes[e.src] }; entries.splice(i + 1, 0, nb); render(); const el = elFor.get(nb.key); el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); el?.classList.add('just-added'); setTimeout(() => el?.classList.remove('just-added'), 1200); }),
+      iconBtn('trash', 'Elimina', () => { storia.prima(); entries.splice(entries.indexOf(e), 1); sel.delete(e.key); render(); }),
       iconBtn('right', 'Sposta avanti', () => move(e, 1))));
     elFor.set(e.key, c.el); c.el._badge = c.badge;
     return c.el;
   }
   function move(e, d) {
-    const i = entries.indexOf(e), j = clamp(i + d, 0, entries.length - 1); if (i === j) return; entries.splice(i, 1); entries.splice(j, 0, e); render();
+    const i = entries.indexOf(e), j = clamp(i + d, 0, entries.length - 1); if (i === j) return; storia.prima(); entries.splice(i, 1); entries.splice(j, 0, e); render();
     keepMoveFocus(elFor.get(e.key), d < 0 ? 'Sposta indietro' : 'Sposta avanti', d < 0 ? 'Sposta avanti' : 'Sposta indietro', `${e.src === 'blank' ? 'Pagina bianca' : 'Originale ' + (e.src + 1)}: posizione ${j + 1} di ${entries.length}`);
   }
   let anchor = null, paintEnd = 0;
@@ -6420,11 +6458,11 @@ async function startOrder(stage, files) {
   const noneBtn = h('button', { class: 'btn sm ghost', onclick: () => { sel.clear(); updSel(); } }, 'Nessuna');
   const invBtn = h('button', { class: 'btn sm ghost l-d', onclick: () => { entries.forEach(e => sel.has(e.key) ? sel.delete(e.key) : sel.add(e.key)); updSel(); } }, 'Inverti');
   const exSel = h('button', { class: 'btn sm', onclick: () => extract(entries.filter(e => sel.has(e.key))) }, ic('extract', 15), 'Estrai');
-  const dupSel = h('button', { class: 'btn sm', onclick: () => { const out = []; for (const e of entries) { out.push(e); if (sel.has(e.key)) out.push({ key: 'p' + (++seq), src: e.src, size: e.size }); } entries = out; render(); } }, ic('copy', 15), 'Duplica');
+  const dupSel = h('button', { class: 'btn sm', onclick: () => { storia.prima(); const out = []; for (const e of entries) { out.push(e); if (sel.has(e.key)) out.push({ key: 'p' + (++seq), src: e.src, size: e.size }); } entries = out; render(); } }, ic('copy', 15), 'Duplica');
   const delSel = h('button', { class: 'btn sm danger', onclick: () => {
     const n = entries.filter(e => sel.has(e.key)).length; if (n >= entries.length) return toast('Il documento non può restare senza pagine', 'error');
-    const prev = entries.slice(); entries = entries.filter(e => !sel.has(e.key)); sel.clear(); render();
-    toastActions(`${plural(n, 'pagina eliminata', 'pagine eliminate')}`, [['Annulla', () => { entries = prev; render(); }]]);
+    storia.prima(); entries = entries.filter(e => !sel.has(e.key)); sel.clear(); render();
+    toastActions(`${plural(n, 'pagina eliminata', 'pagine eliminate')}`, [['Annulla', () => storia.undo()]]);
   } }, ic('trash', 15), 'Elimina');
   const selBar = h('div', { class: 'ord-selbar' }, selCount, allBtn, noneBtn, invBtn, h('span', { class: 'grow' }), exSel, dupSel, delSel);
   // tastiera: Ctrl+A tutte, Esc nessuna, Canc elimina le selezionate
@@ -6461,7 +6499,7 @@ async function startOrder(stage, files) {
     await withBusy(list.length === 1 ? 'Estrazione della pagina…' : 'Estrazione delle pagine…', async () => {
       const extracted = await build(ordered);
       let rest = null;
-      if (xs.remove) { const keep = entries.filter(e => !list.includes(e)); rest = await build(keep); entries = keep; for (const e of list) sel.delete(e.key); render(); }
+      if (xs.remove) { storia.prima(); const keep = entries.filter(e => !list.includes(e)); rest = await build(keep); entries = keep; for (const e of list) sel.delete(e.key); render(); }
       else { sel.clear(); render(); }
       res = { base: doc.base, positions, extracted, rest };
     });
@@ -6469,6 +6507,7 @@ async function startOrder(stage, files) {
   }
   let dragKey = null; grid.addEventListener('dragstart', ev => { dragKey = ev.target.closest?.('[data-sort]')?.dataset.sort || null; }, true);
   makeSortable(grid, keys => {
+    storia.prima();
     if (dragKey && sel.has(dragKey) && sel.size > 1) {
       const group = entries.filter(e => sel.has(e.key)).map(e => e.key), rest = keys.filter(k => !sel.has(k) || k === dragKey);
       const at = rest.indexOf(dragKey); rest.splice(at, 1, ...group); keys = rest;
@@ -6479,8 +6518,8 @@ async function startOrder(stage, files) {
     sec('Documento', info),
     sec('Azioni rapide',
       h('button', { class: 'btn', onclick: () => { entries.reverse(); render(); } }, ic('swap', 18), 'Inverti l’ordine'),
-      h('button', { class: 'btn', onclick: () => { const last = entries[entries.length - 1]; entries.push({ key: 'p' + (++seq), src: 'blank', size: last && last.src !== 'blank' ? sizes[last.src] : (last?.size || [595.28, 841.89]) }); render(); grid.lastChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }, ic('blank', 18), 'Aggiungi pagina bianca'),
-      h('button', { class: 'btn', onclick: () => { entries = initial(); elFor.clear(); render(); } }, ic('reset', 18), 'Ripristina ordine originale')),
+      h('button', { class: 'btn', onclick: () => { storia.prima(); const last = entries[entries.length - 1]; entries.push({ key: 'p' + (++seq), src: 'blank', size: last && last.src !== 'blank' ? sizes[last.src] : (last?.size || [595.28, 841.89]) }); render(); grid.lastChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }, ic('blank', 18), 'Aggiungi pagina bianca'),
+      h('button', { class: 'btn', onclick: () => storia.tutto() }, ic('reset', 18), 'Ripristina ordine originale'), ...storia.bottoni().slice(0, 2)),
     sec('Estrai pagine', selInfo,
       h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: () => { entries.forEach(e => sel.add(e.key)); render(); } }, 'Tutte'),
         h('button', { class: 'btn sm', onclick: () => { sel.clear(); render(); } }, 'Nessuna'),
@@ -14523,13 +14562,20 @@ async function startRedact(stage, files, _tool, auto = null) {
     const t = piiBox.querySelector('.pii-title'); t?.focus({ preventScroll: true });
   } });
   const clearPageBtn = toolBtn('trash', 'Svuota pagina', 'Rimuovi le aree di questa pagina', () => { if (!boxes[viewer.page - 1].length) return; save(); boxes[viewer.page - 1] = []; changed(); });
+  // tutte le aree di tutte le pagine via: il documento com'era all'apertura (si annulla con Ctrl+Z)
+  const resetAllBtn = toolBtn('reset', 'Ripristina', 'Ripristina tutto: togli le aree da oscurare di tutte le pagine', async () => {
+    if (!boxes.some(b => b.length)) return toast('Non ci sono aree da togliere');
+    if (typeof confirmDlg === 'undefined') Later.all();
+    if (!(await confirmDlg('Tolgo tutte le aree da oscurare, in tutte le pagine? Puoi rimetterle con Annulla (Ctrl+Z).', { ok: 'Ripristina tutto' }))) return;
+    save(); boxes.forEach((_, i) => { boxes[i] = []; }); changed(); toast('Tutte le aree tolte: il documento è com’era all’apertura');
+  });
   const panBtn = toolBtn('hand', 'Scorri', 'Tocca per scorrere la pagina invece di disegnare', () => { st.pan = !st.pan; panBtn.classList.toggle('on', st.pan); viewer.overlay.dataset.pan = st.pan ? '1' : ''; });
   // scelta veloce: clic su una parola (o trascinando da una parola all'altra, doppio clic per la riga intera);
   // nello spazio vuoto si disegna un'area libera
   const pickSeg = seg([['words', 'Parole'], ['area', 'Area libera']], st.pick, v => { st.pick = v; viewer.refresh(); });
   pickSeg.classList.add('rpick'); pickSeg.title = 'Parole: clic sulle parole da oscurare · Area libera: trascina un rettangolo';
   const viewer = auto ? { refresh() { }, go() { }, render() { }, destroy() { }, page: 1, cur: 1, overlay: h('div'), el: h('div'), thumbBtns: [], toPt: () => ({ x: 0, y: 0 }) } : new Viewer(doc, {
-    tools: [pickSeg, IS_TOUCH ? panBtn : null, previewBtn, undoBtn, clearPageBtn].filter(Boolean),
+    tools: [pickSeg, IS_TOUCH ? panBtn : null, previewBtn, undoBtn, clearPageBtn, resetAllBtn].filter(Boolean),
     onOverlay: draw, fit: IS_TOUCH ? 'page' : 'width',
   });
   const wordsBy = new Map(); // pagina -> { idx, words }
@@ -14619,7 +14665,8 @@ async function startRedact(stage, files, _tool, auto = null) {
     const p = viewer.toPt(e), w0 = W.words.find(w => w.boxes.some(q => p.x >= q.x && p.x <= q.x + q.w && p.y >= q.y && p.y <= q.y + q.h)); if (!w0) return;
     save(); await addBoxes(viewer.page, joinBoxes(W.words.filter(w => w.line === w0.line).flatMap(w => w.boxes.map((q, j) => ({ ...q, t: j ? '' : w.t }))))); changed();
   });
-  function undo() { if (!hist.length) return; const prev = JSON.parse(hist.pop()); prev.forEach((b, i) => boxes[i] = b); changed(); }
+  // i passi che non avevano cambiato nulla si saltano: Ctrl+Z annulla sempre qualcosa di visibile
+  function undo() { const c = JSON.stringify(boxes); while (hist.length && hist[hist.length - 1] === c) hist.pop(); if (!hist.length) return; const prev = JSON.parse(hist.pop()); prev.forEach((b, i) => boxes[i] = b); changed(); }
   const keyh = e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName)) { e.preventDefault(); undo(); } };
   if (!auto) { document.addEventListener('keydown', keyh); onLeave(() => { document.removeEventListener('keydown', keyh); viewer.destroy(); }); }
 
@@ -18084,7 +18131,8 @@ const BgFlow = (() => {
   function loop(now) {
     raf = requestAnimationFrame(loop);
     if (document.hidden) return;
-    if (now - busyAt > 500) { busyAt = now; busy = !!document.querySelector('.scrim.busy, .drawer.open'); }
+    // dentro uno strumento lo sfondo resta fermo all'ultima immagine: il tempo di ogni fotogramma va al lavoro (mappa, anteprime)
+    if (now - busyAt > 500) { busyAt = now; busy = !!document.querySelector('.scrim.busy, .drawer.open') || (typeof CURRENT_TOOL !== 'undefined' && !!CURRENT_TOOL); }
     if (busy) return;
     // telefoni e computer lenti: mezza frequenza
     if (++frame % (innerWidth < 700 ? 2 : 1)) return;
@@ -18092,7 +18140,7 @@ const BgFlow = (() => {
   }
   function paintStill() { step(); }
   function start() {
-    if (cv || window.__oauthPopup) return;
+    if (cv || window.__oauthPopup || document.documentElement.dataset.anim === 'off') return;
     cv = document.createElement('canvas'); cv.className = 'bg-flow'; cv.setAttribute('aria-hidden', 'true');
     document.body.prepend(cv);
     ctx = cv.getContext('2d', { alpha: false });
@@ -18105,15 +18153,18 @@ const BgFlow = (() => {
     if (still) paintStill(); else raf = requestAnimationFrame(loop);
     document.documentElement.classList.add('has-flow');
   }
-  // preferenza «Animazioni»: solo «Complete» muove lo sfondo; con «Leggere» e «Nessuna» resta un'immagine ferma
-  const moving = () => (document.documentElement.dataset.anim || 'full') === 'full' && !reduce();
+  // preferenza «Animazioni»: con «No» lo sfondo di documenti non c'è proprio (tela tolta dalla pagina); con «Sì» si muove,
+  // salvo «riduci movimento» del dispositivo (immagine ferma)
+  const spento = () => document.documentElement.dataset.anim === 'off';
+  const moving = () => !spento() && !reduce();
   function apply() {
-    if (!cv) return;
+    if (spento()) { if (cv) { cancelAnimationFrame(raf); raf = 0; cv.remove(); cv = null; ctx = null; document.documentElement.classList.remove('has-flow'); } return; }
+    if (!cv) { if (apply._avviato) start(); return; }
     const m = moving();
     if (!m && !still) { still = true; cancelAnimationFrame(raf); raf = 0; paintStill(); }
     else if (m && still) { still = false; raf = requestAnimationFrame(loop); }
   }
-  return { start: () => { start(); apply(); }, stop: () => { cancelAnimationFrame(raf); raf = 0; }, apply };
+  return { start: () => { apply._avviato = true; start(); apply(); }, stop: () => { cancelAnimationFrame(raf); raf = 0; }, apply };
 })();
 
 /* ---------- apertura animata: dopo ~2,3 s (o al primo clic/tasto) il logo vola al suo posto in alto ---------- */

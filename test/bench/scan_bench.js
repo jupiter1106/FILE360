@@ -9,6 +9,9 @@ const only = process.argv.includes('--only') ? process.argv[process.argv.indexOf
   const browser = await chromium.launch(); const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
   page.on('pageerror', e => console.log('pageerror', e.message));
   await page.goto('file://' + app); await page.waitForSelector('.tool-card, .hm-tool, .intent');
+  // i moduli degli strumenti si eseguono nei momenti liberi dopo l'avvio: prima di misurare devono esserci tutti
+  // (senza questa attesa le prime immagini a volte trovavano «ScanKit is not defined» e il risultato cambiava da un giro all'altro)
+  await page.evaluate(() => Later.all()); await page.waitForFunction(() => typeof ScanKit !== 'undefined');
   const rows = []; const thumbs = [];
   for (const [name, T] of Object.entries(truth)) {
     if (only && !only.includes(name)) continue;

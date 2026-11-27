@@ -2027,7 +2027,7 @@ const Drawer = (() => {
         h('p', {}, ic('keyboard', 16), h('span', {}, 'Premi ', h('kbd', {}, '?'), ' per tutte le scorciatoie da tastiera'))),
       h('section', { class: 'dr-sec dr-set', 'aria-label': 'Impostazioni' }, h('h3', {}, 'Impostazioni'),
         row(Prefs.profile()?.[2] || 'user', 'Il tuo lavoro', Prefs.profile() ? Prefs.profile()[1] + ' · cambia' : 'Facoltativo: metto in cima i tuoi strumenti', () => { close(); Onboard.show(); }),
-        h('div', { class: 'dr-theme dr-anim', role: 'radiogroup', 'aria-label': 'Animazioni' }, h('span', { class: 'dr-lab' }, 'Animazioni'), [['full', 'Complete'], ['light', 'Leggere'], ['off', 'Nessuna']].map(([v, l]) =>
+        h('div', { class: 'dr-theme dr-anim', role: 'radiogroup', 'aria-label': 'Animazioni' }, h('span', { class: 'dr-lab' }, 'Animazioni'), [['full', 'Sì'], ['off', 'No']].map(([v, l]) =>
           h('button', { type: 'button', role: 'radio', 'aria-checked': String(Prefs.anim === v), class: 'dr-chip' + (Prefs.anim === v ? ' on' : ''), onclick: () => { Prefs.set({ anim: v, asked: true }); build(); } }, l)))),
       h('div', { class: 'dr-foot' },
         themeBtn && !themeBtn.hidden && window.Theme ? h('div', { class: 'dr-theme', role: 'radiogroup', 'aria-label': 'Tema' }, [['auto', 'Automatico'], ['light', 'Chiaro'], ['dark', 'Scuro']].map(([v, l]) =>
@@ -2277,13 +2277,15 @@ const Prefs = (() => {
   const K = 'file360-prefs'; let p = {};
   try { p = JSON.parse(localStorage.getItem(K) || '{}'); } catch { }
   const apply = () => {
-    const a = p.anim || 'full';   // «riduci movimento» del dispositivo vale comunque (logo e sfondo fermi)
+    // due scelte: «Sì» (tutto com'è) o «No»: gli effetti decorativi spariscono dalla pagina (sfondo di documenti, bagliore
+    // attorno agli strumenti, caselle che tremano, orbite, apertura animata), non restano fermi. La vecchia «Leggere» vale «No».
+    const a = p.anim === 'off' || p.anim === 'light' ? 'off' : 'full';
     document.documentElement.dataset.anim = a;
     try { if (typeof BgFlow !== 'undefined') BgFlow.apply(); } catch (e) { console.warn(e); }
-    document.querySelectorAll('svg.logo-live').forEach(s => { try { a === 'off' ? s.pauseAnimations() : s.unpauseAnimations(); } catch { } });
+    document.querySelectorAll('svg.logo-live').forEach(s => { try { if (a === 'off') s.outerHTML = Brand.logoSvg(+s.getAttribute('width') || 32, { title: s.getAttribute('aria-label') || 'file360' }); } catch { } });
   };
   return {
-    get prof() { return p.prof || null; }, get anim() { return p.anim || 'full'; }, get asked() { return !!p.asked; },
+    get prof() { return p.prof || null; }, get anim() { return p.anim === 'off' || p.anim === 'light' ? 'off' : 'full'; }, get asked() { return !!p.asked; },
     profile() { return PROFILES.find(x => x[0] === p.prof) || null; },
     set(o) { Object.assign(p, o); try { localStorage.setItem(K, JSON.stringify(p)); } catch { } apply(); },
     apply,

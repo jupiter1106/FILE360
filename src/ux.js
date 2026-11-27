@@ -164,7 +164,8 @@ const BgFlow = (() => {
   function loop(now) {
     raf = requestAnimationFrame(loop);
     if (document.hidden) return;
-    if (now - busyAt > 500) { busyAt = now; busy = !!document.querySelector('.scrim.busy, .drawer.open'); }
+    // dentro uno strumento lo sfondo resta fermo all'ultima immagine: il tempo di ogni fotogramma va al lavoro (mappa, anteprime)
+    if (now - busyAt > 500) { busyAt = now; busy = !!document.querySelector('.scrim.busy, .drawer.open') || (typeof CURRENT_TOOL !== 'undefined' && !!CURRENT_TOOL); }
     if (busy) return;
     // telefoni e computer lenti: mezza frequenza
     if (++frame % (innerWidth < 700 ? 2 : 1)) return;
@@ -172,7 +173,7 @@ const BgFlow = (() => {
   }
   function paintStill() { step(); }
   function start() {
-    if (cv || window.__oauthPopup) return;
+    if (cv || window.__oauthPopup || document.documentElement.dataset.anim === 'off') return;
     cv = document.createElement('canvas'); cv.className = 'bg-flow'; cv.setAttribute('aria-hidden', 'true');
     document.body.prepend(cv);
     ctx = cv.getContext('2d', { alpha: false });
@@ -185,15 +186,18 @@ const BgFlow = (() => {
     if (still) paintStill(); else raf = requestAnimationFrame(loop);
     document.documentElement.classList.add('has-flow');
   }
-  // preferenza «Animazioni»: solo «Complete» muove lo sfondo; con «Leggere» e «Nessuna» resta un'immagine ferma
-  const moving = () => (document.documentElement.dataset.anim || 'full') === 'full' && !reduce();
+  // preferenza «Animazioni»: con «No» lo sfondo di documenti non c'è proprio (tela tolta dalla pagina); con «Sì» si muove,
+  // salvo «riduci movimento» del dispositivo (immagine ferma)
+  const spento = () => document.documentElement.dataset.anim === 'off';
+  const moving = () => !spento() && !reduce();
   function apply() {
-    if (!cv) return;
+    if (spento()) { if (cv) { cancelAnimationFrame(raf); raf = 0; cv.remove(); cv = null; ctx = null; document.documentElement.classList.remove('has-flow'); } return; }
+    if (!cv) { if (apply._avviato) start(); return; }
     const m = moving();
     if (!m && !still) { still = true; cancelAnimationFrame(raf); raf = 0; paintStill(); }
     else if (m && still) { still = false; raf = requestAnimationFrame(loop); }
   }
-  return { start: () => { start(); apply(); }, stop: () => { cancelAnimationFrame(raf); raf = 0; }, apply };
+  return { start: () => { apply._avviato = true; start(); apply(); }, stop: () => { cancelAnimationFrame(raf); raf = 0; }, apply };
 })();
 
 /* ---------- apertura animata: dopo ~2,3 s (o al primo clic/tasto) il logo vola al suo posto in alto ---------- */

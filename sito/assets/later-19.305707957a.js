@@ -406,7 +406,7 @@ async function startQrSepa(stage, files) {
         else if (isPdf(f)) {
           let invs = []; try { invs = await FattureKit.leggiPdf(b, f.name); } catch { }
           if (invs.length === 1) items.push({ file: f.name, pdf: b, inv: invs[0], d: QrPay.fromInvoice(invs[0]) });
-          else { const doc = await openPdf(new File([b], f.name, { type: 'application/pdf' })); const pg = await DocRead.pages(doc, {}); items.push({ file: f.name, pdf: b, d: QrPay.fromText(pg.map(x => x.text).join('\n')) }); }
+          else { const doc = await openPdf(new File([b], f.name, { type: 'application/pdf' })); let wq = null; const pg = await DocRead.pages(doc, { getWorker: async () => { if (typeof Tesseract === 'undefined') await need('tesseract'); return wq ||= await makeOcrWorker(new Set(['ita']), 300); } }).finally(() => { try { wq?.terminate(); } catch { } }); items.push({ file: f.name, pdf: b, d: QrPay.fromText(pg.map(x => x.text).join('\n')) }); }
         }
       } catch (e) { toast(`${f.name}: ${e.message}`, 'error'); }
     }

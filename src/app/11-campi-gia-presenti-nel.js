@@ -128,8 +128,15 @@ async function startForms(stage, files) {
   const detected = new Set();
   let scanned = 0;
   const hist = [];
-  const snap = () => { hist.push(JSON.stringify({ fields, removed, objs })); if (hist.length > 80) hist.shift(); };
-  function undo() { if (!hist.length) return; const s = JSON.parse(hist.pop()); fields = s.fields; removed = s.removed; objs = s.objs || []; st.sel = null; st.osel = null; changed(); recalc(); }
+  let ORIG = null;   // il modulo prima della prima modifica: «Ripristina tutto» ci torna (e si annulla con Ctrl+Z)
+  const snap = () => { const cur = JSON.stringify({ fields, removed, objs }); if (ORIG == null) ORIG = cur; hist.push(cur); if (hist.length > 80) hist.shift(); };
+  async function restoreAll() {
+    const cur = JSON.stringify({ fields, removed, objs }); if (ORIG == null || cur === ORIG) return toast('Il modulo è già com’era all’apertura');
+    if (typeof confirmDlg === 'undefined') Later.all();
+    if (!(await confirmDlg('Tolgo campi, valori, spunte e firme aggiunti e torno al modulo com’era all’apertura? Puoi rimetterli con Annulla (Ctrl+Z).', { ok: 'Ripristina tutto' }))) return;
+    hist.push(cur); const o = JSON.parse(ORIG); fields = o.fields; removed = o.removed; objs = o.objs || []; st.sel = null; st.osel = null; changed(); recalc(); toast('Modulo ripristinato com’era all’apertura');
+  }
+  function undo() { const c = JSON.stringify({ fields, removed, objs }); while (hist.length && hist[hist.length - 1] === c) hist.pop(); if (!hist.length) return; const s = JSON.parse(hist.pop()); fields = s.fields; removed = s.removed; objs = s.objs || []; st.sel = null; st.osel = null; changed(); recalc(); }
 
   const ex = await withBusy('Lettura del documento…', async () => readExistingFields(await loadLib(doc.bytes)));
   ex.fields.forEach(f => { f.id = ++fid; fields.push(f); });
@@ -243,7 +250,7 @@ async function startForms(stage, files) {
     h('span', { class: 'vsep' }),
     IS_TOUCH ? panBtn : null,
     toolBtn('wand', 'Rileva pagina', 'Cerca di nuovo i campi in questa pagina', () => detect([viewer.page - 1], true)),
-    toolBtn('undo', 'Annulla', 'Annulla (Ctrl+Z)', undo));
+    toolBtn('undo', 'Annulla', 'Annulla (Ctrl+Z)', undo), toolBtn('reset', '', 'Ripristina tutto: il modulo com’era all’apertura', restoreAll));
   typeBtns.text.classList.add('on');
   const fillBtns = {};
   const mkTool = (t, icon, label, title) => (fillBtns[t] = toolBtn(icon, label, title, () => setTool(st.tool === t ? null : t)));
@@ -259,7 +266,7 @@ async function startForms(stage, files) {
     mkTool('date', 'cal', 'Data', 'Scrivi la data di oggi'),
     toolBtn('sign', 'Firma', 'Inserisci la tua firma', addSignature),
     h('span', { class: 'vsep' }),
-    toolBtn('undo', 'Annulla', 'Annulla (Ctrl+Z)', undo));
+    toolBtn('undo', 'Annulla', 'Annulla (Ctrl+Z)', undo), toolBtn('reset', '', 'Ripristina tutto: il modulo com’era all’apertura', restoreAll));
   const modeSeg = h('div', { class: 'seg mode-seg' });
   // i due passi del lavoro, sempre visibili: 1 controlla i campi trovati, 2 compila (il 3, scarica, è il pulsante principale)
   const drawMode = () => modeSeg.replaceChildren(...[['edit', '1', 'Controlla i campi'], ['fill', '2', 'Compila']].map(([v, n, l]) =>

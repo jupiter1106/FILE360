@@ -22,7 +22,7 @@ print('  indirizzi citati nel codice (nessun file dell’utente viene inviato; s
 run('codice in moduli: nessun file sorgente oltre 3.000 righe', ['python3', '-c', "import pathlib,sys; m=max((len(p.read_text(encoding='utf-8').split(chr(10))),p.name) for p in pathlib.Path('src').rglob('*.js')); print(m); sys.exit(m[0] > 3000)"])
 run('icone: ogni strumento ha un’icona che esiste (nessuna casella vuota)', ['python3', 'tools/icone.py'])
 run('sistema visivo: dimensioni, pesi, raggi, ombre e colori sulle scale dei token', ['python3', 'tools/tokens.py'])
-run('interfaccia (105 comportamenti)', ['node', 'test/suite/ui.test.js'], lambda o: 'tutti verdi' in o)
+run('interfaccia (108 comportamenti)', ['node', 'test/suite/ui.test.js'], lambda o: 'tutti verdi' in o)
 run('ricerca: 70 domande tipiche portano allo strumento giusto (≥ 95%)', ['node', 'test/suite/search.test.js'], lambda o: 'tutti verdi' in o)
 run('Word, Excel, PowerPoint e testi in PDF, Filigrana: testo nell’ordine, celle, grafici, PDF/UA, nessuna richiesta esterna', ['node', 'test/bench/office_bench.js'], lambda o: 'tutti verdi' in o)
 run('PDF in PowerPoint modificabile: aperto da LibreOffice e python-pptx, parole al loro posto ≥ 95%, scansione storta ≥ 94%', ['node', 'test/bench/ppt_bench.js'], lambda o: 'tutti verdi' in o)

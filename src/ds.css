@@ -1425,6 +1425,11 @@ details.adv[open] > summary .adv-sum{display:none}
 .vx-view svg{width:100%;height:100%;max-width:none;max-height:none}
 /* animazioni: «Nessuna» ferma tutto, «Leggere» toglie apertura e sfondo (gestiti nel codice) */
 html[data-anim=off] *,html[data-anim=off] *::before,html[data-anim=off] *::after{animation-duration:0s!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:0s!important;scroll-behavior:auto!important}
+/* «Animazioni: No»: gli effetti decorativi non ci sono (non restano fermi a metà): bagliore che gira attorno agli strumenti,
+   satellite sull'orbita dell'attesa e della zona di caricamento, schede che si gonfiano e tremano trascinando un file */
+html[data-anim=off] .bg-flow,html[data-anim=off] .led,html[data-anim=off] .brand-spin .orbit,html[data-anim=off] .brand-spin .sat,html[data-anim=off] .wb-drop .dz-ic::before{display:none!important}
+html[data-anim=off] .intent.dropping,html[data-anim=off] .hf-t.dropping,html[data-anim=off] .drag-near .intent.tl,html[data-anim=off] .drag-near .intent.guide{animation:none!important;transform:none!important}
+html[data-anim=off] .tool-card.dropping .t-drop svg{animation:none!important}
 /* primo avvio: professione e animazioni */
 .ob-modal{padding:0!important;overflow:hidden}
 .ob{display:flex;flex-direction:column;gap:18px;padding:28px}

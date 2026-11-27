@@ -2074,7 +2074,7 @@ async function startQrSepa(stage, files) {
         else if (isPdf(f)) {
           let invs = []; try { invs = await FattureKit.leggiPdf(b, f.name); } catch { }
           if (invs.length === 1) items.push({ file: f.name, pdf: b, inv: invs[0], d: QrPay.fromInvoice(invs[0]) });
-          else { const doc = await openPdf(new File([b], f.name, { type: 'application/pdf' })); const pg = await DocRead.pages(doc, {}); items.push({ file: f.name, pdf: b, d: QrPay.fromText(pg.map(x => x.text).join('\n')) }); }
+          else { const doc = await openPdf(new File([b], f.name, { type: 'application/pdf' })); let wq = null; const pg = await DocRead.pages(doc, { getWorker: async () => { if (typeof Tesseract === 'undefined') await need('tesseract'); return wq ||= await makeOcrWorker(new Set(['ita']), 300); } }).finally(() => { try { wq?.terminate(); } catch { } }); items.push({ file: f.name, pdf: b, d: QrPay.fromText(pg.map(x => x.text).join('\n')) }); }
         }
       } catch (e) { toast(`${f.name}: ${e.message}`, 'error'); }
     }
@@ -2278,6 +2278,8 @@ async function startMisure(stage, files) {
   const st = { tool: 'dist', unit: 'm', n: found.find(Boolean) || 100, dec: 2 };
   scales.forEach((s, i) => { scales[i] = { n: found[i] || st.n }; });
   const meas = []; let draft = null, hover = null, seq = 0;
+  // annulla, ripeti, ripristina tutto (misure aggiunte, tolte, rinominate)
+  const storia = storiaModifiche({ get: () => ({ meas, seq }), set: v => { meas.splice(0, meas.length, ...v.meas); seq = v.seq; sel = null; drawSide(); viewer.refresh(); }, cosa: 'disegno' });
   const mPerPt = p => { const s = scales[p - 1]; return s.mPerPt || s.n * PT_MM / 1000; };
   const dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
   const lenPts = pts => pts.slice(1).reduce((t, q, i) => t + dist(pts[i], q), 0);
@@ -2389,7 +2391,7 @@ async function startMisure(stage, files) {
       if (m > 0) { scales[d.p - 1] = { mPerPt: m / pts, cal: true }; toast(`Scala tarata sulla pagina ${d.p}: ora le misure seguono la tua quota.`); }
       drawSide(); viewer.refresh(); return;
     }
-    d.id = ++seq; d.label = ''; meas.push(d); sel = d.id; drawSide(); viewer.refresh();
+    storia.prima(); d.id = ++seq; d.label = ''; meas.push(d); sel = d.id; drawSide(); viewer.refresh();
   }
   const onKey = e => {
     if (e.target.closest?.('input,textarea')) return;
@@ -2417,8 +2419,8 @@ async function startMisure(stage, files) {
     listEl.replaceChildren(...meas.map(m => { const v = valueOf(m);
       return h('div', { class: 'ms-it' + (m.id === sel ? ' on' : '') },
         h('button', { class: 'ms-go', title: 'Mostra', onclick: () => { sel = m.id; viewer.go(m.p); viewer.refresh(); drawList(); } }, h('b', {}, v.txt), h('span', { class: 'muted small' }, `${K[m.kind]} · p. ${m.p}${v.sub ? ' · ' + v.sub : ''}`)),
-        h('input', { class: 'input ms-name', placeholder: 'Nome (es. Soggiorno)', value: m.label, 'aria-label': 'Nome della misura', oninput: e => { m.label = e.target.value; viewer.refresh(); } }),
-        iconBtn('trash', 'Togli', () => { meas.splice(meas.indexOf(m), 1); drawList(); viewer.refresh(); })); }));
+        h('input', { class: 'input ms-name', placeholder: 'Nome (es. Soggiorno)', value: m.label, 'aria-label': 'Nome della misura', onfocus: () => storia.prima(), oninput: e => { m.label = e.target.value; viewer.refresh(); } }),
+        iconBtn('trash', 'Togli', () => { storia.prima(); meas.splice(meas.indexOf(m), 1); drawList(); viewer.refresh(); })); }));
   }
   const runBtn = h('button', { class: 'btn primary big btn-run', onclick: run, disabled: true }, ic('ruler', 18), 'Salva le misure');
   const st2 = { pdf: true, xlsx: true };
@@ -2426,7 +2428,7 @@ async function startMisure(stage, files) {
     sec('Scala', scaleBox),
     sec('Unità', seg([['m', 'metri'], ['cm', 'centimetri'], ['mm', 'millimetri']], st.unit, v => { st.unit = v; drawList(); viewer.refresh(); })),
     sec('', checkbox('Aggancia agli spigoli del disegno', st.snap, v => { st.snap = v; viewer.refresh(); }, 'Il punto si ferma da solo sugli estremi delle linee e sugli angoli: misure esatte. Tieni premuto Alt per staccarlo.')),
-    sec('Misure', listEl),
+    sec('Misure', h('div', { class: 'row', style: { gap: '4px', flexWrap: 'wrap', marginBottom: '8px' } }, ...storia.bottoni()), listEl),
     sec('Salva', checkbox('PDF con le misure disegnate', st2.pdf, v => { st2.pdf = v; }), checkbox('Excel con l’elenco', st2.xlsx, v => { st2.xlsx = v; })),
   ], [runBtn]);
   const origGo = viewer.go.bind(viewer); viewer.go = n => { origGo(n); drawSide(); };

@@ -2645,9 +2645,85 @@ const FattureKit = (() => {
         return inc;
       }
     }
+    /* scansione (nessun testo nel PDF): la pagina si migliora e si legge con l'OCR del motore condiviso, poi le parole
+       riconosciute, con la loro posizione, passano allo stesso lettore del layout. Il risultato resta «da verificare». */
+    let daScansione = false;
+    if (!r.pagine.some(p => p.items.length)) { const o = await pagineDaScansione(bytes, r.pagine); if (o) { r.pagine = o; daScansione = true; } }
     const list = leggiPdfLayout(r.pagine, nome);
-    list.forEach(inv => { inv.avvisi = pdfVerifica(inv); finalize(inv); inv.origine = "pdf"; inv.pdfBytes = bytes; });
+    list.forEach(inv => { inv.avvisi = pdfVerifica(inv); if (daScansione) inv.avvisi.unshift("letta da una scansione con il riconoscimento del testo (OCR): verifica numeri e importi"); finalize(inv); inv.origine = "pdf"; inv.daScansione = daScansione; inv.pdfBytes = bytes; });
     return list;
+  }
+  /* errori tipici dell'OCR sulle fatture stampate: i filetti letti come «|», la barra di «Cedente/prestatore» letta come
+     «l», zeri letti come «O» nei codici ministeriali (TD01, RF01, MP05, N2.2) e negli importi, «1T» per «IT» */
+  function correggiOcr(t){
+    t = String(t || "").trim().replace(/^[|¦]+|[|¦]+$/g, "").trim();
+    if (!t || /^[|¦!]+$/.test(t)) return "";
+    t = t.replace(/^(cedente|cessionario)[l1I|\\]+(prestatore|committente)/i, "$1/$2");
+    const cod = /^(TD|RF|MP|TP|RT|TC)[O0]?([O0-9IlSsB]{2})$/i.exec(t);
+    if (cod && /\d/.test(cod[2].replace(/[Oo]/g, "0"))) return cod[1].toUpperCase() + cod[2].replace(/[Oo]/g, "0").replace(/[Il]/g, "1").replace(/[Ss]/g, "5").replace(/B/g, "8");
+    if (/^[1lI]T\d{11}$/.test(t)) return "IT" + t.slice(2);
+    if (/^N[O0-9][.,]?[O0-9]?$/.test(t) && /\d/.test(t)) return t.replace(/(?<=.)[Oo]/g, "0").replace(",", ".");
+    if (/\d/.test(t) && /^[\dOo.,%-]+$/.test(t)) return t.replace(/[Oo]/g, "0");
+    return t;
+  }
+  /* filetti delle tabelle in una scansione: tratti scuri lunghi e sottili nell'immagine già raddrizzata (orizzontali almeno
+     il 3% della larghezza, verticali almeno il 2,5% dell'altezza, spessi al più 7 pixel), riportati sulla pagina con P */
+  function filettiDaImmagine(img, P){
+    const hr = [], vr = [];
+    if (!img || !img.g || !img.w) return { hr, vr };
+    const W = img.w, H = img.h, g = img.g, SCURO = 205, LH = Math.max(30, Math.round(W * 0.03)), LV = Math.max(30, Math.round(H * 0.025));
+    const scuro = i => g[i] < SCURO, BUCO = 4;   // un filetto sottile e chiaro, nella scansione, ha buchi di qualche pixel
+    const unisci = (segs, spessore) => {   // tratti su righe (o colonne) vicine e allineate: un filetto solo
+      segs.sort((a, b) => a[1] - b[1] || a[0] - b[0]); const out = [];
+      for (const s of segs) {
+        const u = out.find(o => Math.abs(s[0] - (o.a + o.b) / 2) <= 2.5 && s[1] <= o.x1 + 12 && s[2] >= o.x0 - 12);
+        if (u) { u.a = Math.min(u.a, s[0]); u.b = Math.max(u.b, s[0]); u.x0 = Math.min(u.x0, s[1]); u.x1 = Math.max(u.x1, s[2]); } else out.push({ a: s[0], b: s[0], x0: s[1], x1: s[2] });
+      }
+      return out.filter(o => o.b - o.a + 1 <= spessore);
+    };
+    const corsa = (scuroIn, n) => { const out = []; let i = 0; while (i < n) { if (!scuroIn(i)) { i++; continue; } let j = i, k = i; while (k + 1 < n && k - j <= BUCO) { k++; if (scuroIn(k)) j = k; } out.push([i, j]); i = j + 1; } return out; };
+    const sh = [], sv = [], MIN = 18;
+    for (let y = 0; y < H; y++) { const r = y * W; for (const [a, b] of corsa(x => scuro(r + x), W)) if (b - a >= MIN) sh.push([y, a, b]); }
+    for (let x = 0; x < W; x++) for (const [a, b] of corsa(y => scuro(y * W + x), H)) if (b - a >= MIN) sv.push([x, a, b]);
+    const lunghi = (L, lim) => L.filter(o => o.x1 - o.x0 >= lim);
+    for (const o of lunghi(unisci(sh, 7), LH)) { const yc = (o.a + o.b) / 2, a = P(o.x0, yc), b = P(o.x1, yc); hr.push({ x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), y: (a[1] + b[1]) / 2 }); }
+    for (const o of lunghi(unisci(sv, 7), LV)) { const xc = (o.a + o.b) / 2, a = P(xc, o.x0), b = P(xc, o.x1); vr.push({ y0: Math.min(a[1], b[1]), y1: Math.max(a[1], b[1]), x: (a[0] + b[0]) / 2 }); }
+    return { hr, vr };
+  }
+  async function pagineDaScansione(bytes, pagine){
+    if (typeof makeOcrWorker !== "function" && typeof Later !== "undefined") try { Later.all(); } catch (e) { /* moduli già eseguiti */ }
+    if (typeof makeOcrWorker !== "function" || typeof ocrRecognizePage !== "function" || typeof OCRPrep === "undefined") return null;
+    if (typeof need === "function") await need("tesseract");
+    const doc = await pdfjsLib.getDocument({ data: bytes.slice(), isEvalSupported: false }).promise;
+    let worker = null;
+    try {
+      worker = await makeOcrWorker(new Set(["ita"]), 300);
+      const out = [];
+      for (let p = 1; p <= doc.numPages; p++) {
+        const rec = await ocrRecognizePage(worker, doc, p, { dpi: 300 });
+        // coordinate della pagina già raddrizzata (in punti): le celle di una riga restano alla stessa altezza
+        const sc = rec.r.scale, P = (x, y) => [x / sc, y / sc];
+        const base = pagine[p - 1] || {}, fil = filettiDaImmagine(rec.prep.img, P);
+        // le parole vicine della stessa riga diventano il testo di una cella, senza scavalcare un filetto verticale
+        const items = [];
+        for (const line of rec.data.lines || []) {
+          const ws = (line.words || []).map(w => ({ t: correggiOcr(w.text), c: w.confidence == null ? 100 : w.confidence, b: w.bbox })).filter(w => w.t && w.b && w.c >= 25)
+            .map(w => { const a = P(w.b.x0, w.b.y0), b = P(w.b.x1, w.b.y1); return { s: w.t, x0: a[0], x1: b[0], y0: a[1], y: b[1] }; }).sort((a, b) => a.x0 - b.x0);
+          let cur = null;
+          for (const w of ws) {
+            const h = Math.max(4, w.y - w.y0), yc = (w.y0 + w.y) / 2;
+            const taglio = cur && fil.vr.some(v => v.x > cur.x1 - 0.5 && v.x < w.x0 + 0.5 && v.y0 - 2 <= yc && yc <= v.y1 + 2);
+            if (cur && !taglio && w.x0 - cur.x1 < 0.9 * h) { cur.s += " " + w.s; cur.x1 = w.x1; cur.y = Math.max(cur.y, w.y); cur.y0 = Math.min(cur.y0, w.y0); }
+            else { if (cur) items.push(cur); cur = { s: w.s, x0: w.x0, x1: w.x1, y0: w.y0, y: w.y }; }
+          }
+          if (cur) items.push(cur);
+        }
+        items.forEach(i => { i.h = Math.max(4, i.y - i.y0); i.f = "ocr"; delete i.y0; });
+        out.push({ w: base.w, h: base.h, items, hr: (base.hr || []).concat(fil.hr), vr: (base.vr || []).concat(fil.vr) });
+      }
+      return out.some(x => x.items.length) ? out : null;
+    } catch (e) { console.warn("fattura da scansione", e); return null; }
+    finally { try { await worker?.terminate(); } catch (e) { /* già chiuso */ } try { await doc.destroy(); } catch (e) { /* già chiuso */ } }
   }
   /* allegati della fattura (di solito la copia di cortesia in PDF): nome, tipo, byte */
   function allegati(inv){
@@ -2668,6 +2744,7 @@ const FattureKit = (() => {
     fmt: { eur, qty, price, dt, dtFile, dtDash, nf },
     tabelle: { T_DOC, T_DOC_BREVE, T_NATURA, T_PAG, PAG_FAM, PAG_FAM_NOME }, metodoPagamento, metodoBreve, metodoTitolo, pagChip, SOGLIA_CONTANTI,
     _render: { renderStandard, renderMinisteriale, pdfEsteso },
+    _scansione: { pagineDaScansione, pdfRighe, pdfGruppi, correggiOcr, estraiDocumento },
   };
 })();
 
