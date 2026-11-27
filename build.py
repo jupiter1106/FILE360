@@ -190,6 +190,19 @@ def mappa_sito(out):
         for f in files:
             with contextlib.redirect_stdout(io.StringIO()): m = mappa_dati.tessere(str(f), out / 'mappa' / 'province' / f.stem, pezzo)
             cfg['province'][f.stem.upper()] = {'n': m['n'], 'pezzo': m['pezzo']}
+    elif (ROOT / 'sito' / 'mappa' / 'province').is_dir() and (ROOT / 'sito' / 'index.html').exists():
+        # senza i 1,8 GB di partenza si riusano le province già tagliate del sito pubblicato (stessi pezzi, stessa
+        # configurazione): così una modifica all'app non toglie strade ed edifici dalla mappa
+        import json, re
+        m = re.search(r'window\.OFFICINA_MAPPA=(\{.*?\});', (ROOT / 'sito' / 'index.html').read_text(encoding='utf-8'))
+        old = json.loads(m.group(1)) if m else {}
+        if old.get('province'):
+            def link(a, b):
+                try: __import__('os').link(a, b)
+                except OSError: shutil.copy2(a, b)
+            for pr in old['province']:
+                shutil.copytree(ROOT / 'sito' / 'mappa' / 'province' / pr, out / 'mappa' / 'province' / pr, copy_function=link)
+            cfg['base'] = old.get('base', '/mappa/province/'); cfg['province'] = old['province']
     return cfg
 def netlify():
     """dist/netlify/: la cartella da pubblicare su Netlify (trascinarla in «Deploys»): pagine, codice, motore OCR,

@@ -325,6 +325,8 @@ const ICONS = {
   building:'<rect x="4.5" y="3.5" width="10" height="17" rx="1"/><path d="M14.5 9.5h5v11h-5M8 7.5h3M8 11h3M8 14.5h3M10 20.5v-2.5"/>',
   stamp:'<path d="M9.5 3.5h5l-.8 6.5h3.3a2 2 0 0 1 2 2v2.5H5V12a2 2 0 0 1 2-2h3.3z"/><path d="M5 18h14M7 20.5h10"/>',
   blank:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9 14h6"/>',
+  // un documento che entra nel PDF (Word, Excel, PowerPoint in PDF)
+  pdf:'<path d="M14 3H7a2 2 0 0 0-2 2v4"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M2 12h10"/><path d="m9 9 3 3-3 3"/>',
 };
 function ic(name, size = 20, sw = 1.9) {
   const s = document.createElement('span');
@@ -605,33 +607,45 @@ const Privacy = (() => {
     });
   }
   async function open() {
-    const body = h('div', { class: 'pv-body' });
-    const m = modal([h('h3', {}, 'Privacy e dati sul dispositivo'), body], { width: 620, cls: 'pv-modal' });
+    // tre parti: in alto titolo e chiusura, al centro l'elenco che scorre, in basso le due azioni sempre visibili
+    const body = h('div', { class: 'pd-scroll' }), foot = h('div', { class: 'pd-foot' });
+    let m = null;
+    const head = h('div', { class: 'pd-head' },
+      h('span', { class: 'pd-mark', 'aria-hidden': 'true' }, ic('shield', 20)),
+      h('div', { class: 'pd-ht' }, h('h3', {}, 'Privacy e dati sul dispositivo'),
+        h('p', {}, 'I documenti non vengono mai caricati su internet. Qui sotto trovi quello che resta in questo browser: puoi cancellarlo quando vuoi.')),
+      h('button', { type: 'button', class: 'icon-btn pd-x', title: 'Chiudi', 'aria-label': 'Chiudi', onclick: () => m?.close() }, ic('x', 18)));
+    m = modal([head, body, foot], { width: 600, cls: 'pd-modal' });
     const kb = b => b > 1048576 ? (b / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
     async function draw() {
       const z = await sizes(), c = cfg(), locked = vaultOn() && !key;
-      const row = (title, desc, info, act) => h('div', { class: 'pv-row' }, h('div', { class: 'grow' }, h('div', { class: 'pv-t' }, title), h('div', { class: 'muted small' }, desc)), h('span', { class: 'pv-n small' }, info), act);
-      const del = (label, fn, ok) => h('button', { class: 'btn sm', onclick: async () => { await fn(); toast(ok); draw(); } }, ic('trash', 14), label);
+      const item = (icon, title, desc, info, label, fn, ok) => h('div', { class: 'pd-item' + (info ? '' : ' is-empty') },
+        h('span', { class: 'pd-ic', 'aria-hidden': 'true' }, ic(icon, 17)),
+        h('div', { class: 'pd-txt' }, h('b', {}, title), h('span', {}, desc)),
+        h('div', { class: 'pd-side' }, h('span', { class: 'pd-size' }, info || 'Vuoto'),
+          info ? h('button', { type: 'button', class: 'btn sm ghost pd-del', 'aria-label': `${label}: ${title}`, onclick: async () => { await fn(); toast(ok); draw(); } }, label) : null));
+      const sec = (title, ...kids) => h('section', { class: 'pd-sec' }, h('h4', {}, title), ...kids);
       body.replaceChildren(
-        h('p', { class: 'muted', style: { margin: '0 0 12px' } }, 'I documenti si elaborano solo in questo browser: non vengono mai caricati su internet. Sul dispositivo restano soltanto le cose elencate qui sotto, e puoi cancellarle quando vuoi.'),
-        row('Progetti e versioni', 'I file aperti, le versioni e i risultati, per riprendere il lavoro.', z.projects ? `${z.projects} · ${kb(z.blobBytes)}` : 'vuoto', del('Cancella', clearProjects, 'Progetti cancellati')),
-        row('Registro delle attività', 'Le operazioni fatte, con l’impronta dei file (non il loro contenuto).', z.log ? `${z.log} voci` : 'vuoto', del('Cancella', clearLog, 'Registro cancellato')),
-        row('Dati personali per i moduli', 'Profilo (nome, codice fiscale, IBAN…), valori ricordati, firme e timbri salvati, correzioni imparate, bozza del contratto di affitto.' + (vaultOn() ? (locked ? ' Protetti e bloccati.' : ' Protetti e sbloccati.') : ''), z.personal ? kb(z.personal) : 'vuoto', del('Cancella', async () => clearPersonal(), 'Dati personali cancellati')),
-        row('Preferenze', 'Preferiti, ricette, scelte degli strumenti, ultimo file aperto nel cloud.', z.prefs ? kb(z.prefs) : 'vuoto', del('Cancella', async () => clearPrefs(), 'Preferenze cancellate')),
-        row('Letture in memoria', 'Il testo letto dalle scansioni in questa scheda, per non rileggerlo in ogni strumento. Sparisce chiudendo la scheda.', z.mem ? `${z.mem} pagine` : 'vuoto', del('Svuota', async () => memClear(), 'Memoria svuotata')),
-        h('div', { class: 'pv-sec' }, h('b', {}, 'Cancellazione automatica'),
-          h('div', { class: 'muted small', style: { margin: '2px 0 8px' } }, 'Progetti, lavori da riprendere e registro più vecchi di così si cancellano da soli all’apertura.'),
-          seg([[7, '7 giorni'], [30, '30 giorni'], [90, '90 giorni'], [0, 'Mai']], c.days ?? 90, v => { setCfg({ ...cfg(), days: +v }); toast(+v ? `Cancellazione dopo ${v} giorni` : 'Cancellazione automatica spenta'); })),
-        h('div', { class: 'pv-sec' }, checkbox('Nessuna traccia', !!c.temp, v => { setCfg({ ...cfg(), temp: !!v }); toast(v ? 'Nessuna traccia: tutto si cancella alla chiusura della scheda' : 'I progetti si conservano di nuovo'); }, 'Per i computer condivisi: tutto ciò che salvi (progetti, registro, dati personali, preferenze) si cancella quando chiudi la scheda.')),
-        typeof crypto !== 'undefined' && crypto.subtle ? h('div', { class: 'pv-sec' }, h('b', {}, 'Frase segreta per i dati personali'),
-          h('div', { class: 'muted small', style: { margin: '2px 0 8px' } }, vaultOn() ? 'I dati personali salvati sono cifrati (AES-GCM 256). Senza la frase non si leggono: se la dimentichi, quei dati vanno persi (il resto no).' : 'Cifra i dati personali salvati (AES-GCM 256): senza la frase restano illeggibili, anche per chi usa questo computer.'),
-          h('div', { class: 'row', style: { gap: '8px', flexWrap: 'wrap' } }, ...(vaultOn() ? [
-            locked ? h('button', { class: 'btn sm primary', onclick: async () => { const p = await askPass('Sblocca i dati personali'); if (p == null) return; if (await unlock(p)) { toast('Dati personali sbloccati'); draw(); } else toast('Frase non corretta', 'error'); } }, ic('key', 14), 'Sblocca') : h('button', { class: 'btn sm', onclick: () => { lock(); toast('Dati personali bloccati'); draw(); } }, ic('key', 14), 'Blocca'),
+        sec('Cosa resta su questo dispositivo',
+          h('div', { class: 'pd-list' },
+            item('project', 'Progetti e versioni', 'File aperti, versioni e risultati, per riprendere il lavoro.', z.projects ? `${z.projects} · ${kb(z.blobBytes)}` : '', 'Cancella', clearProjects, 'Progetti cancellati'),
+            item('activity', 'Registro delle attività', 'Le operazioni fatte, con l’impronta dei file (mai il contenuto).', z.log ? `${z.log} voci` : '', 'Cancella', clearLog, 'Registro cancellato'),
+            item('form', 'Dati personali per i moduli', 'Profilo, valori ricordati, firme e timbri, bozza del contratto.' + (vaultOn() ? (locked ? ' Protetti e bloccati.' : ' Protetti.') : ''), z.personal ? kb(z.personal) : '', 'Cancella', async () => clearPersonal(), 'Dati personali cancellati'),
+            item('star', 'Preferenze', 'Preferiti, ricette e scelte degli strumenti.', z.prefs ? kb(z.prefs) : '', 'Cancella', async () => clearPrefs(), 'Preferenze cancellate'),
+            item('ocr', 'Letture in memoria', 'Testo letto dalle scansioni in questa scheda: sparisce chiudendola.', z.mem ? `${z.mem} pagine` : '', 'Svuota', async () => memClear(), 'Memoria svuotata'))),
+        sec('Cancellazione automatica',
+          h('p', { class: 'pd-note' }, 'Progetti e registro più vecchi di così si cancellano da soli all’apertura.'),
+          seg([[7, '7 giorni'], [30, '30 giorni'], [90, '90 giorni'], [0, 'Mai']], c.days ?? 90, v => { setCfg({ ...cfg(), days: +v }); toast(+v ? `Cancellazione dopo ${v} giorni` : 'Cancellazione automatica spenta'); }),
+          h('div', { class: 'pd-check' }, checkbox('Nessuna traccia', !!c.temp, v => { setCfg({ ...cfg(), temp: !!v }); toast(v ? 'Nessuna traccia: tutto si cancella alla chiusura della scheda' : 'I progetti si conservano di nuovo'); }, 'Per i computer condivisi: tutto si cancella quando chiudi la scheda.'))),
+        typeof crypto !== 'undefined' && crypto.subtle ? sec('Frase segreta per i dati personali',
+          h('p', { class: 'pd-note' }, vaultOn() ? 'I dati personali sono cifrati (AES-GCM 256). Se dimentichi la frase, quei dati vanno persi; il resto no.' : 'Cifra i dati personali salvati (AES-GCM 256): senza la frase restano illeggibili.'),
+          h('div', { class: 'pd-acts' }, ...(vaultOn() ? [
+            locked ? h('button', { class: 'btn sm primary', onclick: async () => { const p = await askPass('Sblocca i dati personali'); if (p == null) return; if (await unlock(p)) { toast('Dati personali sbloccati'); draw(); } else toast('Frase non corretta', 'error'); } }, ic('key', 15), 'Sblocca') : h('button', { class: 'btn sm', onclick: () => { lock(); toast('Dati personali bloccati'); draw(); } }, ic('key', 15), 'Blocca'),
             h('button', { class: 'btn sm ghost', onclick: async () => { const p = locked ? await askPass('Frase segreta attuale') : ''; if (p == null) return; if (await unprotect(p)) { toast('Protezione tolta'); draw(); } else toast('Frase non corretta', 'error'); } }, 'Togli la protezione')] : [
-            h('button', { class: 'btn sm primary', onclick: async () => { const p = await askPass('Scegli una frase segreta', { confirm: true }); if (p == null) return; await protect(p); toast('Dati personali protetti'); draw(); } }, ic('key', 14), 'Proteggi con una frase segreta')]))) : null,
-        h('div', { class: 'row', style: { justifyContent: 'space-between', marginTop: '16px', gap: '8px', flexWrap: 'wrap' } },
-          h('button', { class: 'btn danger', onclick: async () => { if (!confirm('Cancellare tutto ciò che file360 tiene in questo browser? Progetti, registro, dati personali e preferenze non si potranno recuperare.')) return; await clearAll(); toast('Tutto cancellato'); draw(); } }, ic('trash', 16), 'Cancella tutto'),
-          h('button', { class: 'btn', onclick: () => m.close() }, 'Chiudi')));
+            h('button', { class: 'btn sm', onclick: async () => { const p = await askPass('Scegli una frase segreta', { confirm: true }); if (p == null) return; await protect(p); toast('Dati personali protetti'); draw(); } }, ic('key', 15), 'Proteggi con una frase segreta')]))) : null);
+      foot.replaceChildren(
+        h('button', { class: 'btn ghost pd-all', onclick: async () => { if (!confirm('Cancellare tutto ciò che file360 tiene in questo browser? Progetti, registro, dati personali e preferenze non si potranno recuperare.')) return; await clearAll(); toast('Tutto cancellato'); draw(); } }, ic('trash', 16), 'Cancella tutto'),
+        h('button', { class: 'btn primary', onclick: () => m.close() }, 'Fatto'));
     }
     draw();
   }
@@ -4088,7 +4102,7 @@ const Drawer = (() => {
         h('p', {}, ic('disk', 16), space),
         h('p', {}, ic('keyboard', 16), h('span', {}, 'Premi ', h('kbd', {}, '?'), ' per tutte le scorciatoie da tastiera'))),
       h('section', { class: 'dr-sec dr-set', 'aria-label': 'Impostazioni' }, h('h3', {}, 'Impostazioni'),
-        row(Prefs.profile()?.[2] || 'user', 'Il tuo lavoro', Prefs.profile() ? Prefs.profile()[1] + ' · cambia' : 'Scegli: metto in cima i tuoi strumenti', () => { close(); Onboard.show({ only: 'prof' }); }),
+        row(Prefs.profile()?.[2] || 'user', 'Il tuo lavoro', Prefs.profile() ? Prefs.profile()[1] + ' · cambia' : 'Facoltativo: metto in cima i tuoi strumenti', () => { close(); Onboard.show(); }),
         h('div', { class: 'dr-theme dr-anim', role: 'radiogroup', 'aria-label': 'Animazioni' }, h('span', { class: 'dr-lab' }, 'Animazioni'), [['full', 'Complete'], ['light', 'Leggere'], ['off', 'Nessuna']].map(([v, l]) =>
           h('button', { type: 'button', role: 'radio', 'aria-checked': String(Prefs.anim === v), class: 'dr-chip' + (Prefs.anim === v ? ' on' : ''), onclick: () => { Prefs.set({ anim: v, asked: true }); build(); } }, l)))),
       h('div', { class: 'dr-foot' },
@@ -4352,31 +4366,20 @@ const Prefs = (() => {
   };
 })();
 const Onboard = (() => {
-  // passo 1: che lavoro fai; passo 2: quanto movimento. Si può saltare; dal menu si torna qui
-  function show({ only = null } = {}) {
-    let prof = Prefs.prof, anim = Prefs.anim, m = null;
-    const done = () => { Prefs.set({ prof, anim, asked: true }); m?.close(); if (!routeId()) showHome(); if (typeof Drawer !== 'undefined') Drawer.refresh?.(); };
-    const stepProf = () => [h('div', { class: 'ob-head' }, h('span', { class: 'ob-step' }, only ? 'Il tuo lavoro' : 'Passo 1 di 2'), h('h2', {}, 'Che lavoro fai?'),
-        h('p', { class: 'muted' }, 'Metto in cima gli strumenti che ti servono di più e riordino il resto. Tutti gli strumenti restano a portata di mano; puoi cambiare idea dal menu ☰.')),
-      h('div', { class: 'ob-grid', role: 'radiogroup', 'aria-label': 'Professione' }, PROFILES.map(([id, label, icn]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(prof === id), class: 'ob-p' + (prof === id ? ' on' : ''), onclick: () => { prof = id; if (only) done(); else draw(stepAnim); } }, ic(icn, 22), h('span', {}, label)))),
-      h('div', { class: 'ob-foot' }, h('button', { class: 'btn ghost', onclick: () => { if (only) { m.close(); return; } prof = null; draw(stepAnim); } }, only ? 'Annulla' : 'Salta'))];
-    const stepAnim = () => [h('div', { class: 'ob-head' }, h('span', { class: 'ob-step' }, only ? 'Animazioni' : 'Passo 2 di 2'), h('h2', {}, 'Quanto movimento ti piace?'),
-        h('p', { class: 'muted' }, 'Puoi cambiarlo quando vuoi dal menu ☰.')),
-      h('div', { class: 'ob-anim', role: 'radiogroup', 'aria-label': 'Animazioni' }, [['full', 'Completo', 'Apertura animata, documenti che scorrono piano sullo sfondo, piccoli effetti.'], ['light', 'Leggero', 'Solo i piccoli effetti: niente apertura animata né sfondo in movimento.'], ['off', 'Nessuno', 'Tutto fermo: per chi il movimento disturba, o per risparmiare batteria.']]
-        .map(([v, l, d]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(anim === v), class: 'ob-a' + (anim === v ? ' on' : ''), onclick: e => { anim = v; e.currentTarget.parentNode.querySelectorAll('.ob-a').forEach(b => { const on = b === e.currentTarget; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }); document.documentElement.dataset.anim = v; } }, h('b', {}, l), h('span', {}, d)))),
-      h('div', { class: 'ob-foot' }, only ? null : h('button', { class: 'btn ghost', onclick: () => draw(stepProf) }, ic('left', 16), 'Indietro'), h('button', { class: 'btn primary', onclick: done }, only ? 'Fatto' : 'Inizia'))];
-    const box = h('div', { class: 'ob' });
-    const draw = f => { box.replaceChildren(...f()); box.querySelector('.ob-p.on, .ob-a.on, .ob-p, .btn.primary')?.focus(); };
-    draw(only === 'anim' ? stepAnim : stepProf);
-    m = modal([box], { width: 760, cls: 'ob-modal', label: 'Benvenuto in file360', onClose: () => { if (!Prefs.asked) Prefs.set({ asked: true }); Prefs.apply(); } });
+  // la scelta del lavoro: facoltativa, solo dal menu ☰ (nessuna domanda all'avvio). Le animazioni si scelgono nel menu.
+  function show() {
+    let m = null;
+    const pick = id => { Prefs.set({ prof: id, asked: true }); m?.close(); if (!routeId()) showHome(); if (typeof Drawer !== 'undefined') Drawer.refresh?.(); };
+    const cur = Prefs.prof;
+    const box = h('div', { class: 'ob' },
+      h('div', { class: 'ob-head' }, h('h2', {}, 'Il tuo lavoro'),
+        h('p', { class: 'muted' }, 'Facoltativo: metto in cima gli strumenti che ti servono di più. Tutti gli altri restano a portata di mano.')),
+      h('div', { class: 'ob-grid', role: 'radiogroup', 'aria-label': 'Lavoro' }, PROFILES.map(([id, label, icn]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(cur === id), class: 'ob-p' + (cur === id ? ' on' : ''), onclick: () => pick(id) }, ic(icn, 22), h('span', {}, label)))),
+      h('div', { class: 'ob-foot' }, cur ? h('button', { class: 'btn ghost', onclick: () => pick(null) }, 'Nessuna preferenza') : null, h('button', { class: 'btn', onclick: () => m.close() }, 'Annulla')));
+    m = modal([box], { width: 760, cls: 'ob-modal', label: 'Il tuo lavoro' });
+    box.querySelector('.ob-p.on, .ob-p')?.focus();
   }
-  // al primo avvio, finita l'apertura animata, solo in home e non durante i test automatici
-  function maybe() {
-    if (Prefs.asked || (navigator.webdriver && !window.__forceOnboarding) || window.__oauthPopup) return;
-    const go = () => { if (!routeId() && !document.querySelector('.scrim:not(.busy)')) show(); };
-    setTimeout(go, document.getElementById('intro') ? 3100 : 700);
-  }
-  return { show, maybe };
+  return { show };
 })();
 // in home, sotto il riquadro del file: gli strumenti utili a tutti, e quelli del tuo lavoro
 function homeQuick() {
@@ -4384,10 +4387,9 @@ function homeQuick() {
     onclick: e => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button) return; e.preventDefault(); Flow.go(id); } }, h('span', { class: 'qk-ic', 'aria-hidden': 'true' }, ic(t.icon, 16)), h('span', { class: 'qk-n' }, t.short)); dropOpens(a, id); return a; };
   const P = Prefs.profile();
   return h('div', { class: 'home-quick2' },
-    P && P[3].length ? h('section', { class: 'pf-block pf-you', 'aria-label': 'Per il tuo lavoro' }, h('h3', {}, h('span', {}, 'Per il tuo lavoro'), h('b', {}, P[1]), h('button', { class: 'linkish pf-ch', onclick: () => Onboard.show({ only: 'prof' }) }, 'Cambia')), h('div', { class: 'qk-l' }, P[3].map(tile)),
+    P && P[3].length ? h('section', { class: 'pf-block pf-you', 'aria-label': 'Per il tuo lavoro' }, h('h3', {}, h('span', {}, 'Per il tuo lavoro'), h('b', {}, P[1])), h('div', { class: 'qk-l' }, P[3].map(tile)),
       h('button', { class: 'linkish pf-allt', onclick: () => document.querySelector('.intents')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, 'Tutti gli strumenti, per categoria →')) : null,
-    h('section', { class: 'pf-block pf-all', 'aria-label': 'Per tutti, ogni giorno' }, h('h3', {}, h('span', {}, 'Per tutti, ogni giorno')), h('div', { class: 'qk-l' }, UNIVERSAL.map(tile))),
-    !P ? h('button', { class: 'linkish pf-ask', onclick: () => Onboard.show({ only: 'prof' }) }, ic('user', 15), 'Dimmi che lavoro fai: metto in cima i tuoi strumenti') : null);
+    h('section', { class: 'pf-block pf-all', 'aria-label': 'Per tutti, ogni giorno' }, h('h3', {}, h('span', {}, 'Per tutti, ogni giorno')), h('div', { class: 'qk-l' }, UNIVERSAL.map(tile))));
 }
 
 function showHome() {
@@ -5139,7 +5141,6 @@ function initApp() {
   buildRail();
   route(); lastUrl = location.href;
   warmLibs();
-  Onboard.maybe();
 }
 
 /* =====================================================================
@@ -15521,10 +15522,10 @@ const Promo = (() => {
 .pv-ok{width:22px;height:22px;border-radius:50%;background:#16A34A;color:#fff;display:grid;place-items:center;box-shadow:0 4px 10px rgba(22,163,74,.4)}
 .pv-dl{display:flex;align-items:center;gap:5px;background:var(--hue);color:#fff;border-radius:99px;padding:6px 11px;font:750 10px/1 var(--font);box-shadow:0 6px 14px color-mix(in srgb,var(--hue) 40%,transparent);white-space:nowrap}
 .pv-cur{width:18px;height:18px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35));z-index:9;left:0;top:0}
-.pv-row{display:grid;font:600 7px/1 var(--font);color:#333;background:#fff}
-.pv-row span{border-right:1px solid #E3E6EA;border-bottom:1px solid #E3E6EA;padding:3.5px 4px;white-space:nowrap;overflow:hidden}
-.pv-row span.n{text-align:right;font-variant-numeric:tabular-nums}
-.pv-row.h span{background:#17181C;color:#fff;font-weight:800;border-color:#2c2e35}
+.pv-scene .pv-row{display:grid;font:600 7px/1 var(--font);color:#333;background:#fff}
+.pv-scene .pv-row span{border-right:1px solid #E3E6EA;border-bottom:1px solid #E3E6EA;padding:3.5px 4px;white-space:nowrap;overflow:hidden}
+.pv-scene .pv-row span.n{text-align:right;font-variant-numeric:tabular-nums}
+.pv-scene .pv-row.h span{background:#17181C;color:#fff;font-weight:800;border-color:#2c2e35}
 .pv-sheet{border-radius:6px;overflow:hidden;box-shadow:0 6px 16px rgba(20,20,30,.16)}
 .pv-spin{display:block;width:12px;height:12px;border-radius:50%;border:2px solid color-mix(in srgb,var(--hue) 25%,#fff);border-top-color:var(--hue);animation:pvSpin .7s linear infinite}
 .pv-cap{position:relative;height:40px;margin:10px 4px 0}

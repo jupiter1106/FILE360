@@ -1036,10 +1036,13 @@ test('Oscura: clic sulle parole (trascinando più parole, di nuovo per toglierle
 test('Privacy: il bollino apre il centro privacy; frase segreta (cifrati a riposo, bloccati alla riapertura), scadenza automatica, nessuna traccia, cancella tutto', async b => {
   const { page } = await open(b, 'desk1440');
   await page.evaluate(() => { localStorage.setItem('officina-profilo', JSON.stringify({ nome: 'Prova', cf: 'PRVPRV80A01H501X' })); localStorage.setItem('officina-favs', '["unisci"]'); });
-  await page.locator('.privacy').click(); await page.waitForSelector('.pv-modal');
-  const nRows = await page.waitForFunction(() => document.querySelectorAll('.pv-modal .pv-row').length >= 5, null, { timeout: 10000 }).then(() => page.locator('.pv-modal .pv-row').count()).catch(() => page.locator('.pv-modal .pv-row').count());
+  await page.locator('.privacy').click(); await page.waitForSelector('.pd-modal');
+  const nRows = await page.waitForFunction(() => document.querySelectorAll('.pd-modal .pd-item').length >= 5, null, { timeout: 10000 }).then(() => page.locator('.pd-modal .pd-item').count()).catch(() => page.locator('.pd-modal .pd-item').count());
   ok(nRows === 5, 'righe del centro privacy: ' + nRows);
-  await page.locator('.pv-modal .btn', { hasText: 'Proteggi con una frase segreta' }).click();
+  // proporzioni: la finestra sta nello schermo e le righe non prendono stili di altre parti dell'app
+  const geo = await page.evaluate(() => { const m = document.querySelector('.pd-modal').getBoundingClientRect(), s = getComputedStyle(document.querySelector('.pd-size')); return { top: m.top, bottom: m.bottom, vh: innerHeight, border: s.borderRightStyle }; });
+  ok(geo.top >= 0 && geo.bottom <= geo.vh && geo.border === 'none', 'centro privacy sproporzionato: ' + JSON.stringify(geo));
+  await page.locator('.pd-modal .btn', { hasText: 'Proteggi con una frase segreta' }).click();
   const pw = page.locator('.modal input[type=password]'); await pw.nth(0).fill('corta'); await pw.nth(1).fill('corta'); await page.locator('.modal .btn', { hasText: 'Conferma' }).click();
   ok(/8 caratteri/.test(await page.locator('.modal').last().innerText()), 'frase troppo corta accettata');
   await pw.nth(0).fill('frase-di-prova-1'); await pw.nth(1).fill('frase-di-prova-1'); await page.locator('.modal .btn', { hasText: 'Conferma' }).click(); await page.waitForTimeout(1500);
@@ -1062,8 +1065,8 @@ test('Privacy: il bollino apre il centro privacy; frase segreta (cifrati a ripos
   ok(left.favs === null && left.prog === 0, 'nessuna traccia: ' + JSON.stringify(left));
   // cancella tutto
   await page.evaluate(() => { Privacy.setCfg({}); localStorage.setItem('officina-favs', '["x"]'); });
-  await page.locator('.privacy').click(); await page.waitForSelector('.pv-modal'); page.once('dialog', d => d.accept());
-  await page.locator('.pv-modal .btn', { hasText: 'Cancella tutto' }).click(); await page.waitForTimeout(600);
+  await page.locator('.privacy').click(); await page.waitForSelector('.pd-modal'); page.once('dialog', d => d.accept());
+  await page.locator('.pd-modal .btn', { hasText: 'Cancella tutto' }).click(); await page.waitForTimeout(600);
   ok(await page.evaluate(() => localStorage.getItem('officina-favs')) === null, 'cancella tutto non cancella le preferenze');
   ok(page.errs.length === 0, page.errs.join(' | '));
 });

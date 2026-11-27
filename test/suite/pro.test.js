@@ -164,17 +164,22 @@ test('immagine in SVG: il timbro diventa vettoriale senza macchie; un clic togli
   const png = await page.evaluate(async () => { const o = [...document.querySelectorAll('.modal.res')].pop().innerText; return /SVG|svg/.test(o) && /png/i.test(o); });
   ok(png, 'mancano SVG e PNG');
 });
-test('primo avvio: professione e animazioni; la home mette in cima gli strumenti del mestiere; si cambia dal menu', async b => {
-  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } }); await ctx.addInitScript(() => { window.__forceOnboarding = true; });
-  const page = await ctx.newPage(); await page.goto(APP); await page.waitForSelector('.ob', { timeout: 10000 });
-  await page.locator('.ob-p', { hasText: 'Studente' }).click(); await page.locator('.ob-a', { hasText: 'Nessuno' }).click(); await page.locator('.ob .btn.primary').click(); await page.waitForTimeout(500);
-  const r = await page.evaluate(() => ({ anim: document.documentElement.dataset.anim, you: [...document.querySelectorAll('.pf-you .qk')].map(a => a.dataset.id).join(), all: document.querySelectorAll('.pf-all .qk').length, live: document.querySelectorAll('#brand-logo animateMotion').length }));
-  ok(r.anim === 'off' && r.you === 'tesi,conta,migliora,comprimi,pdfa,impagina' && r.all === 8, JSON.stringify(r));
+test('nessuna domanda all’avvio: lavoro e animazioni si scelgono solo dal menu; la home mette in cima gli strumenti del mestiere', async b => {
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await ctx.newPage(); await page.goto(APP); await page.waitForSelector('.intent'); await page.waitForTimeout(4000);
+  ok(await page.locator('.ob, .modal').count() === 0, 'all’avvio compare ancora una domanda');
+  ok(!/che lavoro fai/i.test(await page.locator('#main').innerText()), 'la home chiede ancora che lavoro fai');
+  ok(await page.evaluate(() => typeof ICONS.pdf === 'string' && ICONS.pdf.length > 20), 'manca l’icona di «Word, Excel, PowerPoint in PDF»');
+  await page.click('#menu-btn'); await page.waitForSelector('.dr-set');
+  await page.locator('.dr-anim .dr-chip', { hasText: 'Nessuna' }).click();
+  ok(await page.evaluate(() => document.documentElement.dataset.anim) === 'off', 'animazioni dal menu');
+  await page.locator('.dr-set .dr-row').click(); await page.waitForSelector('.ob-p');
+  await page.locator('.ob-p', { hasText: 'Studente' }).click(); await page.waitForTimeout(500);
+  const r = await page.evaluate(() => ({ you: [...document.querySelectorAll('.pf-you .qk')].map(a => a.dataset.id).join(), all: document.querySelectorAll('.pf-all .qk').length }));
+  ok(r.you === 'tesi,conta,migliora,comprimi,pdfa,impagina' && r.all === 8, JSON.stringify(r));
   await page.reload(); await page.waitForSelector('.intent'); await page.waitForTimeout(900);
   ok(await page.locator('.ob').count() === 0 && await page.evaluate(() => document.documentElement.dataset.anim) === 'off', 'la scelta non resta');
   await page.click('#menu-btn'); await page.waitForSelector('.dr-set');
-  await page.locator('.dr-anim .dr-chip', { hasText: 'Complete' }).click();
-  ok(await page.evaluate(() => document.documentElement.dataset.anim) === 'full', 'animazioni dal menu');
   await page.locator('.dr-set .dr-row').click(); await page.waitForSelector('.ob-p');
   await page.locator('.ob-p', { hasText: 'Avvocato' }).click(); await page.waitForTimeout(400);
   ok((await page.evaluate(() => [...document.querySelectorAll('.pf-you .qk')].map(a => a.dataset.id)))[0] === 'conforme', 'il cambio di professione non riordina');

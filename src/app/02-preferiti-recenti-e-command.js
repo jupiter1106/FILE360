@@ -478,7 +478,6 @@ function initApp() {
   buildRail();
   route(); lastUrl = location.href;
   warmLibs();
-  Onboard.maybe();
 }
 
 /* =====================================================================
