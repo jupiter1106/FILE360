@@ -4402,4 +4402,7 @@ html[data-anim=off] .pa-spin{animation:none;border-top-color:var(--pa)}
 .pa-codebox{display:flex;flex-direction:column;gap:var(--s-2);margin-top:var(--s-2)}
 .pa-netcode{display:block;padding:var(--s-3);border-radius:var(--r-lg);background:var(--surface);border:1px solid var(--line);font:700 22px/28px var(--mono);letter-spacing:.06em;text-align:center;user-select:all}
 .pa-codebox details ul{margin:6px 0;padding-left:var(--s-5)}
+.pa-ip{display:flex;flex-direction:column;gap:6px}
+.pa-ip summary{cursor:pointer;font-weight:600;color:var(--ink-2)}
+.pa-ip p{margin:6px 0}
 

@@ -24,6 +24,12 @@ Dopo 12 secondi il telefono legge le statistiche del collegamento e dice la caus
 
 Nei primi due casi il telefono mostra un **codice di rete di 12 caratteri** (IPv4, porta e voce del QR, con un controllo). Per renderlo visibile, l'indirizzo vero si legge con il permesso della fotocamera attivo. Scritto sul computer in «Il telefono non si collega?», il codice fa bussare il computer per primo verso il telefono. L'uscita del computer apre la strada anche nel suo firewall, e il telefono impara l'indirizzo del computer da chi bussa, senza bisogno del nome «.local». Lo stesso codice compare, su richiesta, anche al primo collegamento.
 
+### Indirizzo del computer scritto una volta
+
+I browser nascondono l'indirizzo locale dietro un nome «.local» e non lo rivelano nemmeno dopo il collegamento: le statistiche mostrano l'indirizzo dell'altra parte come «redacted-ip.invalid». Se la rete non lascia risolvere quei nomi (capita nelle reti d'ufficio), il codice di rete servirebbe a ogni collegamento.
+
+Per evitarlo, nel riquadro «Il telefono chiede sempre il codice?» si scrive una volta l'indirizzo IP del computer. Il QR lo aggiunge agli indirizzi, con le porte dei candidati (al massimo due), e il telefono lo prova insieme agli altri. Dopo un collegamento fatto con il codice, il programma suggerisce questa impostazione. Prova: telefono che non risolve «.local», collegato solo inquadrando in meno di 100 ms.
+
 ## Trasferimento
 
 Canale dati negoziato (id 0). Ogni file viaggia così:
