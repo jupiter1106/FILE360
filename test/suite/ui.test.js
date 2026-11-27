@@ -1500,6 +1500,66 @@ test('Analisi di un contratto ricevuto: il contratto corretto non ha segnalazion
   ok(await p2.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'la pagina scorre in orizzontale al telefono');
   ok(page.errs.length === 0 && p2.errs.length === 0, [...page.errs, ...p2.errs].join(' | '));
 });
+test('Passa file: il telefono inquadra il QR, si abbina con il link, i file passano identici nei due sensi; poi basta il QR; il risultato di uno strumento si manda al telefono; si apre in un altro strumento senza perdere il collegamento', async b => {
+  const { page: pc } = await open(b, 'desk1440'); const { page: tel } = await open(b, 'iphoneSE');
+  const APPURL = pc.url().split('#')[0];
+  await pc.evaluate(() => { location.hash = 'passa'; }); await pc.waitForSelector('.pa-qr-img svg', { timeout: 20000 });
+  const url1 = await pc.getAttribute('.pa-qr-img', 'data-url');
+  ok(url1.length < 200 && /#c=/.test(url1), 'QR troppo lungo o senza dati: ' + url1.length);
+  await tel.goto(APPURL + '#' + url1.split('#')[1]); await tel.waitForSelector('.pa-abb', { timeout: 20000 });
+  ok(/Primo collegamento/.test(await tel.locator('.pa-msg').innerText()), 'il telefono nuovo non chiede l’abbinamento');
+  const link = await tel.evaluate(() => Passa.linkAbbinamento());
+  await pc.fill('.pa-abb-in .input', link); await pc.locator('.pa-abb-in button', { hasText: 'Abbina' }).click();
+  await pc.waitForSelector('.pa-stato', { timeout: 20000 }); await tel.waitForSelector('.pa-stato', { timeout: 20000 }); await pc.waitForTimeout(400);
+  const sas = t => (/Controllo (\d\d-\d\d)/.exec(t) || [])[1];
+  const sPc = sas(await pc.locator('.pa-stato').innerText()), sTel = sas(await tel.locator('.pa-stato').innerText());
+  ok(sPc && sPc === sTel, `codici di controllo diversi: ${sPc} / ${sTel}`);
+  await pc.locator('.pa-conf button', { hasText: 'Sì, coincide' }).click();
+  // dal telefono al computer
+  await tel.locator('.pa-main input[type=file]:not([capture])').setInputFiles(fx('foto-documento.jpg'));
+  await pc.waitForSelector('.pa-it.in .au-chip.ok', { timeout: 30000 });
+  ok(/foto-documento\.jpg/.test(await pc.locator('.pa-it.in').first().innerText()) && /arrivato, identico/.test(await pc.locator('.pa-it.in').first().innerText()), 'file non arrivato identico');
+  // un risultato qualsiasi si manda al telefono
+  await pc.evaluate(() => showResult([{ name: 'risultato.pdf', bytes: new Uint8Array(200000).fill(3), type: 'application/pdf' }], { title: 'Pronto' }));
+  await pc.waitForSelector('.res-passa'); await pc.locator('.res-passa').first().click(); await pc.keyboard.press('Escape');
+  await tel.waitForSelector('.pa-it.in .au-chip.ok', { timeout: 30000 });
+  ok(/risultato\.pdf/.test(await tel.locator('.pa-list').innerText()), 'il risultato non è arrivato al telefono');
+  // apri in un altro strumento: il collegamento resta (pastiglia), e si torna indietro
+  await pc.locator('.pa-it.in .pa-open button', { hasText: 'Immagini' }).first().click(); await pc.waitForSelector('.pa-pill', { timeout: 10000 });
+  await pc.locator('.pa-pill').click(); await pc.waitForSelector('.pa-stato', { timeout: 10000 });
+  // seconda volta: il QR basta
+  await pc.locator('.pa-stato button', { hasText: 'Scollega' }).click(); await pc.waitForSelector('.pa-qr-img svg', { timeout: 20000 }); await tel.waitForSelector('.pa-big', { timeout: 20000 });
+  const url2 = await pc.getAttribute('.pa-qr-img', 'data-url'); const t0 = Date.now();
+  await tel.goto(APPURL + '#' + url2.split('#')[1]); await tel.waitForSelector('.pa-stato', { timeout: 15000 }); await pc.waitForSelector('.pa-stato', { timeout: 15000 });
+  ok(Date.now() - t0 < 5000, 'secondo collegamento lento: ' + (Date.now() - t0) + ' ms');
+  ok(!(await pc.locator('.pa-conf').count()), 'chiede di nuovo la conferma del telefono già confermato');
+  ok(await tel.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'il telefono scorre in orizzontale');
+  ok(pc.errs.length === 0 && tel.errs.length === 0, [...pc.errs, ...tel.errs].join(' | '));
+});
+test('Passa file: il telefono legge il QR con la fotocamera (in un altro browser) e l’immagine di abbinamento si trascina sul computer', async b => {
+  const fs = require('fs'), os = require('os'), path = require('path'); const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'passa-'));
+  let b2 = null;
+  try {
+    const { page: pc } = await open(b, 'desk1440'); await pc.evaluate(() => { location.hash = 'passa'; }); await pc.waitForSelector('.pa-qr-img svg', { timeout: 20000 });
+    await pc.locator('.pa-qr-img').screenshot({ path: path.join(dir, 'qr.png') });
+    require('child_process').execFileSync('python3', ['-c', `
+from PIL import Image
+q=Image.open('${dir}/qr.png').convert('L'); W,H=1280,720; s=560; q=q.resize((s,s)); bg=Image.new('L',(W,H),90); bg.paste(q,((W-s)//2,(H-s)//2))
+y=bg.tobytes(); u=bytes([128])*((W//2)*(H//2)); f=open('${dir}/qr.y4m','wb'); f.write(b'YUV4MPEG2 W%d H%d F10:1 Ip A1:1 C420jpeg\\n'%(W,H))
+for i in range(20): f.write(b'FRAME\\n'+y+u+u)
+f.close()`]);
+    b2 = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--use-file-for-fake-video-capture=' + path.join(dir, 'qr.y4m')] });
+    const { page: tel, ctx } = await open(b2, 'iphoneSE'); await ctx.grantPermissions(['camera']);
+    await tel.evaluate(() => { location.hash = 'passa'; }); await tel.waitForSelector('.pa-big', { timeout: 20000 });
+    await tel.locator('.pa-big').click(); await tel.waitForSelector('.pa-abb', { timeout: 20000 });
+    // l'immagine di abbinamento del telefono, trascinata (qui: scelta) sul computer
+    const img = await tel.evaluate(async () => { const f = await Passa.immagineAbbinamento(); const u = new Uint8Array(await f.arrayBuffer()); let s = ''; for (const x of u) s += String.fromCharCode(x); return btoa(s); });
+    fs.writeFileSync(path.join(dir, 'abbina.png'), Buffer.from(img, 'base64'));
+    await pc.locator('.pa-abb input[type=file]').setInputFiles(path.join(dir, 'abbina.png'));
+    await tel.waitForSelector('.pa-stato', { timeout: 30000 }); await pc.waitForSelector('.pa-stato', { timeout: 30000 });
+    ok(pc.errs.length === 0 && tel.errs.length === 0, [...pc.errs, ...tel.errs].join(' | '));
+  } finally { await b2?.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
 (async () => {
   const only = process.argv[2]; const browser = await chromium.launch(); let fail = 0;
   for (const [name, fn] of T) { if (only && !name.includes(only)) continue; const t0 = Date.now(); try { await fn(browser); await require('../lib').closeAll(); console.log('  ✓', name, `(${Date.now() - t0} ms)`); } catch (e) { await require('../lib').closeAll(); fail++; console.log('  ✗', name, '\n      ', String(e.message).split('\n')[0]); } for (const c of browser.contexts()) await c.close(); }

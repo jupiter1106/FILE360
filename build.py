@@ -66,7 +66,7 @@ def lib_blocco(nome, files):
 # moduli di un solo strumento: Analisi di vendite e acquisti (con la mappa), Contratti, Rileva AI (con il modello statistico)
 def vendite_lib():
     # le coordinate dei Comuni (geo-it.js) servono solo alle mappe di vendite e acquisti: stanno nel loro blocco
-    return lib_blocco('vendite', ['geo-it.js', 'mappa.js', 'vendite.js']) + lib_blocco('contratti', ['contratti.js']) + lib_blocco('rilevaai', ['rilevaai.js', 'rilevaai-modello.js']) + lib_blocco('incassi', ['incassi.js']) + lib_blocco('autentica', ['autentica.js']) + lib_blocco('leggicontratto', ['leggicontratto.js'])
+    return lib_blocco('vendite', ['geo-it.js', 'mappa.js', 'vendite.js']) + lib_blocco('contratti', ['contratti.js']) + lib_blocco('rilevaai', ['rilevaai.js', 'rilevaai-modello.js']) + lib_blocco('incassi', ['incassi.js']) + lib_blocco('autentica', ['autentica.js']) + lib_blocco('leggicontratto', ['leggicontratto.js']) + lib_blocco('passa', ['vendor/jsqr-1.4.0.txt', 'passa.js'])   # jsQR (Apache 2.0): libreria esterna, fuori dai moduli del progetto
 def mappa_lib():
     import json
     V = S / 'vendor' / 'mappa'
