@@ -170,6 +170,8 @@ test('nessuna domanda all’avvio: lavoro e animazioni si scelgono solo dal menu
   ok(await page.locator('.ob, .modal').count() === 0, 'all’avvio compare ancora una domanda');
   ok(!/che lavoro fai/i.test(await page.locator('#main').innerText()), 'la home chiede ancora che lavoro fai');
   ok(await page.evaluate(() => typeof ICONS.pdf === 'string' && ICONS.pdf.length > 20), 'manca l’icona di «Word, Excel, PowerPoint in PDF»');
+  const orb = () => page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.wb-drop .dz-ic'), '::before').offsetDistance) || 0);
+  const o1 = await orb(); await page.waitForTimeout(800); ok(Math.abs(await orb() - o1) > 1, 'l’orbita di «Trascina qui il file» non gira');
   await page.click('#menu-btn'); await page.waitForSelector('.dr-set');
   ok((await page.locator('.dr-anim .dr-chip').allInnerTexts()).join() === 'Sì,No', 'le animazioni non sono una scelta sì/no');
   const prima = await page.evaluate(() => ({ tela: !!document.querySelector('canvas.bg-flow'), logo: !!document.querySelector('svg.logo-live') }));
