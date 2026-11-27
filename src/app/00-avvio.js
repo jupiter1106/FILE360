@@ -40,7 +40,9 @@ const Later = {
   all() { while (this.next()); },
   // i blocchi fino a quello che definisce «name» (l'ordine conta: i blocchi dopo possono usare quelli prima); il resto a breve
   // moduli di un solo strumento in un blocco a parte (data-lib): si eseguono quando lo strumento si apre, dopo gli altri blocchi
-  LIBS: { startVendite: 'vendite', Vendite: 'vendite', Mappa: 'vendite' },
+  LIBS: { startVendite: 'vendite', Vendite: 'vendite', Mappa: 'vendite', startContratto: 'contratti', Contratti: 'contratti', startRilevaAI: 'rilevaai', RilevaAI: 'rilevaai' },
+  // esegue il blocco dello strumento se non è ancora stato eseguito (si può chiamare quante volte si vuole)
+  serve(name) { if (this.LIBS[name]) this.lib(this.LIBS[name]); },   // il blocco si esegue una volta sola (poi non c'è più)
   lib(nome) { const el = document.querySelector(`script[type="text/x-officina-later"][data-lib="${nome}"]`); if (!el) return; this.all(); this._run(el, false); },
   need(name) { if (this.LIBS[name] && !(name in globalThis)) { this.lib(this.LIBS[name]); return; } const b = this._blocks(); const k = name ? b.findIndex(el => (' ' + (el.dataset.defs || '') + ' ').includes(' ' + name + ' ')) : -1; if (k < 0) { if (name && !(name in globalThis)) this.all(); else { const go = () => { if (this.next()) setTimeout(go, 0); }; setTimeout(go, 0); } return; } /* non trovata nei blocchi né già definita: si esegue tutto; già definita: il resto subito dopo */ while (this.i <= k && this.next()); const go = () => { if (this.next()) setTimeout(go, 0); }; setTimeout(go, 0); },
   // sito: scarica in sottofondo il codice dei blocchi (si esegue sempre e solo quando serve)
@@ -1798,34 +1800,54 @@ function iconBtn(icon, title, onclick, cls = 'icon-btn') {
 /* annulla, ripeti e «ripristina tutto» per gli strumenti che modificano. get() dà lo stato (copiabile in JSON), set(s) lo
    rimette e ridisegna. Si chiama prima() PRIMA di ogni modifica. Ctrl+Z, Ctrl+Y e Ctrl+Maiusc+Z finché lo strumento è aperto
    (non dentro un campo di testo). «Ripristina tutto» torna allo stato dell'apertura e si annulla a sua volta. */
-function storiaModifiche({ get, set, cosa = 'documento' }) {
-  const hist = [], fut = [], cur = () => JSON.stringify(get()), orig = cur(); const btns = {};
-  const agg = () => { if (btns.u) btns.u.disabled = !hist.some(x => x !== cur()); if (btns.r) btns.r.disabled = !fut.length; if (btns.t) btns.t.disabled = cur() === orig; };
+/* errori tipici dell'OCR su codici e importi (estratti conto, F24, fatture): «O» al posto di 0 e «l», «I», «|» al posto di 1
+   dentro i numeri, «1T» al posto di «IT» in partite IVA e IBAN, «O» nei codici ente dell'F24 (H5O1). Le parole restano com'erano:
+   si tocca solo ciò che ha almeno due cifre vere e nessun'altra lettera. */
+function correggiOcrCodici(t) {
+  t = String(t ?? '');
+  if (/^[1lI]T\d{11}$/.test(t) || /^[1lI]T\d{2}[A-Z]\d{10}[A-Z0-9]{12}$/i.test(t)) return 'IT' + t.slice(2);
+  const cifre = (t.match(/\d/g) || []).length;
+  if (cifre >= 2 && /[OoIl|]/.test(t) && /^[-+(]?[\d.,'\/OoIl|-]+[)%€]?$/.test(t)) return t.replace(/[Oo]/g, '0').replace(/[Il|]/g, '1');
+  if (cifre >= 1 && /^[A-Z][0-9O]{3}$/.test(t) && /O/.test(t)) return t[0] + t.slice(1).replace(/O/g, '0');
+  return t;
+}
+function storiaModifiche({ get, set, cosa = 'documento', tasti = true, pulsanti = 'tbtn' }) {
+  // prima(): si chiama PRIMA di una modifica; registra(): DOPO (per gli strumenti che confrontano con l'ultimo stato);
+  // fissa(): lo stato attuale diventa quello «dell'apertura» (dopo aver letto campi e dati del documento)
+  const hist = [], fut = [], cur = () => JSON.stringify(get()); let orig = cur(), ultimo = orig; const btns = { u: [], r: [], t: [] }, cbs = [];
+  const agg = () => { const c = cur(); btns.u.forEach(b => { b.disabled = !hist.some(x => x !== c); }); btns.r.forEach(b => { b.disabled = !fut.length; }); btns.t.forEach(b => { b.disabled = c === orig; }); cbs.forEach(f => { try { f(); } catch { } }); };
+  const metti = s => { set(JSON.parse(s)); ultimo = cur(); };
   const H = {
-    prima() { const c = cur(); if (hist[hist.length - 1] === c) return; hist.push(c); if (hist.length > 100) hist.shift(); fut.length = 0; setTimeout(agg, 0); },
+    prima() { const c = cur(); if (hist[hist.length - 1] === c) return; hist.push(c); if (hist.length > 100) hist.shift(); fut.length = 0; ultimo = c; setTimeout(agg, 0); },
+    registra() { const c = cur(); if (c === ultimo) return false; hist.push(ultimo); if (hist.length > 100) hist.shift(); ultimo = c; fut.length = 0; agg(); return true; },
+    fissa() { orig = ultimo = cur(); hist.length = 0; fut.length = 0; agg(); },
+    aggiungi(snap) { if (!snap || snap === cur() || hist[hist.length - 1] === snap) return; hist.push(snap); if (hist.length > 100) hist.shift(); fut.length = 0; agg(); },   // uno stato «prima» già salvato
     // un'istantanea uguale allo stato attuale (presa entrando in un campo senza poi cambiare nulla) non è un passo: si salta
-    undo() { const c = cur(); while (hist.length && hist[hist.length - 1] === c) hist.pop(); if (!hist.length) { agg(); return false; } fut.push(c); set(JSON.parse(hist.pop())); agg(); return true; },
-    redo() { const c = cur(); while (fut.length && fut[fut.length - 1] === c) fut.pop(); if (!fut.length) { agg(); return false; } hist.push(c); set(JSON.parse(fut.pop())); agg(); return true; },
+    undo() { const c = cur(); while (hist.length && hist[hist.length - 1] === c) hist.pop(); if (!hist.length) { agg(); return false; } fut.push(c); metti(hist.pop()); agg(); return true; },
+    redo() { const c = cur(); while (fut.length && fut[fut.length - 1] === c) fut.pop(); if (!fut.length) { agg(); return false; } hist.push(c); metti(fut.pop()); agg(); return true; },
     async tutto() {
       const c = cur(); if (c === orig) return toast(`Il ${cosa} è già com’era all’apertura`);
       if (typeof confirmDlg === 'undefined') Later.all();
       if (!(await confirmDlg(`Tolgo tutte le modifiche e torno al ${cosa} com’era all’apertura? Puoi rimetterle con Annulla (Ctrl+Z).`, { ok: 'Ripristina tutto' }))) return;
-      hist.push(c); fut.length = 0; set(JSON.parse(orig)); agg(); toast(`Ripristinato com’era all’apertura`);
+      hist.push(c); fut.length = 0; metti(orig); agg(); toast(`Ripristinato com’era all’apertura`);
     },
     agg,
-    bottoni() {
-      btns.u = toolBtn('undo', 'Annulla', 'Annulla l’ultima modifica (Ctrl+Z)', () => H.undo()); btns.r = toolBtn('redo', 'Ripeti', 'Ripeti (Ctrl+Y)', () => H.redo());
-      btns.t = toolBtn('reset', 'Ripristina', `Ripristina tutto: il ${cosa} com’era all’apertura`, () => H.tutto()); agg(); return [btns.u, btns.r, btns.t];
+    get passi() { return hist.length; }, get avanti() { return fut.length; }, get originale() { return orig; }, get modificato() { return cur() !== orig; },
+    quando(f) { cbs.push(f); },
+    // i pulsanti (anche più serie, per barre diverse dello stesso strumento): Annulla, Ripeti, Ripristina tutto
+    bottoni({ ripeti = true } = {}) {
+      const u = toolBtn('undo', 'Annulla', 'Annulla l’ultima modifica (Ctrl+Z)', () => H.undo()), r = ripeti ? toolBtn('redo', 'Ripeti', 'Ripeti (Ctrl+Y)', () => H.redo()) : null;
+      const t = toolBtn('reset', pulsanti === 'compatti' ? '' : 'Ripristina', `Ripristina tutto: il ${cosa} com’era all’apertura`, () => H.tutto());
+      btns.u.push(u); if (r) btns.r.push(r); btns.t.push(t); agg(); return [u, r, t];
     },
   };
   const key = e => {
-    if (!(e.ctrlKey || e.metaKey) || e.altKey || document.querySelector('.scrim')) return;
+    if (e.defaultPrevented || !(e.ctrlKey || e.metaKey) || e.altKey || document.querySelector('.scrim')) return;
     const a = document.activeElement; if (a && (a.isContentEditable || a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && /^(text|search|email|url|tel|password|number)$/.test(a.type || 'text')))) return;
     const k = e.key.toLowerCase();
     if (k === 'z' && !e.shiftKey ? H.undo() : (k === 'y' || (k === 'z' && e.shiftKey)) && H.redo()) e.preventDefault();
   };
-  document.addEventListener('keydown', key);
-  if (typeof onLeave === 'function') onLeave(() => document.removeEventListener('keydown', key));
+  if (tasti) { document.addEventListener('keydown', key); if (typeof onLeave === 'function') onLeave(() => document.removeEventListener('keydown', key)); }
   return H;
 }
 function toolBtn(icon, label, title, onclick) {
@@ -2026,7 +2048,7 @@ const Brand = (() => {
   function logoSvg(size = 32, { title = 'file360', mono = null, live = false } = {}) {
     if (live && !mono && !matchMedia('(prefers-reduced-motion: reduce)').matches && document.documentElement.dataset.anim !== 'off') return liveSvg(size, title);
     const o = mono || C.orbit, sw = size < 24 ? 5 : 4;
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 64 64" role="img" aria-label="${title}">` +
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 64 64" role="img" aria-label="${title}"${live && !mono ? ` data-live-size="${size}"` : ''}>` +
       `<path d="${ORBIT_BACK}" fill="none" stroke="${o}" stroke-width="${sw}" stroke-linecap="round"/>` +
       `<path d="${PAGE}" fill="${mono || C.accent}"/><path d="${FOLD}" fill="${mono ? mono : C.fold}" ${mono ? 'opacity=".55"' : ''}/>` +
       `<path d="${ORBIT_FRONT}" fill="none" stroke="${o}" stroke-width="${sw}" stroke-linecap="round"/>` +

@@ -7,7 +7,7 @@ let fail = 0; const step = (name, c, det) => { console.log(`${c ? '✓' : '✗'}
 (async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'contratti-'));
   const b = await chromium.launch(); const p = await b.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
-  await p.goto(APP); await p.waitForSelector('.intent, .hm-tool, .tool-card'); await p.evaluate(() => Later.all());
+  await p.goto(APP); await p.waitForSelector('.intent, .hm-tool, .tool-card'); await p.evaluate(() => (Later.all(), Later.lib('contratti')));
   const R = await p.evaluate(async () => {
     const C = Contratti, b64 = u => { let s = ''; for (let i = 0; i < u.length; i += 32768) s += String.fromCharCode.apply(null, u.subarray(i, i + 32768)); return btoa(s); };
     const pdfText = async bytes => { const d = await pdfDocument({ data: bytes.slice() }).promise; let t = ''; for (let i = 1; i <= d.numPages; i++) t += (await (await d.getPage(i)).getTextContent()).items.map(x => x.str + (x.hasEOL ? '\n' : ' ')).join('') + '\n'; return { t: t.replace(/[  ]+/g, ' '), pages: d.numPages }; };

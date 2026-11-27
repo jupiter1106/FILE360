@@ -164,6 +164,12 @@ test('immagine in SVG: il timbro diventa vettoriale senza macchie; un clic togli
   const png = await page.evaluate(async () => { const o = [...document.querySelectorAll('.modal.res')].pop().innerText; return /SVG|svg/.test(o) && /png/i.test(o); });
   ok(png, 'mancano SVG e PNG');
 });
+test('OCR: codici e importi corretti (O→0, l→1, 1T→IT, H5O1) senza toccare le parole', async b => {
+  const { page } = await open(b, 'desk1280');
+  const r = await page.evaluate(() => [['1.25O,0O', '1.250,00'], ['l2/O3/2025', '12/03/2025'], ['1T60X0542811101000000123456', 'IT60X0542811101000000123456'], ['1T01234567890', 'IT01234567890'], ['H5O1', 'H501'], ['1O4O', '1040'],
+    ['Olio', 'Olio'], ['IO', 'IO'], ['Il', 'Il'], ['COOP', 'COOP'], ['2025', '2025'], ['Bonifico', 'Bonifico'], ['ROMA', 'ROMA']].filter(([a, w]) => correggiOcrCodici(a) !== w).map(([a, w]) => `${a} → ${correggiOcrCodici(a)} (atteso ${w})`));
+  ok(r.length === 0, r.join('; '));
+});
 test('nessuna domanda all’avvio: lavoro e animazioni si scelgono solo dal menu; la home mette in cima gli strumenti del mestiere', async b => {
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await ctx.newPage(); await page.goto(APP); await page.waitForSelector('.intent'); await page.waitForTimeout(4000);
@@ -179,6 +185,11 @@ test('nessuna domanda all’avvio: lavoro e animazioni si scelgono solo dal menu
   const dopo = await page.evaluate(() => ({ anim: document.documentElement.dataset.anim, tela: !!document.querySelector('canvas.bg-flow'), logo: !!document.querySelector('svg.logo-live'),
     led: [...document.querySelectorAll('.led')].every(e => getComputedStyle(e).display === 'none') }));
   ok(prima.tela && dopo.anim === 'off' && !dopo.tela && !dopo.logo && dopo.led, 'con «No» gli effetti restano nella pagina: ' + JSON.stringify({ prima, dopo }));
+  // e di nuovo «Sì»: il logo in alto e quello in fondo tornano a girare subito, senza ricaricare
+  await page.locator('.dr-anim .dr-chip', { hasText: 'Sì' }).click(); await page.waitForTimeout(300);
+  const giro = await page.evaluate(async () => { const L = [...document.querySelectorAll('svg.logo-live')]; const t0 = L.map(s => s.getCurrentTime()); await new Promise(r => setTimeout(r, 400)); return { n: L.length, gira: L.every((s, i) => s.getCurrentTime() > t0[i] && !s.animationsPaused()) }; });
+  ok(giro.n >= 1 && giro.gira, 'tornando a «Sì» i loghi restano fermi: ' + JSON.stringify(giro));
+  await page.locator('.dr-anim .dr-chip', { hasText: 'No' }).click(); await page.waitForTimeout(200);
   await page.locator('.dr-set .dr-row').click(); await page.waitForSelector('.ob-p');
   await page.locator('.ob-p', { hasText: 'Studente' }).click(); await page.waitForTimeout(500);
   const r = await page.evaluate(() => ({ you: [...document.querySelectorAll('.pf-you .qk')].map(a => a.dataset.id).join(), all: document.querySelectorAll('.pf-all .qk').length }));

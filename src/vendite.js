@@ -6,7 +6,8 @@
 const Vendite = (() => {
   const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
   const MESI3 = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
-  const MOD_PAG = { MP01: 'Contanti', MP02: 'Assegno', MP03: 'Assegno circolare', MP05: 'Bonifico', MP08: 'Carta di pagamento', MP09: 'RID', MP10: 'RID utenze', MP11: 'RID veloce', MP12: 'RIBA', MP13: 'MAV', MP14: 'Quietanza erario', MP15: 'Giroconto', MP16: 'Domiciliazione bancaria', MP17: 'Domiciliazione postale', MP18: 'Bollettino postale', MP19: 'SEPA Direct Debit', MP20: 'SEPA Direct Debit CORE', MP21: 'SEPA Direct Debit B2B', MP22: 'Trattenuta su somme già riscosse', MP23: 'PagoPA' };
+  // i nomi dei metodi di pagamento (MP01…MP23): la tabella unica di FattureKit
+  const MOD_PAG = FattureKit.tabelle.T_PAG;
   const PAESI = { AT: 'Austria', BE: 'Belgio', BG: 'Bulgaria', CH: 'Svizzera', CN: 'Cina', CY: 'Cipro', CZ: 'Repubblica Ceca', DE: 'Germania', DK: 'Danimarca', EE: 'Estonia', ES: 'Spagna', FI: 'Finlandia', FR: 'Francia', GB: 'Regno Unito', GR: 'Grecia', HR: 'Croazia', HU: 'Ungheria', IE: 'Irlanda', LT: 'Lituania', LU: 'Lussemburgo', LV: 'Lettonia', MT: 'Malta', NL: 'Paesi Bassi', NO: 'Norvegia', PL: 'Polonia', PT: 'Portogallo', RO: 'Romania', SE: 'Svezia', SI: 'Slovenia', SK: 'Slovacchia', SM: 'San Marino', VA: 'Città del Vaticano', US: 'Stati Uniti', CA: 'Canada', AE: 'Emirati Arabi Uniti', JP: 'Giappone', BR: 'Brasile', AU: 'Australia', TR: 'Turchia', AL: 'Albania', RS: 'Serbia', MA: 'Marocco', TN: 'Tunisia', IL: 'Israele', IN: 'India', MX: 'Messico', RU: 'Russia', UA: 'Ucraina' };
   const DAY = 864e5;
   const r2 = v => Math.round(v * 100) / 100;

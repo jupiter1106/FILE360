@@ -7,7 +7,7 @@ const D = path.join(__dirname, '..', 'fixtures', 'ai');
 let fail = 0; const step = (name, c, det) => { console.log(`${c ? '✓' : '✗'} ${name}${det ? ' · ' + det : ''}`); if (!c) fail++; };
 (async () => {
   const b = await chromium.launch(); const p = await b.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
-  await p.goto(APP); await p.waitForSelector('.intent, .hm-tool, .tool-card'); await p.evaluate(() => Later.all());
+  await p.goto(APP); await p.waitForSelector('.intent, .hm-tool, .tool-card'); await p.evaluate(() => (Later.all(), Later.lib('rilevaai')));
   const leggi = async (name, buf) => p.evaluate(async ([name, b64]) => { const f = new File([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], name); const d = await RilevaAI.leggiFile(f); const pr = RilevaAI.prove(d.text, d); return { text: d.text, prove: pr.map(x => [x.tipo, x.forza, x.titolo]), fonts: d.fonts }; }, [name, buf.toString('base64')]);
   const ATTESI = { 'ai-python-docx.docx': /python-docx/, 'ai-docxjs.docx': /docx\.js/, 'ai-python-pptx.pptx': /python-pptx/, 'ai-pptxgenjs.pptx': /PptxGenJS/, 'ai-openpyxl.xlsx': /openpyxl/, 'ai-reportlab.pdf': /ReportLab/ };
   for (const [f, re] of Object.entries(ATTESI)) {

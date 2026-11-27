@@ -19,7 +19,7 @@ const opus = fs.readFileSync(path.join(FX, 'claude-opus.txt'), 'utf8'), umano = 
   /* misure del modello e velocità */
   {
     const { page } = await open(b, 'desk1440');
-    await page.evaluate(() => Later.all());
+    await page.evaluate(() => (Later.all(), Later.lib('rilevaai')));
     const r = await page.evaluate(([opus, umano]) => {
       const R = RilevaAI, mis = R.modello().misure;
       const lungo = Array(4).fill(umano + '\n\n' + opus).join('\n\n'), t0 = performance.now(); for (let i = 0; i < 5; i++) R.stile(lungo); const ms = (performance.now() - t0) / 5;
