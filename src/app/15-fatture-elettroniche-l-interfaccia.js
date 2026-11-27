@@ -6,7 +6,7 @@
    ===================================================================== */
 const FT = {
   fatture: [], righe: [], selInv: new Set(), selRig: new Set(), scarti: [],
-  q: '', dal: '', al: '', cliente: '', codiva: '', tipodoc: '', origine: '',
+  q: '', dal: '', al: '', cliente: '', codiva: '', tipodoc: '', origine: '', pag: '',
   ordine: { fatture: 'data', prestazioni: 'data' }, verso: { fatture: 1, prestazioni: 1 },
   cfg: { modo: 'fatture', tipo: 'attive', layout: 'cmp', tipopref: false },
 };
@@ -110,6 +110,11 @@ async function startFatture(stage, files) {
     [['', 'Tutte'], ['xml', 'Da XML'], ['pdf', 'Lette da PDF'], ['verif', 'Da verificare']].map(([v, l]) => h('option', { value: v }, l)));
   const inDal = h('input', { class: 'input', type: 'date', onchange: e => { FT.dal = e.target.value; draw(); } });
   const inAl = h('input', { class: 'input', type: 'date', onchange: e => { FT.al = e.target.value; draw(); } });
+  const selPag = h('select', { class: 'input', onchange: e => { FT.pag = e.target.value; draw(); } });
+  /* metodo di pagamento: la famiglia (Bonifico, Carta, Contanti…), «oltre soglia» per i contanti da 5.000 euro in su */
+  const famDi = inv => inv.metodo ? inv.metodo.famiglia : 'nd';
+  const FAMN = K.tabelle.PAG_FAM_NOME, ORD_FAM = ['bonifico', 'carta', 'contanti', 'addebito', 'bollettino', 'assegno', 'altro', 'misto', 'nd'];
+  const passaPag = (inv, f = FT.pag) => !f || (f === 'soglia' ? !!(inv.metodo && inv.metodo.oltreSoglia) : famDi(inv) === f);
   function popolaFiltri() {
     const cl = new Set(), ci = new Set(), td = new Set();
     FT.fatture.forEach(inv => { const n = K.nomeControparte(inv, c.tipo); if (n) cl.add(n); (inv.codiciIva || []).forEach(k => ci.add(k)); if (inv.tipo) td.add(inv.tipo + ' — ' + inv.tipoBreve); });
@@ -117,6 +122,10 @@ async function startFatture(stage, files) {
     FT.cliente = fill(selCliente, [...cl].sort((a, b) => a.localeCompare(b, 'it')), 'Tutte', FT.cliente);
     FT.codiva = fill(selIva, [...ci].sort(), 'Tutti', FT.codiva);
     FT.tipodoc = fill(selTipo, [...td].sort(), 'Tutti', FT.tipodoc);
+    const fams = ORD_FAM.filter(f => FT.fatture.some(inv => famDi(inv) === f)), soglia = FT.fatture.some(inv => inv.metodo && inv.metodo.oltreSoglia);
+    selPag.replaceChildren(h('option', { value: '' }, 'Tutti'), ...fams.map(f => h('option', { value: f }, FAMN[f])), soglia ? h('option', { value: 'soglia' }, 'Contanti da 5.000 € in su') : null);
+    if (![...selPag.options].some(o => o.value === FT.pag)) FT.pag = '';
+    selPag.value = FT.pag;
     selOrig.value = FT.origine; inDal.value = FT.dal; inAl.value = FT.al;
   }
   const daVerificare = inv => orig(inv) === 'pdf' ? !!(inv.avvisi && inv.avvisi.length) : inv.quadra === false;
@@ -130,11 +139,13 @@ async function startFatture(stage, files) {
     if (FT.origine === 'pdf' && orig(inv) === 'xml') return false;
     if (FT.origine === 'verif' && !daVerificare(inv)) return false;
     if (FT.codiva && !(codRiga !== undefined ? [codRiga] : (inv.codiciIva || [])).includes(FT.codiva)) return false;
+    if (!passaPag(inv)) return false;
     return true;
   }
   const parole = () => FT.q.toLowerCase().split(/\s+/).filter(Boolean);
-  const testoF = inv => [K.nomeControparte(inv, c.tipo), inv.numero, inv.tipoBreve, dt(inv.data), (inv.codiciIva || []).join(' '), (inv.causali || []).join(' '), inv.srcName, (inv.righe || []).map(l => l.desc).join(' ')].join(' ').toLowerCase();
-  const testoR = r => [r.desc, r.codici, r.sconti, r.gestionali, r.rifAmm, r.cessione, K.nomeControparte(r.inv, c.tipo), r.inv.numero, dt(r.inv.data), r.codIva, r.periodo, r.inv.tipoBreve, (r.inv.causali || []).join(' '), r.inv.srcName].join(' ').toLowerCase();
+  const metodoTxt = inv => inv.metodo && inv.metodo.codici.length ? [inv.metodo.nome, K.metodoBreve(inv.metodo), inv.metodo.codici.join(' '), 'pagamento'].join(' ') : '';
+  const testoF = inv => [K.nomeControparte(inv, c.tipo), inv.numero, inv.tipoBreve, dt(inv.data), (inv.codiciIva || []).join(' '), (inv.causali || []).join(' '), inv.srcName, (inv.righe || []).map(l => l.desc).join(' '), metodoTxt(inv)].join(' ').toLowerCase();
+  const testoR = r => [r.desc, r.codici, r.sconti, r.gestionali, r.rifAmm, r.cessione, K.nomeControparte(r.inv, c.tipo), r.inv.numero, dt(r.inv.data), r.codIva, r.periodo, r.inv.tipoBreve, (r.inv.causali || []).join(' '), r.inv.srcName, metodoTxt(r.inv)].join(' ').toLowerCase();
   const match = (t, p) => !p.length || p.every(w => t.includes(w));
   const fattureF = () => { const p = parole(); return FT.fatture.filter(inv => passa(inv) && match(testoF(inv), p)); };
   const righeF = () => { const p = parole(); return FT.righe.filter(r => passa(r.inv, r.codIva) && match(testoR(r), p)); };
@@ -143,7 +154,7 @@ async function startFatture(stage, files) {
   function ordina(list) {
     const m = c.modo, v = FT.verso[m], k = FT.ordine[m];
     const keys = inPrest() ? { nome: r => K.nomeControparte(r.inv, c.tipo).toLowerCase(), desc: r => (r.desc || '').toLowerCase(), num: r => (r.inv.numero || '').toLowerCase(), data: r => (r.inv.data || '') + ' ' + (r.inv.numero || ''), importo: r => r.importo || 0 }
-      : { nome: i => K.nomeControparte(i, c.tipo).toLowerCase(), tipo: i => i.tipoBreve || '', num: i => (i.numero || '').toLowerCase(), data: i => (i.data || '') + ' ' + (i.numero || ''), importo: i => i.totale || 0 };
+      : { nome: i => K.nomeControparte(i, c.tipo).toLowerCase(), tipo: i => i.tipoBreve || '', pag: i => ORD_FAM.indexOf(famDi(i)) + ' ' + K.metodoBreve(i.metodo), num: i => (i.numero || '').toLowerCase(), data: i => (i.data || '') + ' ' + (i.numero || ''), importo: i => i.totale || 0 };
     const key = keys[k] || keys.data;
     return list.slice().sort((a, b) => { const x = key(a), y = key(b); return (typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'it')) * v; });
   }
@@ -164,7 +175,7 @@ async function startFatture(stage, files) {
 
   /* —— registro —— */
   const COL = {
-    fatture: [{ l: 'Tipo', s: 'tipo', c: 'hide-s' }, { l: 'Numero', s: 'num' }, { l: 'Data', s: 'data' }, { l: 'Controparte', s: 'nome' }, { l: 'Cod. IVA', c: 'hide-m' },
+    fatture: [{ l: 'Tipo', s: 'tipo', c: 'hide-s' }, { l: 'Numero', s: 'num' }, { l: 'Data', s: 'data' }, { l: 'Controparte', s: 'nome' }, { l: 'Pagamento', s: 'pag', c: 'hide-s' }, { l: 'Cod. IVA', c: 'hide-m' },
       { l: 'Imponibile', n: 1, c: 'hide-m' }, { l: 'Imposta', n: 1, c: 'hide-m' }, { l: 'Ritenuta', n: 1, c: 'hide-s' }, { l: 'Totale', n: 1, s: 'importo' }, { l: '' }],
     prestazioni: [{ l: 'Nome / Cognome', s: 'nome' }, { l: 'Descrizione', s: 'desc' }, { l: 'Fattura', s: 'num', c: 'hide-s' }, { l: 'Data', s: 'data' },
       { l: 'Importo', n: 1, s: 'importo' }, { l: 'Cod. IVA', c: 'hide-m' }, { l: 'Imposte', n: 1, c: 'hide-m' }, { l: 'Ritenute', n: 1, c: 'hide-m' }, { l: '' }],
@@ -176,7 +187,7 @@ async function startFatture(stage, files) {
     const warn = inv.quadra === false && orig(inv) !== 'pdf' ? ' <span class="ft-warn" title="Imponibile più imposta non coincide con il totale dichiarato">!</span>' : '';
     return `<tr class="${on ? 'sel' : ''}" data-id="${inv.id}"><td class="ctrl"><input type="checkbox" ${on ? 'checked' : ''} aria-label="Seleziona"></td>` +
       `<td class="tipo hide-s"><span class="ft-tipo">${esc(inv.tipoBreve)}</span></td><td class="docnum">${evid(inv.numero)}${marca(inv)}</td><td class="date">${esc(dt(inv.data))}</td>` +
-      `<td class="cp">${evid(cp.nome || '')}<small>${esc(cp.piva || cp.cf || '')}</small></td><td class="iva hide-m">${esc((inv.codiciIva || []).join(' · '))}</td>` +
+      `<td class="cp">${evid(cp.nome || '')}<small>${esc(cp.piva || cp.cf || '')}</small></td><td class="pag hide-s">${K.pagChip(inv.metodo)}</td><td class="iva hide-m">${esc((inv.codiciIva || []).join(' · '))}</td>` +
       `<td class="num hide-m">${eur(inv.imponibile)}</td><td class="num hide-m">${eur(inv.imposta)}</td><td class="num hide-s">${inv.ritenutaTot ? eur(inv.ritenutaTot) : ''}</td>` +
       `<td class="num tot">${inv.totale == null ? '' : eur(inv.totale)}${warn}</td>` +
       `<td class="acts"><button class="icon-btn" data-act="prev" title="Anteprima" aria-label="Anteprima">${PREV}</button><button class="icon-btn" data-act="pdf" title="Scarica il PDF" aria-label="Scarica il PDF">${DLI}</button></td></tr>`;
@@ -203,7 +214,7 @@ async function startFatture(stage, files) {
         return `<tr class="${cls}"><td></td><td colspan="2" class="lab">${et} · ${plural(l.length, 'prestazione', 'prestazioni')} da ${plural(nf, 'fattura', 'fatture')}</td><td class="hide-s"></td><td></td><td class="num">${eur(s.importo)}</td><td class="hide-m"></td><td class="num hide-m">${eur(s.imposta)}</td><td class="num hide-m">${s.ritenuta ? eur(s.ritenuta) : ''}</td><td></td></tr>`;
       }
       const s = l.reduce((a, i) => ({ imponibile: a.imponibile + (i.imponibile || 0), imposta: a.imposta + (i.imposta || 0), ritenuta: a.ritenuta + (i.ritenutaTot || 0), totale: a.totale + (i.totale || 0) }), { imponibile: 0, imposta: 0, ritenuta: 0, totale: 0 });
-      return `<tr class="${cls}"><td></td><td class="hide-s"></td><td colspan="3" class="lab">${et} · ${plural(l.length, 'fattura', 'fatture')}</td><td class="hide-m"></td><td class="num hide-m">${eur(s.imponibile)}</td><td class="num hide-m">${eur(s.imposta)}</td><td class="num hide-s">${s.ritenuta ? eur(s.ritenuta) : ''}</td><td class="num">${eur(s.totale)}</td><td></td></tr>`;
+      return `<tr class="${cls}"><td></td><td class="hide-s"></td><td colspan="3" class="lab">${et} · ${plural(l.length, 'fattura', 'fatture')}</td><td class="hide-s"></td><td class="hide-m"></td><td class="num hide-m">${eur(s.imponibile)}</td><td class="num hide-m">${eur(s.imposta)}</td><td class="num hide-s">${s.ritenuta ? eur(s.ritenuta) : ''}</td><td class="num">${eur(s.totale)}</td><td></td></tr>`;
     };
     let out = riga('Totale in elenco', list, '');
     if (scelte.length && scelte.length !== list.length) out += riga('Di cui selezionate', scelte, 'second');
@@ -219,7 +230,7 @@ async function startFatture(stage, files) {
     const att = K.allegati(inv);
     const m = modal([
       h('div', { class: 'ft-prev-head' },
-        h('div', { class: 'grow' }, h('h3', {}, nome.replace(/\.pdf$/, '')), h('div', { class: 'muted small' }, inv.pdfBytes ? 'PDF originale' + (inv.tot > 1 ? `, documento ${inv.idx + 1} di ${inv.tot}` : '') : c.layout === 'min' ? 'Layout esteso, con tutte le sezioni' : 'Layout standard del foglio di stile')),
+        h('div', { class: 'grow' }, h('h3', {}, nome.replace(/\.pdf$/, ''), ' ', h('span', { html: K.pagChip(inv.metodo) })), h('div', { class: 'muted small' }, inv.pdfBytes ? 'PDF originale' + (inv.tot > 1 ? `, documento ${inv.idx + 1} di ${inv.tot}` : '') : c.layout === 'min' ? 'Layout esteso, con tutte le sezioni' : 'Layout standard del foglio di stile')),
         h('button', { class: 'btn sm primary', onclick: () => download(bytes, nome, 'application/pdf') }, ic('download', 15), 'Scarica il PDF'),
         iconBtn('x', 'Chiudi', () => m.close())),
       att.length ? h('div', { class: 'ft-att' }, h('span', { class: 'sec-t' }, plural(att.length, 'allegato nella fattura', 'allegati nella fattura')),
@@ -286,10 +297,12 @@ async function startFatture(stage, files) {
     ['Tipo documento', 20, 's', r => r.inv.tipo + (r.inv.tipoBreve ? ' ' + r.inv.tipoBreve : '')], ['N. linea', 9, 's', r => r.n], ['Quantità', 11, 'n', r => r.qta], ['U.M.', 8, 's', r => r.um],
     ['Prezzo unitario', 14, 'n', r => r.prezzo], ['Sconto / magg.', 18, 's', r => r.sconti], ['Periodo', 20, 's', r => r.periodo], ['Codice articolo', 22, 's', r => r.codici],
     ['Riferimento normativo', 24, 's', r => r.norma], ['Tipo cessione', 16, 's', r => r.cessione], ['Altri dati gestionali', 26, 's', r => r.gestionali], ['Rif. amministrazione', 20, 's', r => r.rifAmm],
-    ['Soggetta a ritenuta', 16, 's', r => r.conRitenuta ? 'SI' : ''], ['Causale documento', 34, 's', r => (r.inv.causali || []).join(' · ')], ['File di origine', 28, 's', r => r.inv.srcName],
+    ['Soggetta a ritenuta', 16, 's', r => r.conRitenuta ? 'SI' : ''], ['Causale documento', 34, 's', r => (r.inv.causali || []).join(' · ')], ['Metodo di pagamento', 24, 's', r => metodoX(r.inv)], ['File di origine', 28, 's', r => r.inv.srcName],
     ['Origine dato', 22, 's', r => ({ xml: 'XML', pdf: 'PDF (lettura del layout)', pdfxml: 'PDF (XML incorporato)' })[orig(r.inv)]],
     ['Esito controlli', 48, 's', r => orig(r.inv) === 'pdf' ? (r.inv.avvisi && r.inv.avvisi.length ? 'DA VERIFICARE: ' + r.inv.avvisi.join('; ') : 'OK') : (r.inv.quadra === false ? 'imponibile più imposta non coincide con il totale' : '')],
   ];
+  // nel foglio: il nome completo del metodo; «non indicato» quando la fattura non ha i dati di pagamento; la soglia del contante segnalata
+  const metodoX = inv => !inv.metodo || !inv.metodo.codici.length ? 'Non indicato' : inv.metodo.nome + (inv.metodo.oltreSoglia ? ' (contanti da 5.000 € in su: da verificare)' : '');
   const HEAD = v => ({ t: 's', v, bold: true, fill: Brand.C.ink, color: '#FFFFFF', valign: 'center', wrap: true, border: { b: 'medium' } });
   const cellX = (t, v) => {
     if (v == null || v === '') return null;
@@ -300,7 +313,8 @@ async function startFatture(stage, files) {
   const fogliRegistro = list => {
     const cols = [['Tipo', 16, 's', i => i.tipo + ' ' + (i.tipoBreve || '')], ['Numero', 14, 's', i => i.numero], ['Data', 12, 'd', i => i.data], ['Controparte', 34, 's', i => K.nomeControparte(i, c.tipo)],
       ['Codice fiscale', 20, 's', i => cfCp(i)], ['Partita IVA', 18, 's', i => pivaCp(i)], ['Codici IVA', 14, 's', i => (i.codiciIva || []).join(' · ')], ['Imponibile', 14, 'n', i => i.imponibile],
-      ['Imposta', 14, 'n', i => i.imposta], ['Ritenuta', 14, 'n', i => i.ritenutaTot || null], ['Totale documento', 16, 'n', i => i.totale], ['File di origine', 28, 's', i => i.srcName],
+      ['Imposta', 14, 'n', i => i.imposta], ['Ritenuta', 14, 'n', i => i.ritenutaTot || null], ['Totale documento', 16, 'n', i => i.totale], ['Metodo di pagamento', 24, 's', i => metodoX(i)], ['Codice modalità', 12, 's', i => i.metodo ? i.metodo.codici.join(' · ') : ''],
+      ['Contanti', 14, 'n', i => i.metodo && i.metodo.contanti ? i.metodo.contanti : null], ['File di origine', 28, 's', i => i.srcName],
       ['Origine dato', 22, 's', i => ({ xml: 'XML', pdf: 'PDF (lettura del layout)', pdfxml: 'PDF (XML incorporato)' })[orig(i)]]];
     const n = list.length, L = XlsxOut.colName;
     const sum = ci => ({ t: 'n', v: list.reduce((a, i) => a + (cols[ci][3](i) || 0), 0), f: `SUBTOTAL(9,${L(ci)}2:${L(ci)}${n + 1})`, fmt: '#,##0.00', bold: true, border: { t: 'thin' } });
@@ -343,6 +357,7 @@ async function startFatture(stage, files) {
   const table = h('table', { class: 'ft-table' }, thead, tbody, tfoot);
   const empty = h('div', { class: 'ft-empty' });
   const errBox = h('div', { class: 'ft-err' });
+  const pagBar = h('div', { class: 'pag-bar', role: 'group', 'aria-label': 'Metodo di pagamento' });
   const twrap = h('div', { class: 'ft-tw' }, table);
   { const sh = h('div', { class: 'ft-sh', 'aria-hidden': 'true' }, h('i', { class: 'l' }), h('i', { class: 'r' })); twrap.prepend(sh);
     const upd = () => { sh.style.setProperty('--h', twrap.clientHeight + 'px'); twrap.classList.toggle('sl', twrap.scrollLeft > 2); twrap.classList.toggle('sr', twrap.scrollLeft + twrap.clientWidth < twrap.scrollWidth - 2); };
@@ -354,7 +369,7 @@ async function startFatture(stage, files) {
         h('button', { class: 'btn sm ghost', onclick: () => { const s = selCorr(); filtrate().forEach(r => s.delete(r.id)); draw(); } }, 'Deseleziona'),
         regBtn,
         h('button', { class: 'btn sm ghost ft-clear', title: 'Togli tutte le fatture dall’elenco', onclick: svuota }, ic('trash', 15), h('span', { class: 'th-l' }, 'Svuota')))),
-    empty, twrap, errBox, fileInp, dirInp);
+    pagBar, empty, twrap, errBox, fileInp, dirInp);
 
   const noteTipo = h('p', { class: 'muted small ft-note' }), noteLay = h('p', { class: 'muted small ft-note' });
   const nameSpec = h('code', { class: 'ft-name' });
@@ -375,8 +390,8 @@ async function startFatture(stage, files) {
       h('label', { class: 'ft-f' }, h('span', {}, 'Controparte'), selCliente),
       h('div', { class: 'ft-f2' }, h('label', { class: 'ft-f' }, h('span', {}, 'Dal'), inDal), h('label', { class: 'ft-f' }, h('span', {}, 'Al'), inAl)),
       h('div', { class: 'ft-f2' }, h('label', { class: 'ft-f' }, h('span', {}, 'Codice IVA'), selIva), h('label', { class: 'ft-f' }, h('span', {}, 'Tipo doc.'), selTipo)),
-      h('label', { class: 'ft-f' }, h('span', {}, 'Origine dei dati'), selOrig),
-      h('button', { class: 'btn sm ghost', style: { width: '100%' }, onclick: () => { FT.q = FT.dal = FT.al = FT.cliente = FT.codiva = FT.tipodoc = FT.origine = ''; search.value = ''; popolaFiltri(); draw(); } }, ic('reset', 15), 'Azzera i filtri')),
+      h('div', { class: 'ft-f2' }, h('label', { class: 'ft-f' }, h('span', {}, 'Pagamento'), selPag), h('label', { class: 'ft-f' }, h('span', {}, 'Origine dei dati'), selOrig)),
+      h('button', { class: 'btn sm ghost', style: { width: '100%' }, onclick: () => { FT.q = FT.dal = FT.al = FT.cliente = FT.codiva = FT.tipodoc = FT.origine = FT.pag = ''; search.value = ''; popolaFiltri(); draw(); } }, ic('reset', 15), 'Azzera i filtri')),
     sec('Aggiungi fatture',
       h('div', { class: 'row', style: { gap: '8px', flexWrap: 'wrap' } },
         h('button', { class: 'btn sm', onclick: () => fileInp.click() }, ic('plus', 15), 'File'),
@@ -412,7 +427,7 @@ async function startFatture(stage, files) {
   function svuota() {
     if (!FT.fatture.length) return;
     FT.fatture = []; FT.righe = []; FT.selInv.clear(); FT.selRig.clear(); FT.scarti = [];
-    FT.q = FT.dal = FT.al = FT.cliente = FT.codiva = FT.tipodoc = FT.origine = ''; search.value = '';
+    FT.q = FT.dal = FT.al = FT.cliente = FT.codiva = FT.tipodoc = FT.origine = FT.pag = ''; search.value = '';
     popolaFiltri(); draw(); toast('Elenco svuotato');
   }
   function drawList() {
@@ -432,11 +447,26 @@ async function startFatture(stage, files) {
         h('span', {}, prest ? 'Ogni riga di dettaglio diventerà una riga qui, cercabile ed esportabile in Excel.' : 'Qui comparirà l’elenco delle fatture, con imponibili, imposte e totali.'),
         h('div', { class: 'row', style: { gap: '8px', justifyContent: 'center' } }, h('button', { class: 'btn primary', onclick: () => fileInp.click() }, ic('file', 16), 'Scegli i file'), h('button', { class: 'btn', onclick: () => dirInp.click() }, ic('layers', 16), 'Cartella')));
     } else empty.hidden = true;
+    drawPag();
     exportBtn.disabled = n === 0;
     exportBtn.replaceChildren(ic(prest ? 'table' : n === 1 ? 'file' : 'zip', 18), prest ? 'Esporta in Excel' + (n ? ` (${n})` : '') : n === 1 ? 'Crea il PDF' : 'Crea i PDF' + (n ? ` (${n})` : ''));
     regBtn.hidden = prest; regBtn.disabled = n === 0;
     actNote.textContent = prest ? (n === 0 ? 'Seleziona le prestazioni da esportare.' : `${plural(n, 'prestazione pronta', 'prestazioni pronte')} · ${COLS_X.length} colonne`)
       : n === 0 ? 'Seleziona le fatture da convertire.' : n === 1 ? 'Una fattura selezionata: esce come PDF singolo.' : `${n} fatture selezionate: escono in un archivio unico.`;
+  }
+  /* riepilogo per metodo di pagamento delle fatture in elenco (gli altri filtri valgono, questo no): un tocco filtra */
+  function drawPag() {
+    const base = FT.fatture.filter(inv => { const f = FT.pag; FT.pag = ''; const ok = passa(inv); FT.pag = f; return ok; });
+    const g = new Map(); base.forEach(inv => { const f = famDi(inv), x = g.get(f) || { n: 0, tot: 0 }; x.n++; x.tot += inv.totale || 0; g.set(f, x); });
+    const soglia = base.filter(inv => inv.metodo && inv.metodo.oltreSoglia);
+    pagBar.hidden = !base.length || (g.size === 1 && g.has('nd'));
+    if (pagBar.hidden) return;
+    const btn = (key, chip, n, tot, title) => h('button', { 'aria-pressed': String(FT.pag === key), title, onclick: () => { FT.pag = FT.pag === key ? '' : key; selPag.value = FT.pag; draw(); } },
+      h('span', { html: chip }), h('em', {}, `${n} · ${eur(tot)} €`));
+    pagBar.replaceChildren(h('span', {}, 'Pagamento'),
+      ...ORD_FAM.filter(f => g.has(f)).map(f => btn(f, K.pagChip(null, { famiglia: f, label: f === 'nd' ? FAMN.nd : FAMN[f] }), g.get(f).n, g.get(f).tot, `Mostra solo: ${FAMN[f]}`)),
+      soglia.length ? btn('soglia', K.pagChip(null, { famiglia: 'contanti', label: 'Contanti da 5.000 €', soglia: true }), soglia.length, soglia.reduce((a, i) => a + (i.metodo.contanti || 0), 0),
+        'Pagamenti in contanti da 5.000 euro in su: fra soggetti diversi non sono ammessi (d.lgs. 231/2007). Da verificare.') : null);
   }
   function draw() {
     const prest = inPrest();

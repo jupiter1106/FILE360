@@ -314,27 +314,12 @@ const Mappa = (() => {
   }
   const zoneFC = (sigle) => ({ type: 'FeatureCollection', features: sigle.filter(s => confini()[s]?.length).map(s => ({ type: 'Feature', properties: { s }, geometry: { type: 'MultiPolygon', coordinates: confini()[s].map(r => [r]) } })) });
   const bbox = sigle => { let b = null; for (const s of sigle) for (const r of confini()[s] || []) for (const [x, y] of r) b = b ? [Math.min(b[0], x), Math.min(b[1], y), Math.max(b[2], x), Math.max(b[3], y)] : [x, y, x, y]; return b && [b[0] - 0.05, b[1] - 0.05, b[2] + 0.05, b[3] + 0.05]; };
-  // il rilievo: l'Italia divisa in esagoni di circa 20 km; su ogni esagono con clienti una colonna alta come il fatturato
-  const RT = 6378137, merc = (lon, lat) => [RT * lon * Math.PI / 180, RT * Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360))];
-  const demerc = (x, y) => [x / RT * 180 / Math.PI, (2 * Math.atan(Math.exp(y / RT)) - Math.PI / 2) * 180 / Math.PI];
-  function esagoni(P, lato = 15500) {
-    const W = Math.sqrt(3) * lato, celle = new Map();
-    for (const p of P) {
-      if (!(p.f > 0)) continue;
-      const [x, y] = merc(p.lon, p.lat), q = (x * Math.sqrt(3) / 3 - y / 3) / lato, r = y * 2 / 3 / lato;
-      // arrotondamento alle coordinate esagonali (cubiche)
-      let rx = Math.round(q), rz = Math.round(r), ry = Math.round(-q - r); const dx = Math.abs(rx - q), dz = Math.abs(rz - r), dy = Math.abs(ry + q + r);
-      if (dx > dy && dx > dz) rx = -ry - rz; else if (dz > dy) rz = -rx - ry;
-      const k = rx + ',' + rz, c = celle.get(k) || { q: rx, r: rz, f: 0, n: 0, top: [] };
-      c.f += p.f; c.n++; c.top.push(p); celle.set(k, c);
-    }
-    const fmax = Math.max(1, ...[...celle.values()].map(c => c.f));
-    return { fmax, fc: { type: 'FeatureCollection', features: [...celle.values()].map(c => {
-      const cx = W * (c.q + c.r / 2), cy = lato * 1.5 * c.r, ring = [];
-      for (let i = 0; i <= 6; i++) { const a = Math.PI / 180 * (60 * (i % 6) - 30); ring.push(demerc(cx + lato * 0.78 * Math.cos(a), cy + lato * 0.78 * Math.sin(a))); }
-      const t = Math.pow(c.f / fmax, 0.75), top = c.top.sort((a, b) => b.f - a.f);
-      return { type: 'Feature', properties: { f: c.f, n: c.n, t, h: 3000 + t * 165000, nomi: top.slice(0, 3).map(p => p.nome).join(' · '), cx: demerc(cx, cy)[0], cy: demerc(cx, cy)[1] }, geometry: { type: 'Polygon', coordinates: [ring] } };
-    }) } };
+  // collegamenti dalla sede: un arco leggero verso ogni cliente o fornitore (curvo, perché le linee dritte si sovrappongono)
+  function arco(a, b, n = 28) {
+    const [x0, y0] = a, [x1, y1] = b, dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy) || 1, k = Math.min(0.22, 0.6 / Math.sqrt(d + 0.2)) * d;
+    const cx = (x0 + x1) / 2 - dy / d * k, cy = (y0 + y1) / 2 + dx / d * k, out = [];
+    for (let i = 0; i <= n; i++) { const t = i / n, u = 1 - t; out.push([u * u * x0 + 2 * u * t * cx + t * t * x1, u * u * y0 + 2 * u * t * cy + t * t * y1]); }
+    return out;
   }
   // simbolo della sede: un rombo
   function rombo(col, bordo) {
@@ -342,17 +327,17 @@ const Mappa = (() => {
     g.beginPath(); g.moveTo(s / 2, 3); g.lineTo(s - 3, s / 2); g.lineTo(s / 2, s - 3); g.lineTo(3, s / 2); g.closePath(); g.fillStyle = col; g.fill(); g.lineWidth = 4; g.strokeStyle = bordo; g.stroke();
     return g.getImageData(0, 0, s, s);
   }
-  const COL = { chiaro: { p: '#4a1fe0', pb: '#ffffff', cl: '#2c1888', clt: '#ffffff', app: '#ffffff', sede: '#e8590c', lab: '#241a52', halo: '#ffffff', spento: '#f1eefb', zona: '#5b2eff', vuoto: '#faf9ff',
-      rilievo: ['#e4ddff', '#b9a6ff', '#8b5cf6', '#5b2eff', '#3b1a9e'] },
-    scuro: { p: '#b9a6ff', pb: '#141127', cl: '#8f74ff', clt: '#0f0c22', app: '#141127', sede: '#ff9b5e', lab: '#f1edff', halo: '#141127', spento: '#0d0b1c', zona: '#a78bfa', vuoto: '#100d22',
-      rilievo: ['#3a2f7a', '#5b45c4', '#8b6cff', '#c2b2ff', '#f1ecff'] } };
+  // clienti viola (il colore del prodotto), fornitori arancio (lo stesso dei grafici degli acquisti)
+  const COL = { chiaro: { p: '#4a1fe0', f: '#c85f0e', pb: '#ffffff', cl: '#2c1888', clf: '#a24a08', clt: '#ffffff', app: '#ffffff', sede: '#15122e', lab: '#241a52', halo: '#ffffff', spento: '#f1eefb', zona: '#5b2eff', vuoto: '#faf9ff' },
+    scuro: { p: '#b9a6ff', f: '#f0954a', pb: '#141127', cl: '#8f74ff', clf: '#e07b2c', clt: '#0f0c22', app: '#141127', sede: '#f1edff', lab: '#f1edff', halo: '#141127', spento: '#0d0b1c', zona: '#a78bfa', vuoto: '#100d22' } };
 
-  /* disegna la mappa in «box». punti: [{id, nome, lon, lat, f (fatturato), prec, tip()}]; sede: {lon, lat, nome}|null;
-     province: le sigle delle province con clienti (il dettaglio si legge solo lì). Restituisce i comandi della mappa
+  /* disegna la mappa in «box». punti: [{id, tipo: 'c' cliente | 'f' fornitore, nome, lon, lat, f (valore), prec, prov, tip()}];
+     sede: {lon, lat, nome}|null; province: le sigle delle province con clienti o fornitori (il dettaglio si legge solo lì);
+     provVal: {sigla: {nome, c, nc, f, nf}} per la provincia sotto il puntatore. Restituisce i comandi della mappa
      oppure lancia un errore (niente WebGL, libreria mancante). */
-  async function disegna(box, { punti, sede, province = [], provSede = null, onPunto, onZona, vista }) {
+  async function disegna(box, { punti, sede, province = [], provSede = null, provVal = {}, onPunto, onZona, onProv, vista, tipi = 'tutti', raggi = true }) {
     const ml = await libreria();
-    // clienti tutti in una regione: si vede solo la regione, con il dettaglio di tutte le sue province e senza la mappa
+    // tutto in una regione: si vede solo la regione, con il dettaglio di tutte le sue province e senza la mappa
     // d'insieme (se il dettaglio c'è); in due o più regioni, tutta l'Italia
     const regs = new Set(province.map(regioneDi).filter(Boolean)), regione = regs.size === 1 ? [...regs][0] : null;
     const provReg = regione ? Object.keys(window.MAPPA_RISORSE.confini.reg).filter(p => regioneDi(p) === regione) : [];
@@ -360,32 +345,35 @@ const Mappa = (() => {
     const F = await fonti(!soloDett); if (!F) throw new Error('Mappa non disponibile.');
     attive = regione ? [...province, ...provReg.filter(p => !province.includes(p))] : [...province, ...(provSede && !province.includes(provSede) ? [provSede] : [])];
     attive.forEach(pr => { if (dettaglioDi(pr)) archivio(pr); });   // intestazioni in anticipo: il primo ingrandimento è subito pronto
-    const tema = scuro() ? 'scuro' : 'chiaro', C = COL[tema];
-    let scalaR = 1;   // le colonne del rilievo in proporzione alla scala: su una regione più basse che sull'Italia intera
-    const fcDi = P => ({ type: 'FeatureCollection', features: P.map(p => ({ type: 'Feature', properties: { id: p.id, nome: p.nome, f: Math.max(0, p.f), a: p.prec === 'comune' || p.prec === 'cap' || p.prec === 'provincia' ? 1 : 0 }, geometry: { type: 'Point', coordinates: [p.lon, p.lat] } })) });
+    const tema = scuro() ? 'scuro' : 'chiaro', C = COL[tema], quieto = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let tutti = punti, mostra = tipi, k = 1;   // k: crescita dei punti all'apertura (0 → 1)
+    const visibili = () => tutti.filter(p => mostra === 'tutti' || (mostra === 'fornitori' ? p.tipo === 'f' : p.tipo !== 'f'));
+    const fcDi = P => ({ type: 'FeatureCollection', features: P.map(p => ({ type: 'Feature', properties: { id: p.id, nome: p.nome, t: p.tipo === 'f' ? 'f' : 'c', f: Math.max(0, p.f), fc: p.tipo === 'f' ? 0 : Math.max(0, p.f), ff: p.tipo === 'f' ? Math.max(0, p.f) : 0, a: p.prec === 'comune' || p.prec === 'cap' || p.prec === 'provincia' ? 1 : 0 }, geometry: { type: 'Point', coordinates: [p.lon, p.lat] } })) });
     const smDi = P => Math.sqrt(Math.max(1, ...P.map(p => p.f)));
-    const raggioG = sm => ['interpolate', ['linear'], ['sqrt', ['get', 'f']], 0, 13, sm * 2, 34];
-    const raggioP = sm => ['interpolate', ['linear'], ['zoom'], 5, ['interpolate', ['linear'], ['sqrt', ['get', 'f']], 0, 4, sm, 12], 15, ['interpolate', ['linear'], ['sqrt', ['get', 'f']], 0, 7, sm, 16]];
-    const fc = fcDi(punti), sm = smDi(punti), conClienti = [...new Set(province)], senza = Object.keys(confini()).filter(s => !conClienti.includes(s) && (!regione || provReg.includes(s)));
+    const raggioG = (sm, k) => ['*', k, ['interpolate', ['linear'], ['sqrt', ['get', 'f']], 0, 13, sm * 2, 34]];
+    const raggioP = (sm, k) => ['interpolate', ['linear'], ['zoom'], 5, ['*', k, ['interpolate', ['linear'], ['sqrt', ['get', 'f']], 0, 4, sm, 12]], 15, ['*', k, ['interpolate', ['linear'], ['sqrt', ['get', 'f']], 0, 7, sm, 16]]];
+    const colP = ['case', ['==', ['get', 't'], 'f'], C.f, C.p];
+    let sm = smDi(visibili());
+    const conClienti = [...new Set(province)], senza = Object.keys(confini()).filter(s => !conClienti.includes(s) && (!regione || provReg.includes(s)));
     const anelliReg = regione ? sagoma(regione) : [], bbReg = regione ? anelliReg.flat().reduce((b, [x, y]) => [Math.min(b[0], x), Math.min(b[1], y), Math.max(b[2], x), Math.max(b[3], y)], [180, 90, -180, -90]) : null;
     const inizio = vista || (bbReg ? [[bbReg[0], bbReg[1]], [bbReg[2], bbReg[3]]] : [[6.6, 36.6], [18.5, 47.1]]);
     const map = new ml.Map({ container: box, style: stile(F, tema, bbox(attive.filter(dettaglioDi)), soloDett ? 6 : 8), bounds: inizio, fitBoundsOptions: { padding: 28 }, maxZoom: 19, minZoom: 4, maxPitch: 60, attributionControl: { compact: false }, dragRotate: false, pitchWithRotate: false, cooperativeGestures: false,
       renderWorldCopies: false, fadeDuration: 180, antialias: true,
       locale: { 'NavigationControl.ZoomIn': 'Ingrandisci', 'NavigationControl.ZoomOut': 'Rimpicciolisci', 'NavigationControl.ResetBearing': 'Orienta a nord', 'FullscreenControl.Enter': 'Schermo intero', 'FullscreenControl.Exit': 'Esci dallo schermo intero', 'ScaleControl.Meters': 'm', 'ScaleControl.Kilometers': 'km', 'Map.Title': 'Mappa', 'Marker.Title': 'Segnaposto', 'Popup.Close': 'Chiudi', 'AttributionControl.ToggleAttribution': 'Fonti della mappa', 'GlobeControl.Enable': 'Globo', 'GlobeControl.Disable': 'Piano' } });
     map.touchZoomRotate.disableRotation();
-    // rotella del mouse: zoom morbido e reattivo, centrato sul puntatore
+    // rotella del mouse: zoom morbido e reattivo, centrato sul puntatore; tastiera: frecce, + e −
     map.scrollZoom.enable({ around: 'pointer' }); map.scrollZoom.setWheelZoomRate(1 / 300); map.scrollZoom.setZoomRate(1 / 80);
     if (bbReg) { const w = bbReg[2] - bbReg[0], hh = bbReg[3] - bbReg[1]; map.setMaxBounds([[bbReg[0] - w * 0.35, bbReg[1] - hh * 0.35], [bbReg[2] + w * 0.35, bbReg[3] + hh * 0.35]]); map.setMinZoom(Math.max(4, map.getZoom() - 0.9)); }
     map.addControl(new ml.NavigationControl({ showCompass: false }), 'top-right');
     map.addControl(new ml.FullscreenControl(), 'top-right');
     map.addControl(new ml.ScaleControl({ unit: 'metric' }), 'bottom-left');
-    map.getCanvas().setAttribute('aria-label', 'Mappa dei clienti: ingrandisci per vedere le strade e i civici');
+    map.getCanvas().setAttribute('aria-label', 'Mappa di clienti e fornitori: ingrandisci con la rotella o con + e −, trascina per spostarti');
     await new Promise((ok, ko) => { map.once('load', ok); map.once('error', e => { if (!map.loaded()) ko(e.error || new Error('Mappa non disponibile.')); }); setTimeout(ok, 15000); });
     map.addImage('sede', rombo(C.sede, C.pb), { pixelRatio: 2 });
-    // le zone: province senza clienti velate ingrandendo, province con clienti con un contorno luminoso
+    // le zone: province senza nessuno velate ingrandendo, province con clienti o fornitori con un contorno luminoso;
+    // al passaggio del puntatore la provincia s'illumina e dice quanto vale
     map.addSource('zone-spente', { type: 'geojson', data: zoneFC(senza) });
-    map.addSource('zone-vendita', { type: 'geojson', data: zoneFC(conClienti) });
-    // una regione sola: fuori dalla regione la mappa sparisce, la regione resta in rilievo con il suo contorno
+    map.addSource('zone-vendita', { type: 'geojson', data: zoneFC(conClienti), promoteId: 's' });
     if (regione && anelliReg.length) {
       map.addSource('fuori', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[-179, -85], [179, -85], [179, 85], [-179, 85], [-179, -85]], ...anelliReg.map(r => [...r].reverse())] } } });
       map.addSource('regione', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'MultiPolygon', coordinates: anelliReg.map(r => [r]) } } });
@@ -394,85 +382,114 @@ const Mappa = (() => {
       map.addLayer({ id: 'regione-bordo', type: 'line', source: 'regione', paint: { 'line-color': C.zona, 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1.4, 12, 2.4], 'line-opacity': 0.85 } });
     }
     map.addLayer({ id: 'zone-velo', type: 'fill', source: 'zone-spente', paint: { 'fill-color': C.spento, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 5, 0, 7, 0.5, 11, 0.6, 12.5, 0] } });
+    map.addLayer({ id: 'zone-luce', type: 'fill', source: 'zone-vendita', maxzoom: 12, paint: { 'fill-color': C.zona, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 4, ['case', ['boolean', ['feature-state', 'su'], false], 0.13, 0], 10, ['case', ['boolean', ['feature-state', 'su'], false], 0.08, 0], 12, 0] } });
     map.addLayer({ id: 'zone-alone', type: 'line', source: 'zone-vendita', paint: { 'line-color': C.zona, 'line-blur': 5, 'line-width': ['interpolate', ['linear'], ['zoom'], 4, 4, 10, 10], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 4, 0.18, 9, 0.22, 12.5, 0] } });
-    map.addLayer({ id: 'zone-bordo', type: 'line', source: 'zone-vendita', paint: { 'line-color': C.zona, 'line-width': ['interpolate', ['linear'], ['zoom'], 4, 0.6, 10, 1.4], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 4, 0.4, 9, 0.7, 12.5, 0] } });
-    // il rilievo (vista «Rilievo»): colonne esagonali in 3D, l'Italia a colpo d'occhio
-    let ril = esagoni(punti), crescita = 0, animR = 0;
-    map.addSource('rilievo', { type: 'geojson', data: ril.fc });
-    const altezza = k => ['*', ['get', 'h'], k * scalaR];
-    map.addLayer({ id: 'rilievo', type: 'fill-extrusion', source: 'rilievo', layout: { visibility: 'none' }, paint: {
-      'fill-extrusion-color': ['interpolate', ['linear'], ['get', 't'], 0, C.rilievo[0], 0.25, C.rilievo[1], 0.5, C.rilievo[2], 0.75, C.rilievo[3], 1, C.rilievo[4]],
-      'fill-extrusion-height': altezza(0), 'fill-extrusion-base': 0, 'fill-extrusion-opacity': ['interpolate', ['linear'], ['zoom'], 4, 0.94, 9.5, 0.94, 11, 0.35], 'fill-extrusion-vertical-gradient': true } });
-    map.addLayer({ id: 'rilievo-base', type: 'line', source: 'rilievo', layout: { visibility: 'none' }, paint: { 'line-color': C.zona, 'line-width': 1, 'line-opacity': 0.35 } }, 'rilievo');
-    const cresci = (da, a, ms = 1100) => { cancelAnimationFrame(animR); const t0 = performance.now(), ease = x => 1 - Math.pow(1 - x, 3);
-      const passo = t => { const x = Math.min(1, (t - t0) / ms); crescita = da + (a - da) * ease(x); map.setPaintProperty('rilievo', 'fill-extrusion-height', altezza(crescita)); if (x < 1) animR = requestAnimationFrame(passo); else animR = 0; }; animR = requestAnimationFrame(passo); };
-    map.addSource('clienti', { type: 'geojson', data: fc, cluster: true, clusterMaxZoom: 14, clusterRadius: 42, clusterProperties: { f: ['+', ['get', 'f']] } });
-    map.addLayer({ id: 'gruppi', type: 'circle', source: 'clienti', filter: ['has', 'point_count'], paint: { 'circle-color': C.cl, 'circle-opacity': 0.9, 'circle-stroke-color': C.pb, 'circle-stroke-width': 2, 'circle-radius': raggioG(sm) } });
+    map.addLayer({ id: 'zone-bordo', type: 'line', source: 'zone-vendita', paint: { 'line-color': C.zona, 'line-width': ['interpolate', ['linear'], ['zoom'], 4, ['case', ['boolean', ['feature-state', 'su'], false], 2.4, 0.6], 10, ['case', ['boolean', ['feature-state', 'su'], false], 2.8, 1.4]], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 4, 0.4, 9, 0.7, 12.5, 0] } });
+    // collegamenti con la sede: archi che partono dalla sede all'apertura, poi restano leggeri; spariscono ingrandendo
+    // (linee semplici: la crescita iniziale si fa accorciando gli archi nei dati, poi restano ferme e leggere da disegnare)
+    const archiDi = (P, prog = 1) => ({ type: 'FeatureCollection', features: sede ? P.filter(p => Math.abs(p.lon - sede.lon) + Math.abs(p.lat - sede.lat) > 0.02).map(p => { const a = arco([sede.lon, sede.lat], [p.lon, p.lat]), n = Math.max(2, Math.ceil(a.length * prog));
+      return { type: 'Feature', properties: { t: p.tipo === 'f' ? 'f' : 'c', w: Math.sqrt(Math.max(0, p.f)) }, geometry: { type: 'LineString', coordinates: a.slice(0, n) } }; }) : [] });
+    let conRaggi = raggi && !!sede, animA = 0;
+    map.addSource('raggi', { type: 'geojson', data: archiDi([]) });
+    for (const [t, col] of [['c', C.p], ['f', C.f]]) map.addLayer({ id: 'raggi-' + t, type: 'line', source: 'raggi', maxzoom: 10.5, filter: ['==', ['get', 't'], t], layout: { 'line-cap': 'round' },
+      paint: { 'line-color': col, 'line-width': ['interpolate', ['linear'], ['get', 'w'], 0, 0.7, sm, 2.6], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 4, 0.42, 8, 0.32, 10.5, 0] } });
+    const lancia = () => { cancelAnimationFrame(animA); const src = map.getSource('raggi'), V = conRaggi ? visibili() : [];
+      if (!V.length || quieto()) { src.setData(archiDi(V)); return; } const t0 = performance.now(), ms = 1100;
+      const passo = t => { const x = Math.max(0, Math.min(1, (t - t0) / ms)); try { src.setData(archiDi(V, 1 - Math.pow(1 - x, 3))); } catch { return; } if (x < 1) animA = requestAnimationFrame(passo); }; animA = requestAnimationFrame(passo); };
+    // punti e gruppi: i gruppi hanno il colore di chi vale di più dentro, con un anello dell'altro colore se ci sono entrambi
+    map.addSource('clienti', { type: 'geojson', data: fcDi(visibili()), generateId: true, cluster: true, clusterMaxZoom: 14, clusterRadius: 44, clusterProperties: { f: ['+', ['get', 'f']], fc: ['+', ['get', 'fc']], ff: ['+', ['get', 'ff']] } });
+    const magF = ['>', ['get', 'ff'], ['get', 'fc']];
+    map.addLayer({ id: 'gruppi-anello', type: 'circle', source: 'clienti', filter: ['all', ['has', 'point_count'], ['>', ['get', 'fc'], 0], ['>', ['get', 'ff'], 0]], paint: { 'circle-color': 'rgba(0,0,0,0)', 'circle-stroke-color': ['case', magF, C.p, C.f], 'circle-stroke-width': 3.5, 'circle-radius': ['+', raggioG(sm, 1), 3] } });
+    map.addLayer({ id: 'gruppi', type: 'circle', source: 'clienti', filter: ['has', 'point_count'], paint: { 'circle-color': ['case', magF, C.clf, C.cl], 'circle-opacity': 0.92, 'circle-stroke-color': C.pb, 'circle-stroke-width': ['case', ['boolean', ['feature-state', 'su'], false], 3.5, 2], 'circle-radius': raggioG(sm, 1) } });
     map.addLayer({ id: 'gruppi-n', type: 'symbol', source: 'clienti', filter: ['has', 'point_count'], layout: { 'text-field': ['get', 'point_count_abbreviated'], 'text-font': ['Noto Sans Medium'], 'text-size': 13, 'text-allow-overlap': true }, paint: { 'text-color': C.clt } });
-    map.addLayer({ id: 'punti', type: 'circle', source: 'clienti', filter: ['!', ['has', 'point_count']], paint: { 'circle-color': ['case', ['==', ['get', 'a'], 1], C.app, C.p], 'circle-stroke-color': ['case', ['==', ['get', 'a'], 1], C.p, C.pb], 'circle-stroke-width': ['case', ['==', ['get', 'a'], 1], 3, 2],
-      'circle-radius': raggioP(sm), 'circle-pitch-alignment': 'map' } });
+    map.addLayer({ id: 'punti', type: 'circle', source: 'clienti', filter: ['!', ['has', 'point_count']], paint: { 'circle-color': ['case', ['==', ['get', 'a'], 1], C.app, colP], 'circle-stroke-color': ['case', ['==', ['get', 'a'], 1], colP, C.pb], 'circle-stroke-width': ['case', ['boolean', ['feature-state', 'su'], false], 4, ['==', ['get', 'a'], 1], 3, 2],
+      'circle-radius': raggioP(sm, 1), 'circle-pitch-alignment': 'map' } });
     map.addLayer({ id: 'punti-sel', type: 'circle', source: 'clienti', filter: ['==', ['get', 'id'], ''], paint: { 'circle-color': 'rgba(0,0,0,0)', 'circle-stroke-color': C.sede, 'circle-stroke-width': 3, 'circle-radius': 20, 'circle-pitch-alignment': 'map' } });
     map.addLayer({ id: 'punti-nome', type: 'symbol', source: 'clienti', minzoom: 12.5, filter: ['!', ['has', 'point_count']], layout: { 'text-field': ['get', 'nome'], 'text-font': ['Noto Sans Medium'], 'text-size': 12.5, 'text-offset': [0, 1.5], 'text-anchor': 'top', 'text-max-width': 12, 'text-optional': true }, paint: { 'text-color': C.lab, 'text-halo-color': C.halo, 'text-halo-width': 1.6 } });
     if (sede) {
       map.addSource('sede', { type: 'geojson', data: { type: 'Feature', properties: { nome: sede.nome }, geometry: { type: 'Point', coordinates: [sede.lon, sede.lat] } } });
       map.addLayer({ id: 'sede', type: 'symbol', source: 'sede', layout: { 'icon-image': 'sede', 'icon-allow-overlap': true, 'icon-size': 1, 'text-field': 'Sede', 'text-font': ['Noto Sans Medium'], 'text-size': 12, 'text-offset': [0, 1.4], 'text-anchor': 'top', 'text-optional': true }, paint: { 'text-color': C.lab, 'text-halo-color': C.halo, 'text-halo-width': 1.6 } });
     }
-    const pop = new ml.Popup({ closeButton: false, closeOnClick: false, offset: 12, className: 'vd-pop' });
-    const riquadro = () => { if (bbReg) return new ml.LngLatBounds([bbReg[0], bbReg[1]], [bbReg[2], bbReg[3]]); const b = punti.reduce((b, p) => b.extend([p.lon, p.lat]), new ml.LngLatBounds()); if (sede) b.extend([sede.lon, sede.lat]); return b; };
+    // all'apertura i punti crescono (gli archi partono insieme), poi la mappa resta ferma: nessun ridisegno continuo
+    let animK = 0;
+    const raggiPunti = () => { try { map.setPaintProperty('punti', 'circle-radius', raggioP(sm, k)); map.setPaintProperty('gruppi', 'circle-radius', raggioG(sm, k)); map.setPaintProperty('gruppi-anello', 'circle-radius', ['+', raggioG(sm, k), 3]); } catch { } };
+    const cresci = () => { cancelAnimationFrame(animK); if (quieto()) { k = 1; raggiPunti(); return; } const t0 = performance.now(), ms = 650;
+      const passo = t => { const x = Math.max(0, Math.min(1, (t - t0) / ms)); k = x < 1 ? 0.15 + 0.85 * (1 - Math.pow(1 - x, 3)) * (1 + 0.12 * Math.sin(x * Math.PI)) : 1; raggiPunti(); if (x < 1) animK = requestAnimationFrame(passo); }; animK = requestAnimationFrame(passo); };
+    const pop = new ml.Popup({ closeButton: false, closeOnClick: false, offset: 12, className: 'vd-pop', maxWidth: '280px' });
+    const riquadro = (P = visibili()) => { if (bbReg) return new ml.LngLatBounds([bbReg[0], bbReg[1]], [bbReg[2], bbReg[3]]); const b = P.reduce((b, p) => b.extend([p.lon, p.lat]), new ml.LngLatBounds()); if (sede) b.extend([sede.lon, sede.lat]); return b; };
+    const testo = (cls, t) => { const e = document.createElement(cls === 'b' ? 'b' : 'div'); if (cls && cls !== 'b') e.className = cls; e.textContent = t; return e; };
+    const eu = v => Math.round(v).toLocaleString('it-IT') + ' €';
 
-    map.on('mouseenter', 'punti', e => { map.getCanvas().style.cursor = 'pointer'; const f = e.features[0]; const p = punti.find(x => x.id === f.properties.id); if (p) pop.setLngLat(f.geometry.coordinates).setDOMContent(p.tip()).addTo(map); });
-    map.on('mouseleave', 'punti', () => { map.getCanvas().style.cursor = ''; pop.remove(); });
-    map.on('mouseenter', 'gruppi', () => { map.getCanvas().style.cursor = 'pointer'; }); map.on('mouseleave', 'gruppi', () => { map.getCanvas().style.cursor = ''; });
-    map.on('click', 'gruppi', async e => { const f = e.features[0]; const z = await map.getSource('clienti').getClusterExpansionZoom(f.properties.cluster_id); map.easeTo({ center: f.geometry.coordinates, zoom: Math.min(z + 0.3, 18) }); });
+    // passaggio del puntatore: il punto si ingrandisce, il gruppo dice chi c'è dentro, la provincia s'illumina
+    let suP = null, suG = null, suZ = null;
+    const stato = (src, id, on) => { if (id != null) try { map.setFeatureState({ source: src, id }, { su: on }); } catch { } };
+    map.on('mousemove', 'punti', e => { if (occupata(e)) return; map.getCanvas().style.cursor = 'pointer'; const f = e.features[0]; if (suP !== f.id) { stato('clienti', suP, false); suP = f.id; stato('clienti', suP, true); }
+      const p = tutti.find(x => x.id === f.properties.id); if (p) pop.setLngLat(f.geometry.coordinates).setDOMContent(p.tip()).addTo(map); });
+    map.on('mouseleave', 'punti', () => { map.getCanvas().style.cursor = ''; stato('clienti', suP, false); suP = null; pop.remove(); });
+    map.on('mousemove', 'gruppi', async e => { if (occupata(e)) return; map.getCanvas().style.cursor = 'pointer'; const f = e.features[0], cid = f.properties.cluster_id; if (suG === f.id) return; stato('clienti', suG, false); suG = f.id; stato('clienti', suG, true);
+      let foglie = []; try { foglie = await map.getSource('clienti').getClusterLeaves(cid, 400, 0); } catch { }
+      if (suG !== f.id) return;
+      const c = foglie.filter(x => x.properties.t !== 'f'), g = foglie.filter(x => x.properties.t === 'f'), top = [...foglie].sort((a, b) => b.properties.f - a.properties.f).slice(0, 4).map(x => x.properties.nome);
+      const d = testo('vd-popt', ''); d.append(testo('b', [c.length ? `${c.length} ${c.length === 1 ? 'cliente' : 'clienti'}` : '', g.length ? `${g.length} ${g.length === 1 ? 'fornitore' : 'fornitori'}` : ''].filter(Boolean).join(' · ')));
+      if (c.length) d.append(testo('', `Vendite ${eu(f.properties.fc)}`)); if (g.length) d.append(testo('', `Acquisti ${eu(f.properties.ff)}`));
+      d.append(testo('muted', top.join(' · ') + (foglie.length > 4 ? '…' : '')), testo('muted small', 'Tocca per ingrandire'));
+      pop.setLngLat(f.geometry.coordinates).setDOMContent(d).addTo(map); });
+    map.on('mouseleave', 'gruppi', () => { map.getCanvas().style.cursor = ''; stato('clienti', suG, false); suG = null; pop.remove(); });
+    map.on('click', 'gruppi', async e => { const f = e.features[0]; const z = await map.getSource('clienti').getClusterExpansionZoom(f.properties.cluster_id); map.easeTo({ center: f.geometry.coordinates, zoom: Math.min(z + 0.3, 18), duration: quieto() ? 0 : 650 }); });
     map.on('click', 'punti', e => { const id = e.features[0].properties.id; onPunto?.(id); });
-    // una colonna del rilievo: al passaggio quanto vale la zona, con un tocco ci si entra
-    map.on('mousemove', 'rilievo', e => { if (modo !== 'rilievo') return; const p = e.features[0].properties; map.getCanvas().style.cursor = 'pointer';
-      const d = document.createElement('div'); d.className = 'vd-popt'; const b = document.createElement('b'); b.textContent = `${Math.round(p.f).toLocaleString('it-IT')} €`; const r1 = document.createElement('div'); r1.textContent = `${p.n} ${p.n === 1 ? 'cliente' : 'clienti'} in questa zona`; const r2 = document.createElement('div'); r2.className = 'muted'; r2.textContent = p.nomi; d.append(b, r1, r2);
-      pop.setLngLat(e.lngLat).setDOMContent(d).addTo(map); });
-    map.on('mouseleave', 'rilievo', () => { map.getCanvas().style.cursor = ''; pop.remove(); });
-    map.on('click', 'rilievo', e => { if (modo !== 'rilievo') return; const p = e.features[0].properties; pop.remove(); map.flyTo({ center: [p.cx, p.cy], zoom: 11, pitch: 0, bearing: 0, speed: 1.2 }); });
-    const zona = () => { const b = map.getBounds(); onZona?.(punti.filter(p => b.contains([p.lon, p.lat])), map.getZoom(), [[b.getWest(), b.getSouth()], [b.getEast(), b.getNorth()]]); };
-    map.on('moveend', zona); zona();
+    const sopraPunto = pt => map.queryRenderedFeatures(pt, { layers: ['punti', 'gruppi'] }).length > 0;
+    const occupata = e => e.originalEvent?.buttons || map.isMoving();   // mentre si trascina o si ingrandisce, niente lavoro in più
+    map.on('mousemove', 'zone-luce', e => { if (occupata(e)) return; if (map.getZoom() > 11.5 || sopraPunto(e.point)) { if (suZ) { stato('zone-vendita', suZ, false); suZ = null; if (!suP && !suG) pop.remove(); } return; }
+      const s = e.features[0].properties.s; if (suZ !== s) { stato('zone-vendita', suZ, false); suZ = s; stato('zone-vendita', s, true); }
+      const v = provVal[s] || {}, d = testo('vd-popt', ''); d.append(testo('b', `${v.nome || s} (${s})`));
+      if (v.nc) d.append(testo('', `${v.nc} ${v.nc === 1 ? 'cliente' : 'clienti'} · ${eu(v.c)}`)); if (v.nf) d.append(testo('', `${v.nf} ${v.nf === 1 ? 'fornitore' : 'fornitori'} · ${eu(v.f)}`));
+      d.append(testo('muted small', 'Tocca per inquadrarla')); pop.setLngLat(e.lngLat).setDOMContent(d).addTo(map); });
+    map.on('mouseleave', 'zone-luce', () => { stato('zone-vendita', suZ, false); suZ = null; if (!suP && !suG) pop.remove(); });
+    const inquadraProv = s => { const b = bbox([s]); if (b) map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 36, duration: quieto() ? 0 : 900, maxZoom: 11 }); };
+    map.on('click', 'zone-luce', e => { if (sopraPunto(e.point) || map.getZoom() > 11.5) return; const s = e.features[0].properties.s; pop.remove(); inquadraProv(s); onProv?.(s); });
+    // l'elenco «nella zona che vedi» si aggiorna appena la mappa si ferma, fuori dal fotogramma del movimento
+    let zonaT = 0; const zonaPresto = () => { clearTimeout(zonaT); zonaT = setTimeout(zona, 140); };
+    const zona = () => { const b = map.getBounds(); onZona?.(visibili().filter(p => b.contains([p.lon, p.lat])), map.getZoom(), [[b.getWest(), b.getSouth()], [b.getEast(), b.getNorth()]]); };
+    map.on('moveend', zonaPresto); zona();
     // allontanandosi, la vista torna dritta
-    map.on('zoomend', () => { if (modo !== 'rilievo' && map.getZoom() < 13.5 && (map.getPitch() > 1 || Math.abs(map.getBearing()) > 1)) map.easeTo({ pitch: 0, bearing: 0, duration: 700 }); });
-    // il cliente scelto pulsa tre volte, poi l'anello resta fermo (la mappa non si ridisegna di continuo)
+    map.on('zoomend', () => { if (map.getZoom() < 13.5 && (map.getPitch() > 1 || Math.abs(map.getBearing()) > 1)) map.easeTo({ pitch: 0, bearing: 0, duration: 700 }); });
+    // il punto scelto pulsa tre volte, poi l'anello resta fermo (la mappa non si ridisegna di continuo)
     let selId = '', anim = 0, t0 = 0;
     const fermo = () => { anim = 0; try { map.setPaintProperty('punti-sel', 'circle-radius', 20); map.setPaintProperty('punti-sel', 'circle-stroke-opacity', 1); } catch { } };
-    const pulsa = t => { if (!selId) return fermo(); t0 ||= t; const e = t - t0; if (e > 2400) return fermo(); const k = (1 - Math.cos(e / 800 * 2 * Math.PI)) / 2; try { map.setPaintProperty('punti-sel', 'circle-radius', 20 + 9 * k); map.setPaintProperty('punti-sel', 'circle-stroke-opacity', 1 - 0.65 * k); } catch { anim = 0; return; } anim = requestAnimationFrame(pulsa); };
-    const seleziona = id => { selId = id || ''; map.setFilter('punti-sel', ['==', ['get', 'id'], selId]); cancelAnimationFrame(anim); t0 = 0; anim = 0; if (selId && !matchMedia('(prefers-reduced-motion: reduce)').matches) anim = requestAnimationFrame(pulsa); };
-    let modo = 'punti';
+    const pulsa = t => { if (!selId) return fermo(); t0 ||= t; const e = t - t0; if (e > 2400) return fermo(); const q = (1 - Math.cos(e / 800 * 2 * Math.PI)) / 2; try { map.setPaintProperty('punti-sel', 'circle-radius', 20 + 9 * q); map.setPaintProperty('punti-sel', 'circle-stroke-opacity', 1 - 0.65 * q); } catch { anim = 0; return; } anim = requestAnimationFrame(pulsa); };
+    const seleziona = id => { selId = id || ''; map.setFilter('punti-sel', ['==', ['get', 'id'], selId]); cancelAnimationFrame(anim); t0 = 0; anim = 0; if (selId && !quieto()) anim = requestAnimationFrame(pulsa); };
+    // il giro dei principali: la mappa vola da uno all'altro mostrando la scheda; si ferma al primo gesto
+    let giroT = 0, giroOn = false, giroFine = null;
+    const fermaGiro = () => { if (!giroOn) return; giroOn = false; clearTimeout(giroT); map.off('mousedown', fermaGiro); map.off('wheel', fermaGiro); map.off('touchstart', fermaGiro); giroFine?.(); };
+    const vola = (id, { scheda = false, zoom = null } = {}) => {
+      const p = tutti.find(x => x.id === id); if (!p) return; seleziona(id);
+      const vicino = p.prec === 'civico' || p.prec === 'stimato', z = zoom ?? (vicino ? 17.2 : p.prec === 'via' ? 15.5 : 12.5), d3 = zoom == null && vicino && haDettaglio() && dettaglioDi(p.prov) && !quieto();
+      map.flyTo({ center: [p.lon, p.lat], zoom: zoom ?? Math.max(map.getZoom(), z), pitch: d3 ? 52 : 0, bearing: d3 ? -18 : 0, speed: 1.4, curve: 1.5, essential: true, ...(quieto() ? { duration: 0 } : {}) });
+      if (scheda) map.once('moveend', () => { if (selId === id) pop.setLngLat([p.lon, p.lat]).setDOMContent(p.tip()).addTo(map); });
+    };
+    cresci(); lancia();
     return {
       map, dettaglio: haDettaglio(), province: (regione ? provReg : conClienti).filter(dettaglioDi), regione, soloRegione: soloDett,
-      vola(id) {
-        const p = punti.find(x => x.id === id); if (!p) return; seleziona(id);
-        const vicino = p.prec === 'civico' || p.prec === 'stimato', z = vicino ? 17.2 : p.prec === 'via' ? 15.5 : 12.5, d3 = vicino && haDettaglio() && dettaglioDi(p.prov) && !matchMedia('(prefers-reduced-motion: reduce)').matches;
-        map.flyTo({ center: [p.lon, p.lat], zoom: Math.max(map.getZoom(), z), pitch: d3 ? 52 : 0, bearing: d3 ? -18 : 0, speed: 1.4, curve: 1.5, essential: true });
+      vola: id => vola(id),
+      tutta(anim = false) { const b = riquadro(); if (b.isEmpty()) return; map.fitBounds(b, { padding: bbReg ? 28 : 40, maxZoom: 15, duration: anim && !quieto() ? 900 : 0, pitch: 0, bearing: 0 }); },
+      sede() { if (sede) map.flyTo({ center: [sede.lon, sede.lat], zoom: Math.max(map.getZoom(), 12.5), pitch: 0, bearing: 0, speed: 1.4, ...(quieto() ? { duration: 0 } : {}) }); },
+      provincia: inquadraProv,
+      // quali punti mostrare: tutti, solo i clienti o solo i fornitori
+      mostra(t) { mostra = t; const V = visibili(); sm = smDi(V); map.getSource('clienti').setData(fcDi(V));
+        for (const l of ['raggi-c', 'raggi-f']) map.setPaintProperty(l, 'line-width', ['interpolate', ['linear'], ['get', 'w'], 0, 0.7, sm, 2.6]); pop.remove(); cresci(); lancia(); zona(); },
+      raggi(on) { conRaggi = on && !!sede; lancia(); },
+      get conRaggi() { return conRaggi; },
+      giro(ids, { pausa = 3200, onPasso = null, onFine = null } = {}) {
+        fermaGiro(); const lista = ids.filter(id => tutti.some(p => p.id === id)); if (!lista.length) return;
+        giroOn = true; giroFine = onFine; let i = 0;
+        map.on('mousedown', fermaGiro); map.on('wheel', fermaGiro); map.on('touchstart', fermaGiro);
+        const passo = () => { if (!giroOn) return; if (i >= lista.length) { fermaGiro(); this.tutta(true); return; } const id = lista[i++]; onPasso?.(id, i, lista.length); vola(id, { scheda: true, zoom: 11.2 }); map.once('moveend', () => { if (giroOn) giroT = setTimeout(passo, pausa); }); };
+        passo();
       },
-      tutta() { const b = riquadro(); if (b.isEmpty()) return;
-        if (modo === 'rilievo') { const cam = map.cameraForBounds(b, { padding: { top: 10, bottom: 150, left: 30, right: 30 } }); map.jumpTo({ center: cam.center, zoom: Math.min(9, cam.zoom + 0.3), pitch: 50, bearing: -14 }); }
-        else map.fitBounds(b, { padding: bbReg ? 28 : 40, maxZoom: 15, duration: 0, pitch: 0, bearing: 0 }); },
-      // «Rilievo»: la vista s'inclina sull'Italia e le colonne crescono; «Clienti»: le colonne scendono e la vista torna dritta
-      rilievo(on) {
-        const quieto = matchMedia('(prefers-reduced-motion: reduce)').matches;
-        modo = on ? 'rilievo' : 'punti'; pop.remove();
-        for (const l of ['zone-alone']) map.setLayoutProperty(l, 'visibility', on ? 'none' : 'visible');
-        for (const l of ['gruppi', 'gruppi-n', 'punti']) map.setLayerZoomRange(l, on ? 10.5 : 0, 24);
-        if (on) {
-          for (const l of ['rilievo', 'rilievo-base']) map.setLayoutProperty(l, 'visibility', 'visible');
-          const b = riquadro(), cam = !b.isEmpty() && map.cameraForBounds(b, { padding: { top: 10, bottom: 150, left: 30, right: 30 } });
-          if (cam) scalaR = Math.max(0.12, Math.min(1, 2 ** (5.6 - Math.min(9, cam.zoom + 0.3))));
-          if (cam) map.easeTo({ center: cam.center, zoom: Math.min(9, cam.zoom + 0.3), pitch: 50, bearing: -14, duration: quieto ? 0 : 1400 });
-          if (quieto) { crescita = 1; map.setPaintProperty('rilievo', 'fill-extrusion-height', altezza(1)); } else cresci(0, 1, 1400);
-        } else {
-          cancelAnimationFrame(animR); for (const l of ['rilievo', 'rilievo-base']) map.setLayoutProperty(l, 'visibility', 'none');
-          map.setPaintProperty('rilievo', 'fill-extrusion-height', altezza(0)); crescita = 0;
-          if (map.getZoom() < 13.5) map.easeTo({ pitch: 0, bearing: 0, duration: quieto ? 0 : 900 });
-        }
-      },
-      get modo() { return modo; },
-      aggiorna(P) { punti = P; const k = smDi(P), d = fcDi(P); map.getSource('clienti').setData(d); ril = esagoni(P); map.getSource('rilievo').setData(ril.fc); map.setPaintProperty('gruppi', 'circle-radius', raggioG(k)); map.setPaintProperty('punti', 'circle-radius', raggioP(k)); zona(); },
+      fermaGiro, get inGiro() { return giroOn; },
+      aggiorna(P) { tutti = P; const V = visibili(); sm = smDi(V); map.getSource('clienti').setData(fcDi(V)); cancelAnimationFrame(animA); map.getSource('raggi').setData(archiDi(conRaggi ? V : [])); raggiPunti(); zona(); },
       seleziona,
-      chiudi() { selId = ''; cancelAnimationFrame(anim); cancelAnimationFrame(animR); pop.remove(); map.remove(); },
+      chiudi() { selId = ''; fermaGiro(); clearTimeout(zonaT); cancelAnimationFrame(anim); cancelAnimationFrame(animK); cancelAnimationFrame(animA); pop.remove(); map.remove(); },
     };
   }
   const webgl = () => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; } };

@@ -35,10 +35,12 @@ Se nei file ci sono più aziende (chi emette fatture a qualcuno che non sia l'az
   - **Una regione sola**: se tutti i clienti sono in una regione, la mappa mostra solo quella, come un'isola con il suo contorno, con strade ed edifici di tutte le sue province; lo spostamento resta attorno alla regione. Il resto d'Italia non si scarica: nemmeno la mappa d'insieme. Con clienti in due o più regioni si vede tutta l'Italia.
   - **Le zone dove vendi** hanno un contorno luminoso; ingrandendo, le province senza clienti si velano.
   - **Zoom con la rotella del mouse**, centrato sul puntatore, e spostamento trascinando, con inerzia; sul telefono con due dita.
-  - **Clienti o Rilievo**, con due pulsanti sulla mappa. «Rilievo» inclina la vista sull'Italia e fa crescere colonne esagonali in 3D, una per zona di circa 20 km, alte e scure quanto il fatturato: si vede a colpo d'occhio dove si concentrano le vendite. Al passaggio una colonna dice quanto vale la zona e i clienti principali; con un tocco ci si entra. Ingrandendo tornano i singoli clienti.
+  - **Clienti e fornitori insieme**: i clienti in viola, i fornitori in arancio. I gruppi prendono il colore di chi vale di più dentro, con un anello dell'altro colore se ci sono entrambi; al passaggio dicono quanti clienti e fornitori contengono, quanto valgono e chi sono i principali. «Tutti, Clienti, Fornitori» sopra la mappa sceglie chi mostrare.
+  - **Una mappa che si muove**: all'apertura i punti crescono e dalla sede partono archi leggeri verso ogni cliente e fornitore («Collegamenti» li spegne); poi la mappa resta ferma e non consuma. Al passaggio il punto si ingrandisce e mostra la sua scheda breve (che cosa compra o che cosa gli compri); la provincia sotto il puntatore si illumina e dice clienti, fornitori e importi, e con un tocco la mappa la inquadra.
+  - **Navigare**: la casella «Cerca» trova un cliente, un fornitore o un Comune e ci vola; «Tutta l'area» inquadra tutti; «Sede» vola sulla sede; «Giro dei principali» vola sugli otto che valgono di più, uno dopo l'altro, con la scheda aperta, e si ferma al primo gesto.
   - **Volo sull'edificio**: dall'elenco o dalla scheda il programma vola sul cliente, inclina la vista e alza gli edifici in 3D (con le altezze di OpenStreetMap). Il punto scelto pulsa tre volte. Allontanandosi la vista torna dritta. Con «riduci movimento» attivo nel sistema niente voli inclinati né pulsazioni;
-- **Comuni**: un cerchio per Comune, grande come il fatturato, con la sede dell'azienda e i cerchi di 50 e 100 km;
-- **Province**: le province colorate per fatturato.
+- **Comuni**: un cerchio per Comune, grande come il fatturato (viola) o gli acquisti (arancio), con la sede dell'azienda e i cerchi di 50 e 100 km; i cerchi entrano con un piccolo rimbalzo, lo zoom (rotella, pulsanti, doppio clic) è animato; nello stesso Comune il cerchio dei fornitori si affianca a quello dei clienti, così si toccano entrambi;
+- **Province**: le province colorate per fatturato o, scegliendo «Fornitori», per acquisti (scala arancio).
 
 Nelle viste Comuni e Province si usano zoom, spostamento e pulsanti. Un tocco su un Comune mostra **chi sono i clienti e che cosa hanno comprato**; un tocco su una provincia mostra i suoi Comuni. Accanto alla mappa ci sono:
 - la distanza dalla sede, per fasce;
@@ -91,6 +93,24 @@ Con le sole fatture di acquisto lo strumento mostra Fornitori, Andamento e Pagam
 
 **Excel** con 11 fogli: scoperte, clienti, prodotti, mesi, territorio, fatture e, con gli acquisti, fornitori, voci di spesa, vendite e acquisti, cassa e IVA, fatture di acquisto.
 
+### Metodo di pagamento
+
+Ogni fattura dichiara come si paga (ModalitaPagamento: MP01 contanti, MP05 bonifico, MP08 carta, MP12 RiBa, MP19 addebito SEPA…). Il programma lo legge per ogni rata e lo mostra come etichetta con icona in tutti gli strumenti che caricano fatture:
+- **Fatture elettroniche**: colonna «Pagamento» nel registro, riepilogo per metodo sopra l'elenco (quante fatture e quanto, un tocco filtra), filtro «Pagamento», ricerca per metodo («carta», «riba»), etichetta nell'anteprima, colonne «Metodo di pagamento», «Codice modalità» e «Contanti» nel registro Excel e «Metodo di pagamento» nell'Excel delle prestazioni. Anche dai PDF della fattura, quando il codice è stampato accanto al suo nome («MP05 Bonifico»).
+- **QR di pagamento**: il metodo indicato in fattura accanto al codice; se non è un bonifico (per esempio carta o contanti), un avviso: il QR SEPA serve a pagare con un bonifico.
+- **Analisi di vendite e acquisti**: come paga ogni cliente e come paghi ogni fornitore (schede, tabelle, Excel), la ripartizione per metodo in «Incassi e pagamenti».
+- **Contanti da 5.000 € in su**: fra soggetti diversi non sono ammessi (art. 49 d.lgs. 231/2007). Le fatture con contanti a partire da quella cifra sono segnalate in rosso (etichetta, riepilogo, scoperta, avviso con numero e data), sempre come «da verificare»: la fattura dice come si doveva pagare, non come si è pagato.
+
+### Cosa compri (fatture di acquisto)
+
+- **Categorie di spesa** riconosciute dalle parole della descrizione di ogni riga (energia, carburanti, telefonia, affitti, noleggi, subappalti, consulenze, software, trasporti, manutenzioni, pubblicità, assicurazioni, pulizie e rifiuti, formazione, viaggi, attrezzature, materiali di consumo; senza parole riconosciute «Merci e materiali» se la riga ha un codice articolo o una quantità in pezzi o peso, altrimenti «Altro»). Per ognuna: voci principali, andamento mese per mese, quota, fornitori e variazione degli ultimi 6 mesi sui 6 prima.
+- **Stesso articolo, prezzi diversi**: la stessa voce (stessa descrizione, anche con codici articolo diversi, e stessa unità di misura) comprata da più fornitori; il prezzo medio pagato davvero da ognuno e quanto si sarebbe risparmiato comprando tutto dal più conveniente. Nella scheda del fornitore più caro: «Qui paghi di più».
+- **Che cosa compri**: ogni voce con categoria, spesa, quantità, prezzo medio pagato (importo ÷ quantità, sconti compresi), andamento del prezzo, fornitori, ogni quanto la compri e la data attesa del prossimo acquisto.
+- **Voci con un solo fornitore** sopra il 2% della spesa, comprate più volte: il rischio di fornitura.
+- **Margini sui prodotti che compri e rivendi**: stessa descrizione o stesso codice nelle vendite e negli acquisti, prezzo medio di acquisto e di vendita, margine, utile del periodo e andamento dei due prezzi («il margine si stringe» se l'acquisto sale più della vendita).
+- **Ritenute d'acconto** trattenute a professionisti e agenti (DatiRitenuta), per mese della fattura e per fornitore: l'azienda le versa con l'F24 entro il 16 del mese dopo il pagamento.
+- **Fornitori sulla mappa**, con la distanza dalla sede, regioni e Comuni, come i clienti.
+
 ### Le scoperte (frasi con i numeri, ordinate per importanza)
 
 | Scoperta | Quando compare |
@@ -107,6 +127,12 @@ Con le sole fatture di acquisto lo strumento mostra Fornitori, Andamento e Pagam
 | Note di credito | Se superano il 2% del fatturato, con il cliente principale |
 | Termini di pagamento | Termini medi, clienti a 90 giorni o più, scadenze dei prossimi 30 giorni |
 | Stima | I prossimi 3 mesi, con almeno 12 mesi di storia |
+| Contanti oltre soglia | Vendite o acquisti con pagamento in contanti da 5.000 € in su |
+| Risparmio possibile | Voci comprate da più fornitori a prezzi diversi, se il risparmio supera 100 € e lo 0,5% degli acquisti |
+| Margine che si stringe | Prezzo d'acquisto salito almeno 4 punti più di quello di vendita; altrimenti i prodotti rivenduti con il loro margine |
+| Un solo fornitore | Una voce che vale almeno l'8% degli acquisti comprata da un solo fornitore |
+| Ritenute da versare | Ritenute d'acconto nelle fatture di acquisto |
+| Spesa che cresce | Una categoria (almeno il 5% della spesa) cresciuta del 15% negli ultimi 6 mesi |
 
 ### La mappa stradale: come funziona
 

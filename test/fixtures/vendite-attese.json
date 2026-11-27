@@ -583,25 +583,39 @@
   }
  },
  "acquisti": {
-  "spesa": 299261.48,
-  "iva": 65837.52,
+  "spesa": 333655.48,
+  "iva": 73404.2,
   "note": 1240.0,
-  "fatture": 244,
-  "fornitori": 8,
+  "fatture": 290,
+  "fornitori": 10,
   "per_fornitore": {
    "Logistica Adriatica S.r.l.": 50540.0,
-   "Müller Elektronik GmbH": 19110.0,
+   "Cavi Veneto S.r.l.": 15288.0,
    "Componenti Emilia S.r.l.": 56989.48,
    "Energia Più S.p.A.": 8740.0,
    "Studio Bianchi Commercialisti": 10350.0,
+   "Müller Elektronik GmbH": 21840.0,
    "Elettroforniture Nord S.p.A.": 146768.0,
    "Rossi Impianti S.p.A.": 4004.0,
-   "Software Cloud S.r.l.": 2760.0
+   "Software Cloud S.r.l.": 2760.0,
+   "Clima Distribuzione S.r.l.": 16376.0
   },
   "principale": "Elettroforniture Nord S.p.A.",
   "rincaro": "Sensore grezzo SG-1",
   "anche_cliente": "Rossi Impianti S.p.A.",
   "estero": "Müller Elektronik GmbH",
+  "risparmio_voce": "Cavo FG16 rotolo 100 m",
+  "rivenduto": "Termostato smart TRM-2",
+  "ritenute": 2070.0,
+  "contanti_soglia": 1,
+  "categorie": {
+   "Energia Più S.p.A.": "Energia e gas",
+   "Software Cloud S.r.l.": "Software e servizi digitali",
+   "Studio Bianchi Commercialisti": "Consulenze e professionisti",
+   "Logistica Adriatica S.r.l.": "Trasporti e spedizioni",
+   "Rossi Impianti S.p.A.": "Lavorazioni e subappalti",
+   "Elettroforniture Nord S.p.A.": "Merci e materiali"
+  },
   "doppie": 5
  }
 }

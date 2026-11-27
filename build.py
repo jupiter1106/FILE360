@@ -43,6 +43,12 @@ MAPPA_INSIEME = 'vendor/mappa/italia-insieme-z5.pmtiles'   # l'Italia d'insieme 
 def tsl_block(): return data_block('tsl', 'tsl-it.json') + data_block('stdfonts', 'stdfonts.json') 
 # mappa stradale (Analisi delle vendite): MapLibre GL + PMTiles + stile nei colori del prodotto + caratteri delle scritte.
 # Un blocco rimandato, eseguito solo quando si apre la mappa (vedi Mappa in src/mappa.js).
+# Analisi di vendite e acquisti (con il codice della mappa): un blocco a parte, eseguito solo quando si apre lo strumento
+# (Later.lib in src/app/00-avvio.js). Così i momenti liberi dell'avvio non eseguono 200 KB che servono a un solo strumento.
+def vendite_lib():
+    if not (S / 'vendite.js').exists(): return ''
+    code = "'use strict';\n" + (rd('mappa.js') + '\n' if (S / 'mappa.js').exists() else '') + rd('vendite.js')
+    return a_pezzi('<script type="text/x-officina-later" data-lib="vendite" data-gz="1"', base64.b64encode(gzip.compress(code.encode("utf-8"), 9, mtime=0)).decode(), 'lib-vendite')
 def mappa_lib():
     import json
     V = S / 'vendor' / 'mappa'
@@ -67,7 +73,7 @@ def build():
     # i moduli dei servizi per professione (src/pro.js) stanno nei blocchi rimandati, subito prima dell'anteprima dei risultati
     if (S / 'pro.js').exists() and LATER_TO:
         L = js.split('\n'); i = next(k for k, l in enumerate(L) if l.startswith(LATER_TO)) - 1
-        js = '\n'.join(L[:i] + [rd('pro.js')] + ([rd('office.js')] if (S / 'office.js').exists() else []) + ([rd('contratti.js')] if (S / 'contratti.js').exists() else []) + ([rd('rilevaai.js')] if (S / 'rilevaai.js').exists() else []) + ([rd('rilevaai-modello.js')] if (S / 'rilevaai-modello.js').exists() else []) + ([rd('comuni-it.js')] if (S / 'comuni-it.js').exists() else []) + ([rd('geo-it.js')] if (S / 'geo-it.js').exists() else []) + ([rd('mappa.js')] if (S / 'mappa.js').exists() else []) + ([rd('vendite.js')] if (S / 'vendite.js').exists() else []) + L[i:])
+        js = '\n'.join(L[:i] + [rd('pro.js')] + ([rd('office.js')] if (S / 'office.js').exists() else []) + ([rd('contratti.js')] if (S / 'contratti.js').exists() else []) + ([rd('rilevaai.js')] if (S / 'rilevaai.js').exists() else []) + ([rd('rilevaai-modello.js')] if (S / 'rilevaai-modello.js').exists() else []) + ([rd('comuni-it.js')] if (S / 'comuni-it.js').exists() else []) + ([rd('geo-it.js')] if (S / 'geo-it.js').exists() else []) + L[i:])
     later, chunks = '', []
     if LATER_FROM and LATER_FROM in js:
         L = js.split('\n'); a = next(i for i, l in enumerate(L) if l.startswith(LATER_FROM)) - 1; z = next(i for i, l in enumerate(L) if l.startswith(LATER_TO)) - 1
@@ -93,7 +99,7 @@ def build():
         vendor = vendor[:a] + vendor[z:]
     head = rd('head.html')
     if DS_FILES: head = head.replace('<html lang="it">', '<html lang="it" data-ds="2">')
-    html = '\n'.join([head, '<style>', css, '</style>', vendor, cloud_script(), '</head>', rd('body.html'), rd('lazy.html') + tsl_block() + mappa_lib() + data_block_pezzi('mappaitalia', MAPPA_INSIEME), later + '<script>', js, '</script>', rd('tail.html')])
+    html = '\n'.join([head, '<style>', css, '</style>', vendor, cloud_script(), '</head>', rd('body.html'), rd('lazy.html') + tsl_block() + mappa_lib() + vendite_lib() + data_block_pezzi('mappaitalia', MAPPA_INSIEME), later + '<script>', js, '</script>', rd('tail.html')])
 
     # il JS deve essere valido (core e blocchi rimandati): un errore di sintassi qui spegnerebbe tutto il programma
     import subprocess, tempfile
