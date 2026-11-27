@@ -126,16 +126,11 @@ async function startForms(stage, files) {
   let objs = []; let oid = 0; // testo libero, spunte, firme
   const detected = new Set();
   let scanned = 0;
-  const hist = [];
-  let ORIG = null;   // il modulo prima della prima modifica: «Ripristina tutto» ci torna (e si annulla con Ctrl+Z)
-  const snap = () => { const cur = JSON.stringify({ fields, removed, objs }); if (ORIG == null) ORIG = cur; hist.push(cur); if (hist.length > 80) hist.shift(); };
-  async function restoreAll() {
-    const cur = JSON.stringify({ fields, removed, objs }); if (ORIG == null || cur === ORIG) return toast('Il modulo è già com’era all’apertura');
-    if (typeof confirmDlg === 'undefined') Later.all();
-    if (!(await confirmDlg('Tolgo campi, valori, spunte e firme aggiunti e torno al modulo com’era all’apertura? Puoi rimetterli con Annulla (Ctrl+Z).', { ok: 'Ripristina tutto' }))) return;
-    hist.push(cur); const o = JSON.parse(ORIG); fields = o.fields; removed = o.removed; objs = o.objs || []; st.sel = null; st.osel = null; changed(); recalc(); toast('Modulo ripristinato com’era all’apertura');
-  }
-  function undo() { const c = JSON.stringify({ fields, removed, objs }); while (hist.length && hist[hist.length - 1] === c) hist.pop(); if (!hist.length) return; const s = JSON.parse(hist.pop()); fields = s.fields; removed = s.removed; objs = s.objs || []; st.sel = null; st.osel = null; changed(); recalc(); }
+  // annulla, ripeti e ripristina tutto: il meccanismo comune (Ctrl+Z, Ctrl+Y). Lo stato «dell'apertura» è quello prima
+  // della prima modifica (dopo la lettura dei campi del documento e la loro ricerca)
+  let fissato = false;
+  const storia = storiaModifiche({ get: () => ({ fields, removed, objs }), set: v => { fields = v.fields; removed = v.removed; objs = v.objs || []; st.sel = null; st.osel = null; changed(); recalc(); }, cosa: 'modulo' });
+  const snap = () => { if (!fissato) { fissato = true; storia.fissa(); } storia.prima(); };
 
   const ex = await withBusy('Lettura del documento…', async () => readExistingFields(await loadLib(doc.bytes)));
   ex.fields.forEach(f => { f.id = ++fid; fields.push(f); });
@@ -249,7 +244,7 @@ async function startForms(stage, files) {
     h('span', { class: 'vsep' }),
     IS_TOUCH ? panBtn : null,
     toolBtn('wand', 'Rileva pagina', 'Cerca di nuovo i campi in questa pagina', () => detect([viewer.page - 1], true)),
-    toolBtn('undo', 'Annulla', 'Annulla (Ctrl+Z)', undo), toolBtn('reset', '', 'Ripristina tutto: il modulo com’era all’apertura', restoreAll));
+    ...(IS_TOUCH ? storia.bottoni({ ripeti: false }).slice(0, 1) : storia.bottoni()));
   typeBtns.text.classList.add('on');
   const fillBtns = {};
   const mkTool = (t, icon, label, title) => (fillBtns[t] = toolBtn(icon, label, title, () => setTool(st.tool === t ? null : t)));
@@ -265,7 +260,7 @@ async function startForms(stage, files) {
     mkTool('date', 'cal', 'Data', 'Scrivi la data di oggi'),
     toolBtn('sign', 'Firma', 'Inserisci la tua firma', addSignature),
     h('span', { class: 'vsep' }),
-    toolBtn('undo', 'Annulla', 'Annulla (Ctrl+Z)', undo), toolBtn('reset', '', 'Ripristina tutto: il modulo com’era all’apertura', restoreAll));
+    ...(IS_TOUCH ? storia.bottoni({ ripeti: false }).slice(0, 1) : storia.bottoni()));
   const modeSeg = h('div', { class: 'seg mode-seg' });
   // i due passi del lavoro, sempre visibili: 1 controlla i campi trovati, 2 compila (il 3, scarica, è il pulsante principale)
   const drawMode = () => modeSeg.replaceChildren(...[['edit', '1', 'Controlla i campi'], ['fill', '2', 'Compila']].map(([v, n, l]) =>
@@ -466,7 +461,7 @@ async function startForms(stage, files) {
         setTimeout(() => {
           if (document.activeElement?.closest?.('.fo-bar')) return;
           if (!o.text.trim()) { objs = objs.filter(x => x !== o); el.remove(); if (st.osel === o.id) { st.osel = null; viewer.overlay.querySelector('.fo-bar')?.remove(); } return; }
-          if (o._snap && o._snap !== JSON.stringify({ fields, removed, objs })) { hist.push(o._snap); if (hist.length > 80) hist.shift(); }
+          if (o._snap) storia.aggiungi(o._snap);
           o._snap = null;
         }, 0);
       });
@@ -701,7 +696,6 @@ async function startForms(stage, files) {
 
   const keyh = e => {
     const inField = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !inField) { e.preventDefault(); undo(); return; }
     if (inField) return;
     if (st.mode === 'fill' && st.osel) {
       const o = objs.find(x => x.id === st.osel); if (!o) return;
@@ -976,6 +970,8 @@ async function startForms(stage, files) {
 
   /* ---------- pannello laterale ---------- */
   const sideBox = h('div');
+  // al telefono la barra non ha spazio: «Ripristina tutto» sta nel pannello
+  const ripristinaTel = IS_TOUCH ? h('button', { class: 'btn sm ghost', style: { width: '100%', marginTop: '8px' }, onclick: () => storia.tutto() }, ic('reset', 15), 'Ripristina tutto') : null;
   const runBtn = h('button', { class: 'btn primary big btn-run', onclick: run });
   const anyFilled = () => objs.length > 0 || fields.some(f => !isRemoved(f) && !f.ro && !f.calc && filled(f) && (f.ex ? f.value !== f.orig : true));
   function updateRun() {
@@ -1089,6 +1085,7 @@ async function startForms(stage, files) {
         sec('Solo il modulo vuoto',
           h('button', { class: 'btn sm', onclick: () => { st.flatten = false; save(); } }, ic('download', 16), 'Scarica il PDF compilabile, senza compilarlo'))),
         hasExisting ? h('div', { class: 'hint ok' }, `Questo PDF era già compilabile: ${plural(new Set(ex.fields.map(f => f.name)).size, 'campo esistente', 'campi esistenti')} (bordo tratteggiato verde).`) : null,
+        ripristinaTel,
       ].filter(Boolean));
     } else {
       const hasProfile = Object.values(FillKit.profile()).some(v => String(v || '').trim());
@@ -1119,6 +1116,7 @@ async function startForms(stage, files) {
             : h('div', { class: 'muted small' }, 'Testo, spunte e firma diventano parte della pagina.')),
         ex.xfa ? h('div', { class: 'hint warn' }, 'Il PDF conteneva anche un modulo XFA (formato dinamico di Adobe): viene rimosso e resta il modulo standard, compatibile con tutti i lettori.') : null,
         fields.some(f => f.calcCustom) ? h('div', { class: 'hint' }, 'Alcuni campi del modulo hanno calcoli personalizzati: verranno aggiornati quando apri il file con Adobe Acrobat Reader.') : null,
+        ripristinaTel,
       ].filter(Boolean));
     }
   }
@@ -1126,7 +1124,7 @@ async function startForms(stage, files) {
   workspace(stage, h('div', { class: 'ws-main vw' }, viewer.el), [sideBox], [runBtn]);
   setMode('fill');
   let typed = 0; stage.addEventListener('input', e => { if (!e.target.closest('.ws-side')) typed++; });
-  Flow.trackTool(() => hist.length + '|' + typed, {
+  Flow.trackTool(() => storia.passi + '|' + typed, {
     // il modulo com'è adesso: campi aggiunti o tolti, valori, testo libero, spunte e firme
     save: () => JSON.stringify({ removed, layout: fields.filter(f => !f.ex).map(f => ({ page: f.page, x: f.x, y: f.y, w: f.w, h: f.h, type: f.type, kind: f.kind, name: f.name, maxLen: f.maxLen || 0, req: !!f.req, align: f.align || 0, value: f.value })),
       exv: Object.fromEntries(fields.filter(f => f.ex && !f.ro && (f.type === 'check' ? f.value : String(f.value ?? '') !== '') && f.value !== f.orig).map(f => [f.ex.name + '#' + f.ex.wi, f.value])), objs, mode: st.mode }),

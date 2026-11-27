@@ -45,13 +45,28 @@ def tsl_block(): return data_block('tsl', 'tsl-it.json') + data_block('stdfonts'
 # Un blocco rimandato, eseguito solo quando si apre la mappa (vedi Mappa in src/mappa.js).
 # Analisi di vendite e acquisti (con il codice della mappa): un blocco a parte, eseguito solo quando si apre lo strumento
 # (Later.lib in src/app/00-avvio.js). Così i momenti liberi dell'avvio non eseguono 200 KB che servono a un solo strumento.
+# Il documento senza caratteri oltre il Latin-1 (’ — … € → ✓): il browser lo tiene in memoria a 8 bit invece che a 16, lo
+# decodifica e lo analizza più in fretta (all'avvio sul telefono il compito più lungo è proprio la decodifica dei 10 MB del
+# file). Gli stessi caratteri restano identici a schermo: nel JS diventano \uXXXX, nel CSS \XXXXXX, nell'HTML &#x...;
+def solo_latin1(html):
+    def js(t): return ''.join(c if ord(c) < 256 else ''.join(f'\\u{u:04x}' for u in ((0xD800 + ((ord(c) - 0x10000) >> 10), 0xDC00 + ((ord(c) - 0x10000) & 0x3FF)) if ord(c) > 0xFFFF else (ord(c),))) for c in t)
+    def css(t): return ''.join(c if ord(c) < 256 else f'\\{ord(c):06x}' for c in t)
+    def tx(t): return ''.join(c if ord(c) < 256 else f'&#x{ord(c):x};' for c in t)
+    out, pos = [], 0
+    for m in re.finditer(r'(<script\b[^>]*>)(.*?)(</script>)|(<style\b[^>]*>)(.*?)(</style>)', html, re.S):
+        out.append(tx(html[pos:m.start()]))
+        out.append(m.group(1) + js(m.group(2)) + m.group(3) if m.group(1) else m.group(4) + css(m.group(5)) + m.group(6))
+        pos = m.end()
+    out.append(tx(html[pos:]))
+    return ''.join(out)
 def lib_blocco(nome, files):
     if not (S / files[-1]).exists(): return ''
     code = "'use strict';\n" + '\n'.join(rd(f) for f in files if (S / f).exists())
     return a_pezzi(f'<script type="text/x-officina-later" data-lib="{nome}" data-gz="1"', base64.b64encode(gzip.compress(code.encode("utf-8"), 9, mtime=0)).decode(), 'lib-' + nome)
 # moduli di un solo strumento: Analisi di vendite e acquisti (con la mappa), Contratti, Rileva AI (con il modello statistico)
 def vendite_lib():
-    return lib_blocco('vendite', ['mappa.js', 'vendite.js']) + lib_blocco('contratti', ['contratti.js']) + lib_blocco('rilevaai', ['rilevaai.js', 'rilevaai-modello.js'])
+    # le coordinate dei Comuni (geo-it.js) servono solo alle mappe di vendite e acquisti: stanno nel loro blocco
+    return lib_blocco('vendite', ['geo-it.js', 'mappa.js', 'vendite.js']) + lib_blocco('contratti', ['contratti.js']) + lib_blocco('rilevaai', ['rilevaai.js', 'rilevaai-modello.js']) + lib_blocco('incassi', ['incassi.js']) + lib_blocco('autentica', ['autentica.js']) + lib_blocco('leggicontratto', ['leggicontratto.js'])
 def mappa_lib():
     import json
     V = S / 'vendor' / 'mappa'
@@ -76,7 +91,7 @@ def build():
     # i moduli dei servizi per professione (src/pro.js) stanno nei blocchi rimandati, subito prima dell'anteprima dei risultati
     if (S / 'pro.js').exists() and LATER_TO:
         L = js.split('\n'); i = next(k for k, l in enumerate(L) if l.startswith(LATER_TO)) - 1
-        js = '\n'.join(L[:i] + [rd('pro.js')] + ([rd('office.js')] if (S / 'office.js').exists() else []) + ([rd('comuni-it.js')] if (S / 'comuni-it.js').exists() else []) + ([rd('geo-it.js')] if (S / 'geo-it.js').exists() else []) + L[i:])
+        js = '\n'.join(L[:i] + [rd('pro.js')] + ([rd('office.js')] if (S / 'office.js').exists() else []) + ([rd('comuni-it.js')] if (S / 'comuni-it.js').exists() else []) + L[i:])
     later, chunks = '', []
     if LATER_FROM and LATER_FROM in js:
         L = js.split('\n'); a = next(i for i, l in enumerate(L) if l.startswith(LATER_FROM)) - 1; z = next(i for i, l in enumerate(L) if l.startswith(LATER_TO)) - 1
@@ -110,6 +125,7 @@ def build():
         with tempfile.NamedTemporaryFile('w', suffix='.js', delete=False, encoding='utf-8') as f: f.write(part)
         r = subprocess.run(['node', '--check', f.name], capture_output=True, text=True); pathlib.Path(f.name).unlink()
         if r.returncode: sys.exit('ERRORE di sintassi nel JS' + (f' (blocco {k - 1})' if k else '') + ':\n' + r.stderr[:800])
+    html = solo_latin1(html)
     (ROOT / 'dist').mkdir(exist_ok=True)
     (ROOT / 'dist' / 'file360.html').write_text(html, encoding='utf-8')
     return len(html.encode('utf-8'))

@@ -2664,7 +2664,7 @@ const FattureKit = (() => {
     if (/^[1lI]T\d{11}$/.test(t)) return "IT" + t.slice(2);
     if (/^N[O0-9][.,]?[O0-9]?$/.test(t) && /\d/.test(t)) return t.replace(/(?<=.)[Oo]/g, "0").replace(",", ".");
     if (/\d/.test(t) && /^[\dOo.,%-]+$/.test(t)) return t.replace(/[Oo]/g, "0");
-    return t;
+    return typeof correggiOcrCodici === "function" ? correggiOcrCodici(t) : t;
   }
   /* filetti delle tabelle in una scansione: tratti scuri lunghi e sottili nell'immagine già raddrizzata (orizzontali almeno
      il 3% della larghezza, verticali almeno il 2,5% dell'altezza, spessi al più 7 pixel), riportati sulla pagina con P */

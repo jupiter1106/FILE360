@@ -1410,6 +1410,96 @@ test('Analisi delle vendite: mappa stradale dall’Italia al civico con la carte
     ok(await p2.locator('.vd-dot').count() > 10 && !(await p2.locator('.vd-maptb button', { hasText: 'Strade' }).count()), 'senza WebGL la mappa per Comuni non compare');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+test('Incassi e pagamenti: fatture ed estratto conto CSV; ogni fattura ha la sua sorte (saldata, scaduta, in parte), il sollecito è già scritto, i movimenti senza fattura sono elencati; Excel', async b => {
+  const att = JSON.parse(require('fs').readFileSync(fx('incassi-attese.json'), 'utf8'));
+  const scad = Object.values(att.vendite).filter(v => v === 'scaduta' || v === 'parziale').length;
+  const { page } = await open(b, 'desk1440'); await openTool(page, 'incassi', ['vendite.zip', 'estratto-conto.csv']); await page.waitForSelector('.vd-kpis', { timeout: 60000 });
+  const k = await page.locator('.vd-kpis').innerText();
+  ok(/Incassato/.test(k) && /378 fatture saldate/.test(k) && /Movimenti senza fattura/.test(k), 'indicatori sbagliati: ' + k.replace(/\s+/g, ' ').slice(0, 300));
+  const tab = await page.locator('.vd-tab').first().innerText(), n = +(/\((\d+)\)/.exec(tab) || [])[1];
+  ok(n >= scad && n <= scad + 6, `scadute da incassare: ${n}, attese almeno ${scad} (più quelle scadute negli ultimi giorni dell'estratto)`);
+  // la scheda del cliente con il sollecito già scritto
+  await page.locator('.vd-t tbody tr.cl').first().click(); await page.waitForSelector('.vd-side .in-sol');
+  const sol = await page.locator('.vd-side .in-sol').inputValue();
+  ok(/^Spett\.le /.test(sol) && /fattur[ae] n\. \d+\/\d{4}/.test(sol) && /per un totale di/.test(sol) && /entro 10 giorni/.test(sol), 'sollecito incompleto: ' + sol.slice(0, 200));
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.locator('.vd-side button', { hasText: 'PDF del sollecito' }).click()]);
+  ok(/^Sollecito .+\.pdf$/.test(dl.suggestedFilename()), 'PDF del sollecito: ' + dl.suggestedFilename());
+  // tutte le emesse: la fattura pagata insieme a un'altra e quella pagata in ritardo
+  await page.locator('.vd-tab', { hasText: 'Tutte le emesse' }).click(); await page.locator('.vd-q').fill('441/2024'); await page.waitForTimeout(200);
+  ok(/saldata/.test(await page.locator('.vd-t').innerText()) && /più fatture/.test(await page.locator('.vd-t').innerText()), 'la fattura pagata con un bonifico unico non è saldata');
+  await page.locator('.vd-q').fill('');
+  await page.locator('.vd-tab', { hasText: 'Clienti' }).click(); ok(/Ritardo medio/.test(await page.locator('.vd-body').innerText()) && /%/.test(await page.locator('.vd-t').innerText()), 'clienti senza puntualità');
+  await page.locator('.vd-tab', { hasText: 'Fornitori' }).click(); ok(await page.locator('.vd-t tbody tr.cl').count() > 5, 'fornitori assenti');
+  await page.locator('.vd-tab', { hasText: 'Movimenti senza fattura' }).click();
+  const senza = await page.locator('.vd-body').innerText();
+  ok(/INCASSO POS/.test(senza) && /STIPENDI/.test(senza) && !/BONIFICO DA CLIENTE/.test(senza), 'movimenti senza fattura sbagliati: ' + senza.slice(0, 200));
+  await runTo(page); ok(/\.xlsx/.test(await page.locator('.modal.res').innerText()), 'nessun Excel');
+  ok(page.errs.length === 0, page.errs.join(' | '));
+});
+test('Incassi e pagamenti: senza estratto conto lo dice e spiega che cosa caricare', async b => {
+  const { page } = await open(b, 'iphoneSE'); await openTool(page, 'incassi', ['vendite.zip']); await page.waitForSelector('.vd-empty', { timeout: 60000 });
+  ok(/Manca l’estratto conto/.test(await page.locator('.vd-empty').innerText()), 'nessuna spiegazione');
+  ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'la pagina scorre in orizzontale al telefono');
+  ok(page.errs.length === 0, page.errs.join(' | '));
+});
+test('Verifica di autenticità: la fattura modificata dopo la creazione (importo coperto e riscritto, versione precedente nel file), l’originale pulito; versione di prima, confronto, PDF evidenziato e rapporto', async b => {
+  const { page } = await open(b, 'desk1440'); await openTool(page, 'autentica', ['autentica-modificata.pdf', 'autentica-originale.pdf']); await page.waitForSelector('.au-esito', { timeout: 60000 });
+  const t = await page.locator('.vd-body').innerText();
+  ok(/Segni di alterazione/.test(t) && /Testo coperto da un riquadro bianco/.test(t) && /1\.200,00 EUR/.test(t) && /Cifre scritte con un altro programma/.test(t) && /iLovePDF/.test(t), 'segni mancanti: ' + t.slice(0, 400));
+  ok(/7\.200,00/.test(await page.locator('.au-diff').innerText()), 'la differenza con la prima versione non c’è');
+  await page.waitForSelector('.au-pg .au-mark.bad'); await page.locator('.au-segni .au-sb', { hasText: 'riquadro bianco' }).click();
+  ok(/1\.200,00 EUR/.test(await page.locator('.au-zoom').innerText()), 'il segno selezionato non si vede nella colonna');
+  const [d1] = await Promise.all([page.waitForEvent('download'), page.locator('.au-vacts button', { hasText: 'Scarica questa versione' }).first().click()]);
+  ok(/versione 1\.pdf$/.test(d1.suggestedFilename()), 'versione precedente: ' + d1.suggestedFilename());
+  const [d2] = await Promise.all([page.waitForEvent('download'), page.locator('button', { hasText: 'PDF con le modifiche evidenziate' }).click()]);
+  ok(/modifiche evidenziate\.pdf$/.test(d2.suggestedFilename()), 'PDF evidenziato: ' + d2.suggestedFilename());
+  await page.locator('.au-fb', { hasText: 'autentica-originale' }).click(); await page.waitForTimeout(500);
+  ok(/Nessun segno di modifica/.test(await page.locator('.au-esito').innerText()), 'l’originale non risulta pulito');
+  await page.locator('.au-fb', { hasText: 'autentica-modificata' }).click(); await page.waitForSelector('.au-vacts');
+  await runTo(page); ok(/Verifica di autenticità .+\.pdf/.test(await page.locator('.modal.res').innerText()), 'nessun rapporto');
+  await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+  await page.locator('.au-vacts button', { hasText: 'Confrontala con la finale' }).first().click();
+  await page.waitForFunction(() => /confronta/.test(location.hash + location.pathname), null, { timeout: 15000 });
+  await page.waitForSelector('.cf-files .fr-info, .filelist', { timeout: 30000 });
+  ok(/versione 1/.test(await page.locator('.tool').innerText()), 'Confronta non ha ricevuto le due versioni');
+  ok(page.errs.length === 0, page.errs.join(' | '));
+});
+test('Verifica di autenticità: contratto cambiato dopo la firma digitale, scansione con riquadro bianco; al telefono senza scorrimento orizzontale', async b => {
+  const { page } = await open(b, 'iphoneSE'); await openTool(page, 'autentica', ['autentica-firmata.pdf', 'autentica-scansione.pdf']); await page.waitForSelector('.au-esito', { timeout: 60000 });
+  const t = await page.locator('.vd-body').innerText();
+  ok(/cambiato dopo la firma digitale/.test(t) && /Mario Esempio/.test(t), 'firma: ' + t.slice(0, 300));
+  ok(/800,00/.test(await page.locator('.au-diff').innerText()) && /600,00/.test(await page.locator('.au-diff').innerText()), 'differenza del canone mancante');
+  ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'la pagina scorre in orizzontale al telefono');
+  await page.locator('.au-fb', { hasText: 'autentica-scansione' }).click(); await page.waitForTimeout(600);
+  const s = await page.locator('.vd-body').innerText();
+  ok(/Riquadro chiaro sopra la scansione/.test(s) && /4\.500,00/.test(s), 'scansione: ' + s.slice(0, 300));
+  ok(page.errs.length === 0, page.errs.join(' | '));
+});
+test('Analisi di un contratto ricevuto: la locazione con clausole illegittime (deposito, durata, recesso, foro…), la frase evidenziata nel testo, la lettera di richiesta, le scadenze in calendario e il rapporto', async b => {
+  const { page } = await open(b, 'desk1440'); await openTool(page, 'leggicontratto', ['contratto-ricevuto-rischioso.pdf']); await page.waitForSelector('.au-esito', { timeout: 60000 });
+  const t = await page.locator('.vd-body').innerText();
+  ok(/5 clausole da cambiare/.test(t) && /Deposito cauzionale di 4 mensilità/.test(t) && /Foro di Milano, ma l’immobile è a Bologna/.test(t) && /art\. 11 L\. 392\/1978/.test(t), 'clausole mancanti: ' + t.slice(0, 300));
+  ok(/9600,00|9\.600,00/.test(await page.locator('.lc-kpis').innerText()) && /4 mensilità/.test(await page.locator('.lc-kpis').innerText()), 'dati chiave sbagliati');
+  await page.locator('.lc-ruolo button', { hasText: 'Conduttore' }).click(); ok(await page.locator('.au-segni .au-chip', { hasText: 'a tuo sfavore' }).count() >= 5, 'il ruolo non evidenzia le clausole a sfavore');
+  await page.locator('.au-segni .au-sb', { hasText: 'Il conduttore non può recedere' }).click(); await page.waitForTimeout(300);
+  ok(/rinuncia alla facolta di recesso/.test(await page.locator('.lc-m.on').first().innerText()), 'la frase non è evidenziata nel testo');
+  ok(/ridurre il deposito cauzionale a tre mensilità/.test(await page.locator('.lc-lett').inputValue()), 'lettera di richiesta senza le modifiche');
+  const [ics] = await Promise.all([page.waitForEvent('download'), page.locator('.lc-side button', { hasText: 'Aggiungi al calendario' }).click()]);
+  const cal = require('fs').readFileSync(await ics.path(), 'utf8'); ok(/BEGIN:VCALENDAR/.test(cal) && /DTSTART;VALUE=DATE:20280430/.test(cal) && /disdetta/.test(cal), 'calendario: ' + cal.slice(0, 200));
+  await runTo(page); ok(/Analisi del contratto .+\.pdf/.test(await page.locator('.modal.res').innerText()), 'nessun rapporto');
+  ok(page.errs.length === 0, page.errs.join(' | '));
+});
+test('Analisi di un contratto ricevuto: il contratto corretto non ha segnalazioni; al telefono il testo incollato delle condizioni di un abbonamento mostra le clausole vessatorie senza doppia firma', async b => {
+  const { page } = await open(b, 'desk1280'); await openTool(page, 'leggicontratto', ['contratto-ricevuto-corretto.pdf']); await page.waitForSelector('.au-esito', { timeout: 60000 });
+  const tc = await page.locator('.vd-body').innerText(); ok(/Nessuna clausola a rischio/.test(tc), 'il contratto corretto ha segnalazioni: ' + tc.slice(0, 300));
+  const p2 = (await open(b, 'iphoneSE')).page; await openTool(p2, 'leggicontratto', []); await p2.locator('.dz-nofile').click(); await p2.waitForSelector('.lc-paste');
+  const Q = '"'.repeat(3), txt = require('fs').readFileSync(require('path').join(__dirname, '..', 'make_contratti_ricevuti.py'), 'utf8').split('SERVIZIO = ' + Q)[1].split(Q)[0];
+  await p2.locator('.lc-paste').fill(txt); await p2.locator('button', { hasText: 'Analizza il testo' }).click(); await p2.waitForSelector('.au-esito');
+  const s2 = await p2.locator('.vd-body').innerText();
+  ok(/senza approvazione specifica/.test(s2) && /Modifiche unilaterali/.test(s2) && /Rinnovo automatico/.test(s2), 'condizioni del servizio: ' + s2.slice(0, 900));
+  ok(await p2.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'la pagina scorre in orizzontale al telefono');
+  ok(page.errs.length === 0 && p2.errs.length === 0, [...page.errs, ...p2.errs].join(' | '));
+});
 (async () => {
   const only = process.argv[2]; const browser = await chromium.launch(); let fail = 0;
   for (const [name, fn] of T) { if (only && !name.includes(only)) continue; const t0 = Date.now(); try { await fn(browser); await require('../lib').closeAll(); console.log('  ✓', name, `(${Date.now() - t0} ms)`); } catch (e) { await require('../lib').closeAll(); fail++; console.log('  ✗', name, '\n      ', String(e.message).split('\n')[0]); } for (const c of browser.contexts()) await c.close(); }

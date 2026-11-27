@@ -276,3 +276,69 @@ json.dump(out, open(os.path.join(OUT, 'vendite-attese.json'), 'w'), ensure_ascii
 print(len(POSIZIONI), 'indirizzi veri:', ', '.join(f"{k} {sum(1 for p in POSIZIONI.values() if p['tipo'] == k)}" for k in KINDS))
 print(len(acquisti), 'acquisti,', round(attese_acq['spesa'], 2), 'di spesa; quota del principale', round(attese_acq['per_fornitore']['Elettroforniture Nord S.p.A.'] / attese_acq['spesa'], 3))
 print(len(fatture), 'fatture,', out['clienti'], 'clienti, fatturato', out['fatturato'], 'top3', out['quota_top3'], 'mese migliore', out['mese_migliore'], 'peggiore', out['mese_peggiore'])
+
+# ---------- estratto conto dello stesso periodo (CSV dell'home banking) per «Incassi e pagamenti veri" ----------
+# ogni fattura ha una sorte scritta qui (pagata, in ritardo, in due rate, insieme alla successiva dello stesso cliente,
+# non pagata): l'abbinamento del programma deve ritrovarla. Generatore a parte: le altre prove non cambiano.
+BR = random.Random(2024)
+mov, sorte = [], {}
+def it(v): return f'{v:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+pagamenti = {}   # numero della fattura -> date dei movimenti che la pagano
+def add(d, desc, v, *nn):
+    mov.append((d, desc, round(v, 2)))
+    for n in nn: pagamenti.setdefault(n, []).append(d)
+vend = [f for f in fatture if f['tipo'] == 'TD01']
+usate = set()
+for k, f in enumerate(vend):
+    if f['n'] in usate: continue
+    _, imp, iva = xml(f); due = round(imp + iva, 2); pa = bool(f['cli'][2]) and False
+    nome = f['cli'][0]; scad = f['data'] + dt.timedelta(days=60 if 'Comune' in nome else 30)
+    if scad > END - dt.timedelta(days=12): sorte[f['n']] = 'fuori'; continue
+    caso = k % 10; corto = nome.split()[0].upper()
+    if caso in (0, 1, 2):   # pagata alla scadenza, causali diverse
+        desc = [f'BONIFICO DA {nome.upper()} PER FATT. {f["n"]}', f'ACCREDITO BONIFICO ORD. {nome.upper()} RIF FT N. {f["n"].split("/")[0]}', f'BON. {nome.upper()} SALDO FATTURA {f["n"]}'][caso]
+        add(scad + dt.timedelta(days=BR.randint(-3, 4)), desc, due, f['n']); sorte[f['n']] = 'saldata'
+    elif caso == 3:   # solo il nome, nessun numero
+        add(scad + dt.timedelta(days=BR.randint(0, 6)), f'BONIFICO DA {nome.upper()}', due, f['n']); sorte[f['n']] = 'saldata'
+    elif caso == 4 and due > 300:   # in due rate
+        a = round(due * 0.4, 2); add(scad, f'BONIFICO {nome.upper()} ACCONTO', a, f['n']); add(scad + dt.timedelta(days=30), f'BONIFICO {nome.upper()} SALDO', round(due - a, 2), f['n'])
+        sorte[f['n']] = 'saldata' if scad + dt.timedelta(days=30) <= END else 'parziale'
+    elif caso == 5:   # insieme alla prossima fattura dello stesso cliente
+        g = next((x for x in vend[k + 1:] if x['cli'][0] == nome and x['n'] not in usate and x['data'] + dt.timedelta(days=30) <= END - dt.timedelta(days=12)), None)
+        if g:
+            _, i2, v2 = xml(g); usate.add(g['n']); add(g['data'] + dt.timedelta(days=31), f'BONIFICO DA {nome.upper()} FATTURE {f["n"]} E {g["n"]}', due + round(i2 + v2, 2), f['n'], g['n']); sorte[f['n']] = sorte[g['n']] = 'saldata'
+        else: add(scad, f'BONIFICO DA {nome.upper()}', due, f['n']); sorte[f['n']] = 'saldata'
+    elif caso == 8:   # mai pagata: scaduta
+        sorte[f['n']] = 'scaduta'
+    elif caso == 9:   # pagata con 40 giorni di ritardo
+        add(scad + dt.timedelta(days=40), f'BONIFICO {corto} FT {f["n"]}', due, f['n']); sorte[f['n']] = 'saldata'
+    else:
+        add(scad + dt.timedelta(days=BR.randint(-2, 2)), f'ACCREDITO BONIFICO DA {nome.upper()} FATTURA {f["n"]}', due, f['n']); sorte[f['n']] = 'saldata'
+sorteA = {}
+for k, f in enumerate([f for f in acquisti if f['tipo'] in ('TD01', 'TD06', 'TD18')]):
+    nome = f['forn'][0]; scad = f['data'] + dt.timedelta(days=f['termini'])
+    imp = round(sum(r['tot'] for r in f['righe']), 2); due = imp if f['tipo'] == 'TD18' else round(imp * 1.22, 2)
+    if f['tipo'] == 'TD18':   # fornitore estero: si paga l'imponibile, senza scadenza nel documento di integrazione
+        if k % 5 == 2: sorteA[f['n']] = 'da verificare'; continue
+        add(f['data'] + dt.timedelta(days=BR.randint(5, 20)), f'BONIFICO ESTERO A FAVORE DI {nome.upper()} INV {f["n"]}', -due, f['n']); sorteA[f['n']] = 'saldata'; continue
+    if scad > END - dt.timedelta(days=12): sorteA[f['n']] = 'fuori'; continue
+    if k % 9 == 4: sorteA[f['n']] = 'scaduta'; continue
+    desc = f'SDD {nome.upper()} ADDEBITO' if f.get('mod') == 'MP19' else f'BONIFICO A FAVORE DI {nome.upper()} FT {f["n"]}'
+    add(scad + dt.timedelta(days=BR.randint(-1, 3)), desc, -due, f['n']); sorteA[f['n']] = 'saldata'
+d = START
+while d <= END:   # movimenti senza fattura
+    add(d.replace(day=27), 'STIPENDI DIPENDENTI MESE', -BR.randint(9000, 12000)); add(d.replace(day=16), 'F24 DELEGA PAGAMENTO IMPOSTE', -BR.randint(1500, 4000))
+    add(d.replace(day=10), 'INCASSO POS NEGOZIO', BR.randint(300, 900)); add(d.replace(day=28), 'COMMISSIONI E SPESE TENUTA CONTO', -12.5)
+    d = (d.replace(day=1) + dt.timedelta(days=32)).replace(day=1)
+mov = [m for m in mov if START <= m[0] <= END]; mov.sort(key=lambda m: m[0])
+# pagamenti caduti dopo la fine dell'estratto: la fattura risulta non pagata (o pagata in parte) alla data dell'estratto
+for S, mai in ((sorte, 'scaduta'), (sorteA, 'scaduta')):
+    for n, v in S.items():
+        dd = pagamenti.get(n, [])
+        if v in ('saldata', 'parziale') and dd and all(x > END for x in dd): S[n] = 'da verificare' if n.startswith('A') and v == 'saldata' and any(f['n'] == n and f['tipo'] == 'TD18' for f in acquisti) else mai
+        elif v == 'saldata' and any(x > END for x in dd): S[n] = 'parziale'
+with open(os.path.join(OUT, 'estratto-conto.csv'), 'w', encoding='utf-8') as fh:
+    fh.write('Data contabile;Data valuta;Descrizione operazione;Importo\n')
+    for d, desc, v in mov: fh.write(f'{d.strftime("%d/%m/%Y")};{d.strftime("%d/%m/%Y")};{desc};{it(v)}\n')
+json.dump(dict(vendite=sorte, acquisti=sorteA, movimenti=len(mov)), open(os.path.join(OUT, 'incassi-attese.json'), 'w'), ensure_ascii=False, indent=1)
+print(len(mov), 'movimenti nell’estratto conto;', sum(1 for v in sorte.values() if v == 'scaduta'), 'fatture scadute attese')

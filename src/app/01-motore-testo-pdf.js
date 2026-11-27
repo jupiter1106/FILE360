@@ -1604,6 +1604,39 @@ const SEO = (() => {
         ['I dati vengono inviati da qualche parte?', 'No: tutto avviene nel browser. La bozza resta solo su questo dispositivo, oppure la salvi tu in un file.'],
       ],
     },
+    leggicontratto: {
+      slug: 'analisi-contratto-clausole', title: 'Analisi di un contratto ricevuto: clausole vessatorie e illegittime prima di firmare',
+      desc: 'Carica il contratto da firmare (PDF anche scansionato, Word o testo): deposito oltre tre mensilità, durata sotto il minimo, foro sbagliato, recesso escluso, spese straordinarie all’inquilino, rinnovo tacito, penali, modifiche unilaterali, clausole senza doppia firma. Frase esatta, norma e modifica da chiedere. Senza upload.',
+      h1: 'Analisi di un contratto ricevuto', h2: 'Come controllare un contratto prima di firmarlo', rel: ["contratto", "confronta", "oscura"],
+      steps: ['Carica il contratto (PDF, anche scansionato, Word, foto) oppure incolla il testo.', 'Guarda le clausole da cambiare, da guardare e da sapere: per ognuna la frase esatta evidenziata nel testo, la norma e la modifica da chiedere.', 'Copia la lettera con le richieste di modifica, aggiungi le scadenze al calendario e scarica il rapporto.'],
+      faq: [
+        ['Che contratti controlla?', 'Locazioni abitative (4+4, 3+2, transitorie, per studenti), locazioni a uso diverso, foresteria, box, comodato, e contratti di servizi o fornitura con un consumatore. Le regole seguono la legge 431/1998, la legge 392/1978, il codice civile e il Codice del consumo.'],
+        ['È un parere legale?', 'No: è un controllo automatico che trova le clausole note per essere nulle, contestabili o onerose e spiega perché, citando la norma. Per i contratti importanti fatti assistere da un professionista.'],
+        ['Il contratto viene caricato su un server?', 'No: tutto avviene nel browser. Il testo non lascia il dispositivo.'],
+      ],
+    },
+    autentica: {
+      slug: 'verifica-autenticita-pdf', title: 'Verifica di autenticità di un PDF: il documento è stato modificato?',
+      desc: 'Controlla se un PDF ricevuto (fattura, contratto, certificato, estratto conto) è stato modificato dopo la creazione: versioni precedenti rimaste nel file e che cosa è cambiato, testo cambiato dopo la firma digitale, date e programmi dei metadati, cifre in un carattere diverso, testo nascosto, coperture bianche sulle scansioni. Senza upload.',
+      h1: 'Verifica di autenticità di un PDF', h2: 'Come capire se un PDF è stato modificato', rel: ["firme", "confronta", "verificapdfa"],
+      steps: ['Trascina il PDF da controllare, anche più di uno.', 'Guarda l’esito e i controlli: ogni segno è spiegato e, quando riguarda un punto preciso, è evidenziato sulla pagina.', 'Se il file contiene versioni precedenti, scaricale o confrontale con quella finale; scarica il rapporto in PDF.'],
+      faq: [
+        ['Può dire con certezza che un PDF è autentico?', 'No, e nessun programma può: un documento ricreato da zero o ristampato non porta tracce. Può trovare i segni concreti di una modifica: versioni precedenti rimaste nel file, testo cambiato dopo una firma, date incoerenti, cifre scritte con un altro carattere, rettangoli bianchi sopra una scansione.'],
+        ['Che cosa sono le versioni precedenti?', 'Molti programmi, quando salvano un PDF modificato, aggiungono le modifiche in coda al file e lasciano dentro la versione di prima. Qui vengono recuperate: si possono scaricare, confrontare parola per parola con quella finale e ottenere il PDF con le modifiche evidenziate.'],
+        ['Il file viene caricato su un server?', 'No: tutto avviene nel browser. Il PDF non lascia il dispositivo.'],
+      ],
+    },
+    incassi: {
+      slug: 'incassi-estratto-conto-fatture', title: 'Incassi e pagamenti veri: estratto conto abbinato alle fatture, scaduti e solleciti',
+      desc: 'Carica l’estratto conto (PDF anche scansionato o CSV dell’home banking) e le fatture emesse e ricevute: quali fatture sono state davvero incassate o pagate, quando e con quanto ritardo, quali sono scadute, il sollecito già scritto, i movimenti senza fattura. Senza upload.',
+      h1: 'Incassi e pagamenti veri', h2: 'Come sapere quali fatture sono state davvero pagate', rel: ["vendite", "estrattoconto", "fatture"],
+      steps: ['Carica insieme le fatture (XML, P7M, lo ZIP del cassetto fiscale o i PDF della fattura elettronica) e l’estratto conto dello stesso periodo, in PDF o CSV.', 'Il programma abbina ogni movimento alla fattura che paga: importo, rate, nome della controparte e numero della fattura nella causale, anche un bonifico per più fatture o una fattura pagata in più volte.', 'Guarda le fatture scadute e non incassate, il ritardo vero di ogni cliente e i movimenti senza fattura; copia il sollecito o scaricalo in PDF; scarica tutto in Excel.'],
+      faq: [
+        ['Come capisce quale movimento paga una fattura?', 'Confronta l’importo con il totale da pagare (o con le rate scritte in fattura) e cerca nella causale il nome della controparte e il numero della fattura. Riconosce anche un bonifico che paga più fatture dello stesso cliente e una fattura pagata in più volte. Le fatture successive all’ultimo movimento dell’estratto restano «da giudicare».'],
+        ['Va bene l’estratto conto scansionato?', 'Sì: le pagine si migliorano e si leggono con il riconoscimento del testo (OCR), sul dispositivo. Il CSV dell’home banking è ancora più preciso.'],
+        ['I dati vengono inviati da qualche parte?', 'No: tutto avviene nel browser. Fatture ed estratti conto non lasciano il dispositivo.'],
+      ],
+    },
     vendite: {
       slug: 'analisi-vendite-fatture', title: 'Analisi di vendite e acquisti dalle fatture elettroniche: clienti, fornitori, mappa e statistiche',
       desc: 'Carica le fatture emesse e ricevute (XML, P7M, ZIP del cassetto fiscale o PDF): mappa dei clienti fino al civico, chi sono e che cosa comprano, fornitori e rincari, vendite meno acquisti, cassa prevista, IVA stimata, stima dei prossimi mesi ed Excel. Senza upload.',
@@ -1715,6 +1748,15 @@ const TOOLS = {
   contratto: { title: 'Contratto di affitto e comodato', short: 'Contratto affitto', icon: 'lease', hue: '#B45309', accept: '.pdf,.json,application/pdf,application/json', multiple: false, anyFile: true, noFile: 'Compila un nuovo contratto', noFileIcon: 'lease', noFileFirst: true, pickLabel: 'Apri una visura o una bozza',
               dzTitle: 'Il contratto pronto in pochi minuti', dzText: 'Hai la visura catastale in PDF o una bozza salvata (.json)? Trascinala qui: immobile e proprietari si compilano da soli.',
               desc: 'Contratto di locazione 4+4, 3+2 concordato, transitorio, per studenti, a uso negozio o ufficio, foresteria, box auto, affitto di terreni agricoli e comodato gratuito: compili i dati nella colonna, il contratto si scrive da solo con le clausole che scegli e ogni articolo si può modificare. PDF e Word, più il promemoria di registrazione e imposte.', start: (...a) => { Later.serve('startContratto'); return startContratto(...a); } },
+  leggicontratto: { title: 'Analisi di un contratto ricevuto', short: 'Analizza contratto', icon: 'contractcheck', hue: '#7C3AED', accept: '.pdf,.docx,.odt,.txt,application/pdf,text/plain,image/*', multiple: false, anyFile: true, noFile: 'Incolla il testo', noFileIcon: 'textedit',
+              dzTitle: 'Trascina qui il contratto da firmare', dzText: 'PDF (anche scansionato), Word o foto delle pagine: le clausole a rischio con la norma e la modifica da chiedere. Il file resta sul tuo dispositivo.',
+              desc: 'Il contratto che ti hanno mandato da firmare: clausole nulle, contestabili o onerose (deposito, durata, foro, recesso, spese, rinnovo tacito, penali, modifiche unilaterali, doppia firma), con la frase esatta, la norma e la richiesta di modifica già scritta.', start: (...a) => { Later.serve('startLeggiContratto'); return startLeggiContratto(...a); } },
+  autentica: { title: 'Verifica di autenticità', short: 'Autenticità', icon: 'fingerprint', hue: '#BE123C', accept: '.pdf,application/pdf', multiple: true,
+              dzTitle: 'Trascina qui il PDF da verificare', dzText: 'Una fattura, un contratto, un certificato o un estratto conto ricevuti da altri: vedi se sono stati modificati dopo la creazione. Il file resta sul tuo dispositivo.',
+              desc: 'Il PDF è stato modificato? Versioni precedenti rimaste nel file e che cosa è cambiato, testo cambiato dopo la firma digitale, date e programmi incoerenti, cifre in un carattere diverso, testo nascosto, coperture bianche sulle scansioni. Rapporto in PDF.', start: (...a) => { Later.serve('startAutentica'); return startAutentica(...a); } },
+  incassi:  { title: 'Incassi e pagamenti veri', short: 'Incassi veri', icon: 'bank', hue: '#047857', accept: '.xml,.p7m,.zip,.pdf,.csv,.txt,application/zip,application/pdf,text/xml,text/csv,image/*', multiple: true, anyFile: true, folder: true,
+              dzTitle: 'Trascina qui estratto conto e fatture', dzText: 'L’estratto conto (PDF, anche scansionato, o CSV dell’home banking) e le fatture emesse e ricevute (XML, P7M, ZIP del cassetto fiscale o PDF). Restano sul tuo dispositivo.',
+              desc: 'L’estratto conto abbinato alle fatture: quali sono state davvero incassate o pagate e con quanto ritardo, quali sono scadute, il sollecito già scritto, i movimenti senza fattura. Excel con tutto.', start: (...a) => { Later.serve('startIncassi'); return startIncassi(...a); } },
   vendite:  { title: 'Analisi di vendite e acquisti', short: 'Vendite e acquisti', icon: 'chart', hue: '#1D4ED8', accept: '.xml,.p7m,.zip,.pdf,application/zip,application/pdf,text/xml', multiple: true, anyFile: true, folder: true,
               dzTitle: 'Trascina qui le fatture emesse e ricevute', dzText: 'XML, P7M, lo ZIP del cassetto fiscale o i PDF della fattura elettronica — anche tutta la cartella. Restano sul tuo dispositivo.',
               desc: 'Dalle fatture emesse e ricevute: clienti e fornitori sulla mappa fino al civico, che cosa vendi e che cosa compri, prezzi a confronto tra fornitori, margini, metodi di pagamento, ritenute, cassa prevista e IVA stimata, clienti da ricontattare e stima dei prossimi mesi. Excel con tutto.', start: (...a) => { Later.serve('startVendite'); return startVendite(...a); } },
@@ -1752,7 +1794,7 @@ const TOOLS = {
 // descrizioni brevi per le schede compatte
 const SHORT_DESC = {
   estrattoconto: 'Movimenti del conto in Excel, con verifica dei saldi', f24: 'F24, CU, 730, Redditi, IRAP, IVA in Excel', visure: 'Visure camerali e catastali in dati', laboratorio: 'Referti in tabella, valori fuori intervallo evidenziati',
-  vendite: 'Mappa dei clienti e statistiche dalle fatture', contratto: 'Locazione e comodato guidati', rilevaai: 'Prove di testo AI e passaggi copiati', qrsepa: 'Il QR per pagare con bonifico', conforme: 'Dicitura di conformità, poi la firma', misure: 'Distanze e superfici in scala', conta: 'Parole, caratteri, cartelle', tesi: 'Modello Word e controllo del PDF', vettoriale: 'Timbri e loghi in SVG e PNG trasparente',
+  incassi: 'Quali fatture sono state davvero pagate', autentica: 'Il PDF è stato modificato?', leggicontratto: 'Clausole a rischio prima di firmare', vendite: 'Mappa dei clienti e statistiche dalle fatture', contratto: 'Locazione e comodato guidati', rilevaai: 'Prove di testo AI e passaggi copiati', qrsepa: 'Il QR per pagare con bonifico', conforme: 'Dicitura di conformità, poi la firma', misure: 'Distanze e superfici in scala', conta: 'Parole, caratteri, cartelle', tesi: 'Modello Word e controllo del PDF', vettoriale: 'Timbri e loghi in SVG e PNG trasparente',
   tavola: 'A0/A1 su fogli A4 o A3', officepdf: 'Word, Excel, PowerPoint e testi in PDF', filigrana: 'Scritta o logo su tutte le pagine', pdftesto: 'Testo e pagina web dal PDF', annota: 'Evidenzia, note e commenti', pdfppt: 'Una diapositiva per pagina',
   unisci: 'Più PDF e immagini in un solo documento', immagini: 'Foto e scansioni in un PDF ordinato', dividi: 'Separa pagine o intervalli in più file',
   comprimi: 'Riduci il peso mantenendo la qualità', modifica: 'Riscrivi il testo, aggiungi immagini e firme', ruota: 'Raddrizza pagine singole o tutte',
@@ -1775,8 +1817,8 @@ const GROUPS = [
   ['Modifica e proteggi', ['modifica', 'annota', 'moduli', 'oscura', 'numeri', 'filigrana', 'proteggi']],
   ['Pagine', ['ordina', 'ruota', 'unisci', 'dividi', 'impagina']],
   ['Converti e ottimizza', ['word', 'excel', 'officepdf', 'ocr', 'migliora', 'pdfa', 'verificapdfa', 'comprimi', 'immagini', 'immaginipdf', 'vettoriale']],
-  ['Analizza e confronta', ['analisi', 'estrai', 'confronta', 'rilevaai', 'misure', 'conta']],
-  [FISCAL_GROUP, ['fatture', 'vendite', 'firme', 'xbrl', 'contratto'], 'Fatture elettroniche, file firmati .p7m, bilanci XBRL e contratti di affitto'],
+  ['Analizza e confronta', ['analisi', 'estrai', 'confronta', 'autentica', 'rilevaai', 'misure', 'conta']],
+  [FISCAL_GROUP, ['fatture', 'vendite', 'incassi', 'firme', 'xbrl', 'contratto', 'leggicontratto'], 'Fatture elettroniche, incassi, file firmati .p7m, bilanci XBRL, contratti di affitto e controllo dei contratti'],
 ];
 /* ---------- famiglie: strumenti simili o complementari stanno in una scheda sola ----------
    In home compare solo il primo; gli altri sono a un clic sotto di lui e, dentro, nelle linguette in alto
@@ -2259,11 +2301,11 @@ function homeSearch() {
 const UNIVERSAL = ['comprimi', 'unisci', 'dividi', 'modifica', 'immagini', 'word', 'ocr', 'conta'];
 const PROFILES = [
   ['pa', 'Pubblica amministrazione', 'building', ['firme', 'conforme', 'oscura', 'pdfa', 'numeri', 'unisci'], ['Per l’albo: «Oscura» toglie i dati personali, poi «PDF/A» prepara il file per la pubblicazione e la conservazione.', '«Copia conforme» aggiunge la dicitura con l’impronta del file; poi lo firmi con «Firma».']],
-  ['contabile', 'Contabilità', 'table', ['estrattoconto', 'fatture', 'vendite', 'qrsepa', 'excel', 'f24'], ['«Estratto conto» porta i movimenti in Excel e verifica che i saldi tornino.', 'Dalla fattura (XML o PDF) creo il codice QR per pagarla con bonifico dall’app della banca.']],
+  ['contabile', 'Contabilità', 'table', ['estrattoconto', 'incassi', 'fatture', 'vendite', 'qrsepa', 'excel', 'f24'], ['«Estratto conto» porta i movimenti in Excel e verifica che i saldi tornino.', 'Dalla fattura (XML o PDF) creo il codice QR per pagarla con bonifico dall’app della banca.']],
   ['commercialista', 'Commercialista', 'receipt', ['f24', 'fatture', 'vendite', 'estrattoconto', 'visure', 'analisi', 'firme', 'xbrl'], ['«F24 e dichiarazioni» legge tanti F24 insieme e fa il riepilogo per codice tributo.', 'Dalle visure catastali calcolo anche il valore ai fini IMU di ogni immobile.']],
   ['lavoro', 'Consulente del lavoro', 'user', ['f24', 'proteggi', 'oscura', 'firme', 'moduli'], ['«Oscura» toglie IBAN, codici fiscali e altri dati personali prima di inoltrare un documento.', '«Proteggi» mette una password diversa a ogni cedolino prima dell’invio.']],
   ['notaio', 'Notaio', 'seal', ['conforme', 'visure', 'firme', 'oscura', 'confronta', 'migliora'], ['«Copia conforme» con la formula notarile; «Firme» verifica i .p7m che ricevi ed estrae il PDF.', '«Confronta» trova ogni parola cambiata tra due bozze dell’atto.']],
-  ['avvocato', 'Avvocato', 'sign', ['conforme', 'firme', 'unisci', 'numeri', 'confronta', 'oscura', 'pdfa'], ['Attestazione di conformità per il deposito: «Copia conforme»; «Firme» verifica le firme dei .p7m ricevuti.', 'Allegati numerati con «Numeri di pagina», atti uniti con «Unisci».']],
+  ['avvocato', 'Avvocato', 'sign', ['conforme', 'leggicontratto', 'firme', 'autentica', 'unisci', 'numeri', 'confronta', 'oscura', 'pdfa'], ['Attestazione di conformità per il deposito: «Copia conforme»; «Firme» verifica le firme dei .p7m ricevuti.', 'Allegati numerati con «Numeri di pagina», atti uniti con «Unisci».']],
   ['architetto', 'Architetto', 'poster', ['misure', 'tavola', 'comprimi', 'confronta', 'firme', 'migliora'], ['«Misure in scala» si aggancia agli spigoli del disegno: misure esatte su piante e sezioni.', '«Stampa una tavola grande» divide un A1 su fogli A4 in scala reale.']],
   ['ingegnere', 'Ingegnere', 'ruler', ['misure', 'tavola', 'comprimi', 'confronta', 'firme', 'pdfa'], ['Tavole troppo pesanti per il portale? «Comprimi» le alleggerisce senza perdere le linee.', '«Confronta» mostra cosa è cambiato tra due revisioni.']],
   ['geometra', 'Geometra', 'home', ['visure', 'contratto', 'misure', 'tavola', 'migliora', 'comprimi', 'firme'], ['Dalle visure catastali: foglio, particella, rendita e valore IMU in Excel.', 'Le planimetrie vecchie scansionate: «Migliora» le raddrizza e le pulisce.']],

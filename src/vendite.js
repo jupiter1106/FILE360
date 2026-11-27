@@ -102,7 +102,7 @@ const Vendite = (() => {
         acquisti.push({ id: f.id, numero: f.numero, data: f.data, t: Date.parse(f.data) || 0, tipo: f.tipo, segno, estero: ACQ_ESTERO.test(f.tipo),
           imp: segno * (f.imponibile || 0), iva: segno * (f.imposta || 0), tot: segno * (f.totale || 0), forn: ced, fornNome: c.nome || '(senza nome)', fornDati: c,
           righe: (f.righe || []).filter(r => r.desc || r.totale).map(r => ({ k: chiaveProdotto(r), kd: chiaveDesc(r), desc: pulisciDesc(r.desc), qta: segno * (r.qta || (r.totale ? 1 : 0)), um: r.um || '', prezzo: r.prezzo || 0, tot: segno * (r.totale || 0) })),
-          rit: segno * (f.ritenutaTot || 0), ritTipi: (f.ritenute || []).map(r => r.tipo).filter(Boolean), metodo: f.metodo || null,
+          split: (f.riepiloghi || []).some(r => r.esigibilita === 'S'), rit: segno * (f.ritenutaTot || 0), ritTipi: (f.ritenute || []).map(r => r.tipo).filter(Boolean), metodo: f.metodo || null,
           modalita: pag[0]?.modalita || '', scadenze: pag.filter(d => d.scadenza).map(d => ({ data: d.scadenza, t: Date.parse(d.scadenza), imp: d.importo || 0 })), file: f.srcName });
         scartate.passive++; continue;
       }
@@ -115,7 +115,7 @@ const Vendite = (() => {
         id: f.id, numero: f.numero, data: f.data, t: Date.parse(f.data) || 0, tipo: f.tipo, segno,
         imp: segno * (f.imponibile || 0), iva: segno * (f.imposta || 0), tot: segno * (f.totale || 0),
         cli: ck, cliNome: c.nome || '(senza nome)', persona: !!c.persona || (!c.piva && !!c.cf && !pa), pa, cliDati: c,
-        righe, metodo: f.metodo || null, modalita: pag[0]?.modalita || '', scadenze: pag.filter(d => d.scadenza).map(d => ({ data: d.scadenza, t: Date.parse(d.scadenza), imp: d.importo || 0 })),
+        righe, split: (f.riepiloghi || []).some(r => r.esigibilita === 'S'), rit: segno * (f.ritenutaTot || 0), metodo: f.metodo || null, modalita: pag[0]?.modalita || '', scadenze: pag.filter(d => d.scadenza).map(d => ({ data: d.scadenza, t: Date.parse(d.scadenza), imp: d.importo || 0 })),
         file: f.srcName,
       });
     }

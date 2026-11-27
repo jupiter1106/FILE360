@@ -35,19 +35,20 @@ const Later = {
     // sito: il codice del blocco è un file a parte, già scaricato in anticipo (prefetch); se non è ancora arrivato si legge ora
     if (el.dataset.src && !el.textContent) { const x = new XMLHttpRequest(); x.open('GET', el.dataset.src, false); x.send(); if (x.status !== 200) throw new Error('Impossibile scaricare un componente necessario: controlla la connessione e riprova.'); el.textContent = x.responseText; }
     if (!el.dataset.gz) return el.textContent; const bin = atob(testoAPezzi(el).trim()), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new TextDecoder().decode(pako.ungzip(u)); },
-  _run(el, strict = true) { const s = document.createElement('script'); s.textContent = (strict ? '"use strict";\n' : '') + this._src(el); document.head.append(s); s.remove(); el.remove(); },
+  _run(el, strict = true) { const s = document.createElement('script'); s.textContent = (strict ? '"use strict";\n' : '') + (el._txt ?? this._src(el)); el._txt = null; document.head.append(s); s.remove(); el.remove(); },
   next() { const b = this._blocks(); if (this.i >= b.length) return false; this._run(b[this.i++]); return true; },
   all() { while (this.next()); },
   // i blocchi fino a quello che definisce «name» (l'ordine conta: i blocchi dopo possono usare quelli prima); il resto a breve
   // moduli di un solo strumento in un blocco a parte (data-lib): si eseguono quando lo strumento si apre, dopo gli altri blocchi
-  LIBS: { startVendite: 'vendite', Vendite: 'vendite', Mappa: 'vendite', startContratto: 'contratti', Contratti: 'contratti', startRilevaAI: 'rilevaai', RilevaAI: 'rilevaai' },
+  LIBS: { startVendite: 'vendite', Vendite: 'vendite', Mappa: 'vendite', startContratto: 'contratti', Contratti: 'contratti', startRilevaAI: 'rilevaai', RilevaAI: 'rilevaai', startIncassi: 'incassi', Incassi: 'incassi', startAutentica: 'autentica', Autentica: 'autentica', startLeggiContratto: 'leggicontratto', Clausole: 'leggicontratto' },
   // esegue il blocco dello strumento se non è ancora stato eseguito (si può chiamare quante volte si vuole)
   serve(name) { if (this.LIBS[name]) this.lib(this.LIBS[name]); },   // il blocco si esegue una volta sola (poi non c'è più)
   lib(nome) { const el = document.querySelector(`script[type="text/x-officina-later"][data-lib="${nome}"]`); if (!el) return; this.all(); this._run(el, false); },
   need(name) { if (this.LIBS[name] && !(name in globalThis)) { this.lib(this.LIBS[name]); return; } const b = this._blocks(); const k = name ? b.findIndex(el => (' ' + (el.dataset.defs || '') + ' ').includes(' ' + name + ' ')) : -1; if (k < 0) { if (name && !(name in globalThis)) this.all(); else { const go = () => { if (this.next()) setTimeout(go, 0); }; setTimeout(go, 0); } return; } /* non trovata nei blocchi né già definita: si esegue tutto; già definita: il resto subito dopo */ while (this.i <= k && this.next()); const go = () => { if (this.next()) setTimeout(go, 0); }; setTimeout(go, 0); },
   // sito: scarica in sottofondo il codice dei blocchi (si esegue sempre e solo quando serve)
   prefetch() { this._pre = Promise.all([...document.querySelectorAll('script[type="text/x-officina-later"][data-src]:not([data-lib="mappa"])')].filter(el => !el.textContent).map(el => fetch(el.dataset.src).then(r => r.ok ? r.text() : null).then(t => { if (t && !el.textContent) el.textContent = t; }).catch(() => { }))); return this._pre; },
-  idle() { const step = () => { if (!this.next()) return; (window.requestIdleCallback || (f => setTimeout(f, 16)))(step, { timeout: 400 }); }; (this._pre || Promise.resolve()).then(() => setTimeout(step, 50)); },
+  // nei momenti liberi ogni blocco in due tempi: prima si decomprime, poi (al momento libero dopo) si esegue: due attese brevi invece di una lunga
+  idle() { const later = f => (window.requestIdleCallback || (g => setTimeout(g, 16)))(f, { timeout: 400 }); const step = () => { const b = this._blocks(); if (this.i >= b.length) return; const el = b[this.i]; if (el._txt == null && el.isConnected) { try { el._txt = this._src(el); } catch { } later(step); return; } if (!this.next()) return; later(step); }; (this._pre || Promise.resolve()).then(() => setTimeout(step, 50)); },
 };
 
 /* ---------- pdf.js su richiesta ----------
@@ -248,6 +249,8 @@ const ICONS = {
   orbit:'<ellipse cx="12" cy="12.5" rx="10" ry="4" transform="rotate(-24 12 12.5)"/><path d="M9 6h4l3 3v7a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 8 16V7.5A1.5 1.5 0 0 1 9 6z"/>',
   disk:'<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
   wifi0:'<path d="M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0"/><path d="M3 3l18 18"/>',
+  contractcheck:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5"/><path d="M14 3v4a1 1 0 0 0 1 1h4v3"/><path d="M8.5 9h3M8.5 12.5h5M8.5 16h2.5"/><circle cx="17" cy="17" r="3.5"/><path d="m19.6 19.6 2 2"/>',
+  fingerprint:'<path d="M12 4a7 7 0 0 0-7 7v2"/><path d="M19 11a7 7 0 0 0-11.5-5.4"/><path d="M8.5 13v-2a3.5 3.5 0 0 1 7 0v3c0 2.5-.6 4.6-1.6 6.4"/><path d="M12 11v3c0 2.6-.9 5-2.4 6.8"/><path d="M19 13.5c0 1.6-.3 3.2-.8 4.6"/><path d="M5 16.5c.4.7.6 1.6.6 2.5"/>',
   shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/>',
   check:'<path d="M20 6 9 17l-5-5"/>',
   seal:'<path d="M12 2.6l2.3 1.5 2.8-.1.9 2.6 2.2 1.7-.9 2.7.9 2.7-2.2 1.7-.9 2.6-2.8-.1L12 21.4l-2.3-1.5-2.8.1-.9-2.6-2.2-1.7.9-2.7-.9-2.7 2.2-1.7.9-2.6 2.8.1z"/><path d="m8.8 12 2.2 2.2 4.2-4.4"/>',
