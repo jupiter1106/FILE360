@@ -10,7 +10,7 @@ const { chromium, open } = require('../lib');
   const url1 = await pc.getAttribute('.pa-qr-img', 'data-url');
   ok(url1.length <= 200, `QR: ${url1.length} caratteri (soglia 200: si legge da lontano)`);
   await tel.goto(APP + '#' + url1.split('#')[1]); await tel.waitForSelector('.pa-abb', { timeout: 20000 });
-  await pc.fill('.pa-abb-in .input', await tel.evaluate(() => Passa.linkAbbinamento())); await pc.locator('.pa-abb-in button', { hasText: 'Abbina' }).click();
+  await pc.fill('.pa-in-abb', await tel.evaluate(() => Passa.linkAbbinamento())); await pc.locator('.pa-abb-in button', { hasText: 'Abbina' }).click();
   await pc.waitForSelector('.pa-stato', { timeout: 20000 }); await tel.waitForSelector('.pa-stato', { timeout: 20000 });
   const giro = async (da, nome, MB) => da.evaluate(async ({ nome, MB }) => {
     const n = MB * 1e6, u = new Uint8Array(n); for (let i = 0; i < n; i += 65536) crypto.getRandomValues(u.subarray(i, Math.min(n, i + 65536)));

@@ -237,6 +237,8 @@ const Passa = (() => {
       url, fp, voci,
       // un telefono abbinato adesso (link aperto in un'altra scheda, immagine trascinata, codice incollato): usa la voce libera
       async attivaNuovo(t) { const v = voci[voci.length - 1]; if (v.t) return false; await v.attiva(t); return true; },
+      // codice di rete del telefono: il computer conosce il suo indirizzo e bussa per primo
+      async bussa({ addr, port, k }) { const v = voci[k]; if (!v || !v.t) return false; await v.pc.addIceCandidate({ candidate: `candidate:9 1 udp 2122260223 ${addr} ${port} typ host`, sdpMid: '0', sdpMLineIndex: 0 }); return true; },
       chiudi() { chiuso.v = true; for (const v of voci) if (!v.canale.aperto) try { v.pc.close(); } catch { } },
     };
   }
@@ -263,7 +265,7 @@ const Passa = (() => {
     const a = await pc.createAnswer(); a.sdp = conCred(a.sdp, c.telU, c.telP); await pc.setLocalDescription(a);
     const can = new Canale(pc, dc, { io, fpMio: io.fp, fpAltro: q.fp });
     can.on(t => { if (t === 'aperto') onCanale?.(can); });
-    return { canale: can, nuovo, pc };
+    return { canale: can, nuovo, pc, k: v.k };
   }
 
   /* ---------- lettore di QR: fotocamera e immagini ---------- */
@@ -299,7 +301,39 @@ const Passa = (() => {
     return await new Promise(r => c.toBlob(b => r(new File([b], `Abbina ${i.nome}.png`, { type: 'image/png' })), 'image/png'));
   }
 
-  return { identita, rinomina, dispositivi, abbina, togli, aggiornaDispositivo, certNuovo, usaCertNuovo, linkAbbinamento, leggiAbbinamento, codice, daCodice, controllo, ospita, leggiQR, collegati, scansiona, qrDaImmagine, immagineAbbinamento, base, Sha256, _test: { b64u, unb64u, fpText, fpBytes } };
+  /* ---------- quando il telefono non arriva al computer ---------- */
+  // che cosa è successo, dalle statistiche del collegamento del telefono
+  async function diagnosi(pc) {
+    const st = await pc.getStats(); let remoti = 0, inviati = 0, risposte = 0;
+    st.forEach(x => { if (x.type === 'remote-candidate') remoti++; if (x.type === 'candidate-pair') { inviati += x.requestsSent || 0; risposte += x.responsesReceived || 0; } });
+    const causa = risposte > 0 ? 'cifratura' : inviati > 0 ? 'risposta' : 'indirizzo';
+    return { causa, remoti, inviati, risposte };
+  }
+  // il codice di rete: indirizzo IPv4 e porta del telefono (e quale voce del QR usa), da scrivere sul computer.
+  // Con il codice è il computer a «bussare» al telefono: passa il firewall del computer e non serve il nome .local
+  const privato = a => /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(a);
+  async function indirizzoTelefono(pc) {
+    await raccogli(pc);
+    const L = candidati(pc.localDescription.sdp).filter(x => /^\d+\.\d+\.\d+\.\d+$/.test(x.addr) && !/^(127|0)\./.test(x.addr));
+    const voto = a => (/^192\.168\./.test(a) ? 3 : privato(a) ? 2 : /^169\.254\./.test(a) ? 0 : 1);
+    return L.sort((a, b) => voto(b.addr) - voto(a.addr))[0] || null;
+  }
+  function codiceRete({ addr, port }, k) {
+    const b = [...addr.split('.').map(Number), port >> 8, port & 255, k & 255]; let bits = '', x = 0;
+    for (const v of b) { bits += v.toString(2).padStart(8, '0'); x ^= (v >> 4) ^ (v & 15); }
+    bits += x.toString(2).padStart(4, '0'); let out = ''; for (let i = 0; i < 60; i += 5) out += B32[parseInt(bits.slice(i, i + 5), 2)];
+    return out.match(/.{4}/g).join('-');
+  }
+  function leggiCodiceRete(t) {
+    const s = String(t).toUpperCase().replace(/[^0-9A-Z]/g, '').replace(/[IL]/g, '1').replace(/O/g, '0').replace(/U/g, 'V');
+    if (s.length !== 12) return null;
+    let bits = ''; for (const c of s) { const v = B32.indexOf(c); if (v < 0) return null; bits += v.toString(2).padStart(5, '0'); }
+    const b = []; let x = 0; for (let i = 0; i < 7; i++) { b.push(parseInt(bits.slice(i * 8, i * 8 + 8), 2)); x ^= (b[i] >> 4) ^ (b[i] & 15); }
+    if (parseInt(bits.slice(56, 60), 2) !== x) return null;
+    return { addr: b.slice(0, 4).join('.'), port: (b[4] << 8) | b[5], k: b[6] };
+  }
+
+  return { identita, rinomina, dispositivi, abbina, togli, aggiornaDispositivo, certNuovo, usaCertNuovo, linkAbbinamento, leggiAbbinamento, codice, daCodice, controllo, ospita, leggiQR, collegati, scansiona, qrDaImmagine, immagineAbbinamento, base, Sha256, diagnosi, indirizzoTelefono, codiceRete, leggiCodiceRete, _test: { b64u, unb64u, fpText, fpBytes } };
 })();
 
 /* ---------- la sessione resta viva anche fuori dalla pagina (per aprire un file ricevuto in un altro strumento) ---------- */
@@ -392,13 +426,22 @@ async function startPassa(stage) {
   async function vistaComputer() {
     const qrBox = h('div', { class: 'pa-qr', 'aria-live': 'polite' }, h('div', { class: 'pa-qr-load' }, 'Preparo il collegamento…'));
     const listaTel = h('div', { class: 'pa-tel' });
-    const campo = h('input', { class: 'input', placeholder: 'Incolla il link o il codice del telefono', 'aria-label': 'Link o codice di abbinamento' });
+    const campo = h('input', { class: 'input pa-in-abb', placeholder: 'Incolla il link o il codice del telefono', 'aria-label': 'Link o codice di abbinamento' });
     const pickImg = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: () => { if (pickImg.files[0]) daImmagine(pickImg.files[0]); pickImg.value = ''; } });
+    const campoRete = h('input', { class: 'input pa-in-rete', placeholder: 'Es. K7QF-9XMB-2PQ4', 'aria-label': 'Codice di rete del telefono', autocomplete: 'off', spellcheck: 'false' });
+    const reteBox = h('div', { class: 'pa-abb' }, h('b', {}, 'Il telefono non si collega?'), h('p', { class: 'small muted' }, 'Il telefono mostra un codice di rete di 12 caratteri: scrivilo qui e sarà il computer a chiamarlo.'),
+      h('div', { class: 'row pa-abb-in' }, campoRete, h('button', { type: 'button', class: 'btn', onclick: () => daRete(campoRete.value) }, 'Collega')));
+    campoRete.addEventListener('keydown', e => { if (e.key === 'Enter') daRete(campoRete.value); });
+    async function daRete(v) {
+      const c = Passa.leggiCodiceRete(v); if (!c) return toast('Codice di rete non valido: controlla i 12 caratteri', 'error');
+      if (!sessione || !(await sessione.bussa(c).catch(() => false))) return toast('Il codice non corrisponde a questo QR: sul telefono premi «Inquadra di nuovo»', 'error');
+      toast('Chiamo il telefono…');
+    }
     const abbinaBox = h('div', { class: 'pa-abb' }, h('b', {}, 'Prima volta con un telefono?'),
       h('ol', { class: 'small' }, h('li', {}, 'Inquadra il QR con il telefono: ti proporrà di mandarti un link.'), h('li', {}, 'Apri qui quel link (o trascina l’immagine, o incolla il codice): il telefono resta abbinato e il collegamento parte.')),
       h('div', { class: 'row pa-abb-in' }, campo, h('button', { type: 'button', class: 'btn', onclick: () => daTesto(campo.value) }, 'Abbina'), h('button', { type: 'button', class: 'btn', onclick: () => pickImg.click() }, ic('photo', 15), 'Immagine')), pickImg);
     main.replaceChildren(
-      h('div', { class: 'pa-grid' }, qrBox, h('div', { class: 'pa-side' }, listaTel, abbinaBox)), garanzia(),
+      h('div', { class: 'pa-grid' }, qrBox, h('div', { class: 'pa-side' }, listaTel, reteBox, abbinaBox)), garanzia(),
       h('p', { class: 'small muted pa-switch' }, 'Questo dispositivo è un telefono? ', h('button', { type: 'button', class: 'btn sm ghost', onclick: () => cambiaRuolo('telefono') }, 'Usalo come telefono')));
     main.addEventListener('dragover', e => e.preventDefault());
     main.addEventListener('drop', e => { const f = e.dataTransfer?.files?.[0]; if (f && /^image\//.test(f.type)) { e.preventDefault(); daImmagine(f); } });
@@ -476,14 +519,38 @@ async function startPassa(stage) {
           msg.replaceChildren(h('div', { class: 'pa-abb' }, h('b', {}, 'Primo collegamento con questo computer'), h('p', { class: 'small' }, 'Manda al computer il link di abbinamento (per mail, WhatsApp…) e aprilo lì: il collegamento parte da solo, senza inquadrare di nuovo.'),
             h('button', { type: 'button', class: 'btn primary', onclick: () => mandaAbbinamento() }, ic('share', 16), 'Manda il link al computer'), h('div', { class: 'pa-wait small' }, h('span', { class: 'pa-spin' }), 'In attesa del computer…')));
           const fino = Date.now() + 5 * 60e3;
+          // se dopo 25 secondi non si è ancora collegato (computer già abbinato ma irraggiungibile), si offre il codice di rete
+          setTimeout(async () => { if (fatto || !vivo) return; const d = msg.querySelector('.pa-abb'); if (!d) return;
+            const vai = h('button', { type: 'button', class: 'btn sm', onclick: () => { fatto = true; nonArriva(q, r); } }, 'Il computer ha il link ma non si collega');
+            d.append(vai); }, 25000);
           const prova = () => setTimeout(async () => { if (fatto || !vivo) return; if (r.pc.connectionState === 'failed' && Date.now() < fino) { try { r.pc.close(); } catch { } const r2 = await Passa.collegati(q, { onCanale: can => { fatto = true; if (vivo) vistaCollegato(can); } }); r.pc = r2.pc; } if (Date.now() < fino) prova(); }, 4000);
           prova(); return;
         }
-        setTimeout(() => { if (fatto || !vivo) return; tentativi++;
-          msg.replaceChildren(h('div', { class: 'pa-err' }, ic('alert', 22), h('div', {}, h('b', {}, 'Non riesco a raggiungere il computer'),
-            h('ul', { class: 'small' }, h('li', {}, 'Telefono e computer devono essere sulla stessa rete: la Wi-Fi dello stesso router (il computer può essere col cavo).'), h('li', {}, 'Le reti «ospiti» spesso isolano i dispositivi: usa quella principale.'), h('li', {}, 'In 4G/5G il collegamento diretto non è possibile: collegati alla Wi-Fi.'), h('li', {}, 'Senza Wi-Fi: attiva l’hotspot del telefono e collega il computer all’hotspot.')),
-            h('button', { type: 'button', class: 'btn sm', onclick: () => apriCamera() }, 'Inquadra di nuovo')))); }, 15000);
+        setTimeout(() => { if (!fatto && vivo) nonArriva(q, r); }, 12000);
       } catch (e) { msg.replaceChildren(h('div', { class: 'pa-err' }, ic('alert', 22), h('p', {}, e.message || 'Collegamento non riuscito'))); }
+    }
+    // il telefono non raggiunge il computer: la causa precisa e il codice di rete (con cui è il computer a bussare)
+    async function nonArriva(q, r) {
+      tentativi++;
+      const d = await Passa.diagnosi(r.pc).catch(() => ({ causa: 'indirizzo' }));
+      const CAUSA = {
+        indirizzo: ['Il telefono non trova il computer sulla rete', 'Il computer si presenta con un nome «.local» che questo telefono non riesce a risolvere, oppure i due dispositivi non sono sulla stessa rete.'],
+        risposta: ['Il computer non risponde', 'Il telefono ha bussato ma il computer non ha risposto: di solito è il firewall del computer (su Windows con la rete impostata come «pubblica») o una Wi-Fi che isola i dispositivi.'],
+        cifratura: ['Il computer non riconosce questo telefono', 'La rete funziona ma l’abbinamento non coincide: sul computer togli questo telefono e abbinalo di nuovo.'],
+      }[d.causa];
+      const box = h('div', { class: 'pa-err pa-diag' }, ic('alert', 22), h('div', {}, h('b', {}, CAUSA[0]), h('p', { class: 'small' }, CAUSA[1]), h('div', { class: 'pa-codebox' }, h('span', { class: 'pa-wait small' }, h('span', { class: 'pa-spin' }), 'Preparo il codice di rete…'))));
+      msg.replaceChildren(box);
+      if (d.causa === 'cifratura') { box.querySelector('.pa-codebox').replaceChildren(h('button', { type: 'button', class: 'btn sm', onclick: () => mandaAbbinamento() }, ic('share', 14), 'Manda di nuovo il link al computer')); return; }
+      // un nuovo collegamento del telefono, con l'indirizzo vero (il permesso della fotocamera lo rende visibile)
+      let cam = null; try { cam = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); } catch { }
+      let r2 = null, ind = null;
+      try { r2 = await Passa.collegati(q, { onCanale: can => { if (vivo) vistaCollegato(can); } }); ind = await Passa.indirizzoTelefono(r2.pc); } catch (e) { console.warn(e); }
+      cam?.getTracks().forEach(t => t.stop()); try { r.pc.close(); } catch { }
+      const cb = box.querySelector('.pa-codebox');
+      if (!ind) { cb.replaceChildren(h('p', { class: 'small' }, 'Non riesco a leggere l’indirizzo di questo telefono: concedi la fotocamera a file360 e premi «Inquadra di nuovo».'), h('button', { type: 'button', class: 'btn sm', onclick: () => apriCamera() }, 'Inquadra di nuovo')); return; }
+      cb.replaceChildren(h('b', {}, 'Scrivi questo codice sul computer'), h('code', { class: 'pa-netcode' }, Passa.codiceRete(ind, r2.k)), h('span', { class: 'small muted' }, 'Sotto il QR: «Il telefono non si collega?». Con il codice è il computer a chiamare il telefono.'),
+        h('details', { class: 'small' }, h('summary', {}, 'Altre cose da controllare'), h('ul', {}, h('li', {}, 'Telefono e computer sulla stessa Wi-Fi (il computer può essere col cavo allo stesso router). Le reti «ospiti» isolano i dispositivi.'), h('li', {}, 'Se usi Chrome su iPhone: Impostazioni › Chrome › Rete locale attiva.'), h('li', {}, 'Computer Windows: imposta la rete come «privata» (Impostazioni › Rete › Proprietà).'), h('li', {}, 'In 4G/5G il collegamento diretto non è possibile; senza Wi-Fi usa l’hotspot del telefono.'))),
+        h('button', { type: 'button', class: 'btn sm', onclick: () => apriCamera() }, 'Inquadra di nuovo'));
     }
     if (qrTesto) collega(qrTesto);
   }
