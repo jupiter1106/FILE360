@@ -39,7 +39,10 @@ const Later = {
   next() { const b = this._blocks(); if (this.i >= b.length) return false; this._run(b[this.i++]); return true; },
   all() { while (this.next()); },
   // i blocchi fino a quello che definisce «name» (l'ordine conta: i blocchi dopo possono usare quelli prima); il resto a breve
-  need(name) { const b = this._blocks(); const k = name ? b.findIndex(el => (' ' + (el.dataset.defs || '') + ' ').includes(' ' + name + ' ')) : -1; if (k < 0) { if (name && !(name in globalThis)) this.all(); else { const go = () => { if (this.next()) setTimeout(go, 0); }; setTimeout(go, 0); } return; } /* non trovata nei blocchi né già definita: si esegue tutto; già definita: il resto subito dopo */ while (this.i <= k && this.next()); const go = () => { if (this.next()) setTimeout(go, 0); }; setTimeout(go, 0); },
+  // moduli di un solo strumento in un blocco a parte (data-lib): si eseguono quando lo strumento si apre, dopo gli altri blocchi
+  LIBS: { startVendite: 'vendite', Vendite: 'vendite', Mappa: 'vendite' },
+  lib(nome) { const el = document.querySelector(`script[type="text/x-officina-later"][data-lib="${nome}"]`); if (!el) return; this.all(); this._run(el, false); },
+  need(name) { if (this.LIBS[name] && !(name in globalThis)) { this.lib(this.LIBS[name]); return; } const b = this._blocks(); const k = name ? b.findIndex(el => (' ' + (el.dataset.defs || '') + ' ').includes(' ' + name + ' ')) : -1; if (k < 0) { if (name && !(name in globalThis)) this.all(); else { const go = () => { if (this.next()) setTimeout(go, 0); }; setTimeout(go, 0); } return; } /* non trovata nei blocchi né già definita: si esegue tutto; già definita: il resto subito dopo */ while (this.i <= k && this.next()); const go = () => { if (this.next()) setTimeout(go, 0); }; setTimeout(go, 0); },
   // sito: scarica in sottofondo il codice dei blocchi (si esegue sempre e solo quando serve)
   prefetch() { this._pre = Promise.all([...document.querySelectorAll('script[type="text/x-officina-later"][data-src]:not([data-lib="mappa"])')].filter(el => !el.textContent).map(el => fetch(el.dataset.src).then(r => r.ok ? r.text() : null).then(t => { if (t && !el.textContent) el.textContent = t; }).catch(() => { }))); return this._pre; },
   idle() { const step = () => { if (!this.next()) return; (window.requestIdleCallback || (f => setTimeout(f, 16)))(step, { timeout: 400 }); }; (this._pre || Promise.resolve()).then(() => setTimeout(step, 50)); },
@@ -199,6 +202,8 @@ const ICONS = {
   checkbox:'<rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
   comb:'<rect x="2.5" y="7" width="19" height="10" rx="1.5"/><path d="M7.25 7v10M12 7v10M16.75 7v10"/>',
   wand:'<path d="m15.5 3.5 1.1 2.4 2.4 1.1-2.4 1.1-1.1 2.4-1.1-2.4L12 7l2.4-1.1z"/><path d="M4 20l9-9"/><path d="M19 14.5v3M17.5 16h3"/>',
+  play:'<path d="M7.5 4.8v14.4L19 12z"/>',
+  cart:'<circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2.5 3.5h3l2.4 11.2a1.6 1.6 0 0 0 1.6 1.3h8.4a1.6 1.6 0 0 0 1.6-1.2L21.5 8H6.3"/>',
   pdf:'<path d="M9 9V5a2 2 0 0 1 2-2h5l5 5v11a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-1"/><path d="M16 3v5h5"/><path d="M3 13.5h9"/><path d="m9 10.5 3 3-3 3"/>',
   pdfa:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="m9 14.5 2 2 4-4.5"/>',
   pdfacheck:'<path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4"/><path d="M13 3v5h5v2"/><circle cx="16" cy="16" r="3.5"/><path d="m18.6 18.6 2.9 2.9"/>',

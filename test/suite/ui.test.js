@@ -252,6 +252,17 @@ test('Fatture a 320 px: la tabella che scorre lo mostra con un’ombra visibile 
   const r = await page.evaluate(() => { const w = document.querySelector('.ft-tw'), i = w.querySelector('.ft-sh i.r'); return { scrolls: w.scrollWidth > w.clientWidth, visible: +getComputedStyle(i).opacity, h: i.getBoundingClientRect().height, z: getComputedStyle(w.querySelector('.ft-sh')).zIndex }; });
   ok(!r.scrolls || (r.visible > 0.9 && r.h > 40), JSON.stringify(r));
 });
+test('Fatture: il metodo di pagamento di ogni fattura è in evidenza, filtrabile, cercabile; i contanti da 5.000 € in su sono segnalati', async b => {
+  const { page } = await open(b, 'desk1440'); await openTool(page, 'fatture', ['vendite.zip']); await page.waitForSelector('.ft-tw:not([hidden])', { timeout: 60000 });
+  const bar = await page.locator('.pag-bar').innerText();
+  ok(/Bonifico/.test(bar) && /Carta/.test(bar) && /Contanti da 5\.000/.test(bar), 'riepilogo dei metodi incompleto: ' + bar.replace(/\n/g, ' '));
+  ok(await page.locator('.ft-table tbody .pag-chip').count() > 50, 'la colonna del pagamento non c’è');
+  await page.locator('.pag-bar button', { hasText: 'Contanti da 5.000' }).click(); await page.waitForTimeout(200);
+  ok(await page.locator('.ft-table tbody tr').count() === 1 && await page.locator('.ft-table tbody .pag-chip.soglia').count() === 1, 'il filtro della soglia del contante non funziona');
+  await page.locator('.pag-bar button', { hasText: 'Contanti da 5.000' }).click(); await page.locator('.ft-search').fill('carta'); await page.waitForTimeout(200);
+  ok(await page.locator('.ft-table tbody tr').count() > 20, 'la ricerca per metodo di pagamento non trova le fatture pagate con carta');
+  ok(page.errs.length === 0, page.errs.join(' | '));
+});
 test('errori: lo stesso file non valido ha la stessa diagnosi in ogni strumento, con la riparazione come prima azione', async b => {
   const { page } = await open(b, 'desk1280'); const seen = {};
   for (const tool of ['comprimi', 'word', 'ocr', 'dividi', 'ruota', 'modifica']) {
@@ -1268,7 +1279,7 @@ test('Analisi delle vendite: dallo ZIP le scoperte, la mappa e i clienti; un Com
   const { page } = await open(b, 'desk1440'); await openTool(page, 'vendite', ['vendite.zip']); await page.waitForSelector('.vd-kpis', { timeout: 60000 });
   const t = await page.locator('.vd-body').innerText();
   ok(/2\.449\.546/.test(t) && /da 3 clienti/.test(t) && /non compra da/.test(t) && /si comprano insieme/.test(t), 'panoramica o scoperte mancanti: ' + t.slice(0, 200));
-  await page.locator('.vd-tab', { hasText: 'Mappa' }).click(); await page.locator('.vd-maptb button', { hasText: 'Comuni' }).click(); await page.locator('.vd-dot').first().click(); await page.waitForTimeout(300);
+  await page.locator('.vd-tab', { hasText: 'Mappa' }).click(); await page.locator('.vd-maptb button', { hasText: 'Comuni' }).click(); await page.locator('.vd-dot:not(.f)').first().dispatchEvent('click'); await page.waitForTimeout(300);
   const side = await page.locator('.vd-side').innerText();
   ok(/Milano/.test(side) && /Rossi Impianti/.test(side) && /fatture/.test(side), 'il Comune non mostra i clienti: ' + side.slice(0, 160));
   await page.locator('.vd-side button', { hasText: 'Solo questo Comune' }).click(); await page.waitForTimeout(300);
@@ -1293,16 +1304,24 @@ test('Analisi di vendite e acquisti: con le fatture passive compaiono fornitori,
   ok(/Acquisti/.test(await page.locator('.vd-kpis').innerText()) && /Doppioni/.test(await page.locator('.vd-side').innerText()), 'mancano gli acquisti in panoramica o i doppioni');
   await page.locator('.vd-tab', { hasText: 'Fornitori' }).click();
   const t = await page.locator('.vd-body').innerText();
-  ok(/Elettroforniture Nord/.test(t) && /Sensore grezzo SG-1/.test(t) && /anche cliente/.test(t), 'fornitori, rincari o fornitori-clienti mancanti: ' + t.slice(0, 200));
+  ok(/Elettroforniture Nord/.test(t) && /anche cliente/.test(t), 'fornitori, rincari o fornitori-clienti mancanti: ' + t.slice(0, 200));
   await page.locator('.vd-tab', { hasText: 'Incassi e pagamenti' }).click();
-  ok(/Cassa prevista/.test(await page.locator('.vd-body').innerText()) && /IVA per trimestre/.test(await page.locator('.vd-body').innerText()), 'manca la cassa o l’IVA');
+  const inc = await page.locator('.vd-body').innerText();
+  ok(/Cassa prevista/.test(inc) && /IVA per trimestre/.test(inc) && /Pagamenti in contanti/.test(inc) && /5\.000/.test(inc) && await page.locator('.vd-body .pag-chip.f-contanti').count() > 0, 'manca la cassa, l’IVA o il controllo del contante');
+  // cosa compri: categorie dalle descrizioni, stesso articolo da due fornitori, margini dei rivenduti, ritenute
+  await page.locator('.vd-tab', { hasText: 'Cosa compri' }).click();
+  const cc = await page.locator('.vd-body').innerText();
+  for (const [re, m] of [[/Sensore grezzo SG-1[\s\S]*\+12/, 'rincaro del sensore'], [/Energia e gas/, 'categoria energia'], [/Consulenze e professionisti/, 'categoria consulenze'], [/Lavorazioni e subappalti/, 'categoria subappalti'], [/Cavo FG16 rotolo 100 m[\s\S]*risparmiabili/, 'confronto dei prezzi'], [/Termostato smart TRM-2/, 'margine sul rivenduto'], [/Ritenute d’acconto/, 'ritenute']]) ok(re.test(cc), 'Cosa compri: manca ' + m);
+  // la scheda del fornitore più caro dice dove paghi di più
+  await page.locator('.vd-tab', { hasText: 'Fornitori' }).click(); await page.locator('.vd-t tbody tr', { hasText: 'Elettroforniture' }).click();
+  ok(/Qui paghi di più[\s\S]*Cavi Veneto/i.test(await page.locator('.vd-side').innerText()), 'la scheda del fornitore non confronta i prezzi');
   ok(page.errs.length === 0, page.errs.join(' | '));
   const p2 = (await open(b, 'desk1280')).page; await openTool(p2, 'vendite', ['acquisti-solo.zip']); await p2.waitForSelector('.vd-tabs', { timeout: 60000 });
   const tabs = await p2.locator('.vd-tab').allInnerTexts(), side = await p2.locator('.vd-side').innerText();
-  ok(tabs.join() === 'Fornitori,Andamento,Pagamenti' && /Alfa Forniture/.test(side) && !/Fatture di vendita/.test(side), JSON.stringify({ tabs, side: side.slice(0, 120) }));
+  ok(tabs.join() === 'Fornitori,Cosa compri,Mappa,Andamento,Pagamenti' && /Alfa Forniture/.test(side) && !/Fatture di vendita/.test(side), JSON.stringify({ tabs, side: side.slice(0, 120) }));
   ok(p2.errs.length === 0, p2.errs.join(' | '));
 });
-test('Analisi delle vendite: mappa stradale dall’Italia al civico con la cartella della mappa, rilievo in 3D; senza WebGL resta la mappa per Comuni', async b => {
+test('Analisi delle vendite: mappa stradale dall’Italia al civico con la cartella della mappa, clienti e fornitori, giro e ricerca; senza WebGL resta la mappa per Comuni', async b => {
   const os = require('os'), fs = require('fs'), path = require('path'), dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mappa-italia-'));
   fs.mkdirSync(path.join(dir, 'province')); fs.copyFileSync(path.join(__dirname, '..', 'fixtures', 'mappa', 'BO.pmtiles'), path.join(dir, 'province', 'BO.pmtiles')); fs.mkdirSync(path.join(dir, 'civici'));
   for (const p of ['BO', 'MI', 'MO', 'RE']) fs.copyFileSync(path.join(__dirname, '..', '..', 'dati', 'mappa', 'civici', p + '.json.gz'), path.join(dir, 'civici', p + '.json.gz'));
@@ -1316,16 +1335,22 @@ test('Analisi delle vendite: mappa stradale dall’Italia al civico con la carte
     const fc = page.waitForEvent('filechooser'); await page.locator('.vd-glav button.primary').click(); await (await fc).setFiles(dir);
     await page.waitForFunction(() => document.querySelector('.vd-glav')?.hidden, null, { timeout: 90000 }); await pronta();
     ok(/\d+ al civico/.test(await page.locator('.vd-precl').innerText()), 'nessun cliente al civico');
-    await page.locator('.vd-zona .vd-clb', { hasText: 'Rossi Impianti' }).click();
-    await page.waitForFunction(() => { const m = document.querySelector('.vd-gl')._mappa.map; return !m.isMoving() && m.getZoom() >= 16; }, null, { timeout: 20000 });
+    await page.locator('.vd-zona .vd-zb:not(.f) .vd-clb', { hasText: 'Rossi Impianti' }).click();
+    await page.waitForFunction(() => { const m = document.querySelector('.vd-gl')._mappa.map; return !m.isMoving() && m.getZoom() >= 16; }, null, { timeout: 20000 }).catch(async () => { throw new Error('volo su Rossi: zoom ' + await page.evaluate(() => document.querySelector('.vd-gl')._mappa.map.getZoom())); });
     const side = await page.locator('.vd-side').innerText();
     ok(/Rossi Impianti/.test(side) && /posizione al civico/.test(side), 'la scheda non dice l’indirizzo e la precisione: ' + side.slice(0, 200));
-    await page.locator('.vd-glm', { hasText: 'Rilievo' }).click();
-    await page.waitForFunction(() => { const m = document.querySelector('.vd-gl')._mappa.map; return !m.isMoving() && m.getPitch() > 30; }, null, { timeout: 20000 }); await page.waitForTimeout(1600);
-    const ril = await page.evaluate(() => { const m = document.querySelector('.vd-gl')._mappa.map; return { vis: m.getLayoutProperty('rilievo', 'visibility'), col: m.queryRenderedFeatures({ layers: ['rilievo'] }).length }; });
-    ok(ril.vis === 'visible' && ril.col > 5, 'il rilievo non mostra le colonne: ' + JSON.stringify(ril));
-    await page.locator('.vd-glm', { hasText: 'Clienti' }).click();
-    await page.waitForFunction(() => { const m = document.querySelector('.vd-gl')._mappa.map; return !m.isMoving() && m.getPitch() < 1; }, null, { timeout: 20000 });
+    // clienti e fornitori insieme, poi solo i fornitori; provincia al passaggio; giro dei principali; niente rilievo
+    const tipi = () => page.evaluate(() => { const m = document.querySelector('.vd-gl')._mappa.map; return [...new Set(m.querySourceFeatures('clienti').map(f => f.properties.t).filter(Boolean))].sort().join(); });
+    ok(await tipi() === 'c,f', 'sulla mappa non ci sono clienti e fornitori insieme: ' + await tipi());
+    await page.locator('.vd-glbar .seg button', { hasText: 'Fornitori' }).click(); await page.waitForTimeout(600);
+    ok(await tipi() === 'f', 'il filtro dei fornitori non funziona: ' + await tipi());
+    ok(await page.evaluate(() => !document.querySelector('.vd-gl')._mappa.map.getLayer('rilievo')) && !(await page.locator('text=Rilievo').count()), 'il rilievo c’è ancora');
+    await page.locator('.vd-glbar .seg button', { hasText: 'Tutti' }).click(); await page.locator('.vd-glbar button', { hasText: 'Tutta l’area' }).click(); await page.waitForTimeout(1200);
+    await page.locator('.vd-glbar .vd-glgiro').click();
+    await page.waitForFunction(() => document.querySelector('.vd-gl')._mappa.inGiro && document.querySelector('.vd-side .vd-sh'), null, { timeout: 20000 }).catch(async e => { throw new Error('giro: ' + JSON.stringify(await page.evaluate(() => ({ giro: document.querySelector('.vd-gl')._mappa.inGiro, side: document.querySelector('.vd-side')?.innerText.slice(0, 80), btn: document.querySelector('.vd-glgiro')?.textContent })))); });
+    await page.locator('.vd-glbar .vd-glgiro').click(); ok(await page.evaluate(() => !document.querySelector('.vd-gl')._mappa.inGiro), 'il giro non si ferma');
+    await page.locator('.vd-glq').fill('Cavi Ven'); await page.locator('.vd-glris button').first().click();
+    await page.waitForFunction(() => /Cavi Veneto/.test(document.querySelector('.vd-side')?.innerText || ''), null, { timeout: 20000 }).catch(async () => { throw new Error('ricerca: ' + (await page.locator('.vd-side').innerText()).slice(0, 80)); });
     ok(page.errs.length === 0, page.errs.join(' | '));
     const p2 = (await open(b, 'desk1280')).page;
     await p2.addInitScript(() => { const g = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function (t, ...a) { return /webgl/.test(t) ? null : g.call(this, t, ...a); }; });

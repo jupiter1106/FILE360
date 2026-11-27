@@ -428,13 +428,18 @@ async function startQrSepa(stage, files) {
     form.replaceChildren(F('Beneficiario (chi riceve il pagamento)', 'name', { maxlength: 70, autocomplete: 'organization' }), ib, am, cz,
       advanced('qr', () => d.bic ? 'BIC ' + d.bic : '', F('BIC (facoltativo)', 'bic', { placeholder: 'es. BCITITMM', maxlength: 11 }, 'Non serve per i bonifici in area SEPA.')));
   }
+  // il metodo di pagamento scritto nella fattura: il QR SEPA è un bonifico, quindi se la fattura dice altro lo si fa notare
+  const metodo = it => it.inv && it.inv.metodo && it.inv.metodo.codici.length ? it.inv.metodo : null;
+  const nonBonifico = it => { const m = metodo(it); return !!m && !m.famiglie.includes('bonifico'); };
   function refresh() {
-    const it = items[cur], d = it.d, q = EpcQr.build({ ...d, amount: isNaN(d.amount) ? -1 : d.amount });
-    err.replaceChildren(...q.errors.map(e => h('div', { class: 'dr-check bad' }, ic('alert', 16), h('span', {}, e))));
+    const it = items[cur], d = it.d, q = EpcQr.build({ ...d, amount: isNaN(d.amount) ? -1 : d.amount }), m = metodo(it);
+    err.replaceChildren(...[...q.errors.map(e => h('div', { class: 'dr-check bad' }, ic('alert', 16), h('span', {}, e))),
+      nonBonifico(it) ? h('div', { class: 'dr-check warn' }, ic('alert', 16), h('span', {}, `La fattura indica come pagamento «${m.nome}», non il bonifico: il codice QR serve a pagare con un bonifico. Crealo se accetti anche il bonifico.`)) : null].filter(Boolean));
     if (q.ok) {
       const code = QR.encode(q.payload, { ecl: 'M' });
       preview.replaceChildren(h('div', { class: 'qr-card' }, h('div', { class: 'qr-img', html: QR.svg(code) }),
         h('div', { class: 'qr-info' }, h('b', {}, d.name), h('span', {}, EpcQr.ibanFmt(d.iban)), d.amount ? h('strong', {}, '€ ' + QrPay.E(d.amount)) : h('span', { class: 'muted' }, 'Importo libero'), d.text ? h('span', { class: 'muted small' }, d.text) : null,
+          it.inv ? h('span', { class: 'qr-pag' }, h('span', { class: 'muted small' }, 'Pagamento indicato in fattura'), h('span', { html: FattureKit.pagChip(it.inv.metodo) })) : null,
           h('span', { class: 'muted small' }, 'Standard europeo EPC per i bonifici SEPA: lo leggono molte app bancarie. Se la tua non lo legge, i dati restano scritti accanto.'))));
     } else preview.replaceChildren(h('div', { class: 'qr-card empty' }, h('div', { class: 'qr-img ph' }, ic('qr', 64, 1.2)), h('div', { class: 'qr-info' }, h('b', {}, 'Il codice compare qui'), h('span', { class: 'muted small' }, 'Compila beneficiario e IBAN: l’importo e la causale sono facoltativi.'))));
     drawList(); runBtn.disabled = !items.some(x => EpcQr.build({ ...x.d, amount: isNaN(x.d.amount) ? -1 : x.d.amount }).ok);
@@ -443,7 +448,7 @@ async function startQrSepa(stage, files) {
     if (items.length < 2) { list.replaceChildren(); return; }
     list.replaceChildren(h('div', { class: 'sec-t' }, `${plural(items.length, 'fattura', 'fatture')}: tocca per vedere e correggere`), ...items.map((it, i) => {
       const ok = EpcQr.build({ ...it.d, amount: isNaN(it.d.amount) ? -1 : it.d.amount }).ok;
-      return h('button', { class: 'qr-item' + (i === cur ? ' on' : ''), onclick: () => { cur = i; drawForm(); refresh(); } }, ic(ok ? 'check' : 'alert', 16), h('span', { class: 'qi-n' }, it.d.label || it.file || `Fattura ${i + 1}`), h('span', { class: 'qi-a' }, it.d.amount ? '€ ' + QrPay.E(it.d.amount) : ''));
+      return h('button', { class: 'qr-item' + (i === cur ? ' on' : ''), onclick: () => { cur = i; drawForm(); refresh(); } }, ic(ok ? 'check' : 'alert', 16), h('span', { class: 'qi-n' }, it.d.label || it.file || `Fattura ${i + 1}`), metodo(it) ? h('span', { html: FattureKit.pagChip(it.inv.metodo) }) : null, h('span', { class: 'qi-a' }, it.d.amount ? '€ ' + QrPay.E(it.d.amount) : ''));
     }));
   }
   const runBtn = h('button', { class: 'btn primary big btn-run', onclick: run }, ic('qr', 18), items.length > 1 ? `Crea ${items.length} codici QR` : 'Crea il codice QR');

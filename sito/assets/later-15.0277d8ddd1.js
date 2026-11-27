@@ -527,6 +527,13 @@ const FattureKit = (() => {
   const T_NATURA = {N1:"Escluse ex art. 15",N2:"Non soggette","N2.1":"Non soggette ad IVA ex artt. da 7 a 7-septies","N2.2":"Non soggette — altri casi",N3:"Non imponibili","N3.1":"Non imponibili — esportazioni","N3.2":"Non imponibili — cessioni intracomunitarie","N3.3":"Non imponibili — cessioni verso San Marino","N3.4":"Non imponibili — operazioni assimilate alle esportazioni","N3.5":"Non imponibili — a seguito di dichiarazioni d'intento","N3.6":"Non imponibili — altre operazioni che non concorrono al plafond",N4:"Esenti",N5:"Regime del margine / IVA non esposta in fattura",N6:"Inversione contabile","N6.1":"Inversione contabile — cessione di rottami","N6.2":"Inversione contabile — cessione di oro e argento puro","N6.3":"Inversione contabile — subappalto nel settore edile","N6.4":"Inversione contabile — cessione di fabbricati","N6.5":"Inversione contabile — cessione di telefoni cellulari","N6.6":"Inversione contabile — cessione di prodotti elettronici","N6.7":"Inversione contabile — prestazioni comparto edile e settori connessi","N6.8":"Inversione contabile — operazioni settore energetico","N6.9":"Inversione contabile — altri casi",N7:"IVA assolta in altro stato UE"};
   const T_PAG = {MP01:"Contanti",MP02:"Assegno",MP03:"Assegno circolare",MP04:"Contanti presso Tesoreria",MP05:"Bonifico",MP06:"Vaglia cambiario",MP07:"Bollettino bancario",MP08:"Carta di pagamento",MP09:"RID",MP10:"RID utenze",MP11:"RID veloce",MP12:"RIBA",MP13:"MAV",MP14:"Quietanza erario",MP15:"Giroconto su conti di contabilità speciale",MP16:"Domiciliazione bancaria",MP17:"Domiciliazione postale",MP18:"Bollettino di c/c postale",MP19:"SEPA Direct Debit",MP20:"SEPA Direct Debit CORE",MP21:"SEPA Direct Debit B2B",MP22:"Trattenuta su somme già riscosse",MP23:"PagoPA"};
   const T_COND = {TP01:"Pagamento a rate",TP02:"Pagamento completo",TP03:"Anticipo"};
+  /* famiglie dei metodi di pagamento: per l'evidenza a colpo d'occhio, i filtri e i riepiloghi */
+  const PAG_FAM = {MP01:"contanti",MP04:"contanti",MP08:"carta",MP05:"bonifico",MP15:"bonifico",MP02:"assegno",MP03:"assegno",MP06:"assegno",
+    MP09:"addebito",MP10:"addebito",MP11:"addebito",MP16:"addebito",MP17:"addebito",MP19:"addebito",MP20:"addebito",MP21:"addebito",
+    MP07:"bollettino",MP12:"bollettino",MP13:"bollettino",MP18:"bollettino",MP23:"bollettino",MP14:"altro",MP22:"altro"};
+  const PAG_FAM_NOME = {contanti:"Contanti",carta:"Carta",bonifico:"Bonifico",assegno:"Assegno",addebito:"Addebito diretto",bollettino:"RiBa, MAV, bollettino",altro:"Altro",misto:"Più metodi",nd:"Non indicato"};
+  /* trasferimenti in contanti fra soggetti diversi: vietati da 5.000 euro in su (art. 49 d.lgs. 231/2007, dal 2023) */
+  const SOGLIA_CONTANTI = 5000;
   const T_REGIME = {RF01:"Ordinario",RF02:"Contribuenti minimi",RF04:"Agricoltura e attività connesse e pesca",RF05:"Vendita sali e tabacchi",RF06:"Commercio dei fiammiferi",RF07:"Editoria",RF08:"Gestione servizi telefonia pubblica",RF09:"Rivendita documenti di trasporto pubblico e di sosta",RF10:"Intrattenimenti e giochi",RF11:"Agenzie viaggi e turismo",RF12:"Agriturismo",RF13:"Vendite a domicilio",RF14:"Rivendita beni usati, oggetti d'arte, d'antiquariato o da collezione",RF15:"Agenzie di vendite all'asta di oggetti d'arte",RF16:"IVA per cassa P.A.",RF17:"IVA per cassa",RF18:"Altro",RF19:"Regime forfettario"};
   const T_RIT = {RT01:"Ritenuta persone fisiche",RT02:"Ritenuta persone giuridiche",RT03:"Contributo INPS",RT04:"Contributo ENASARCO",RT05:"Contributo ENPAM",RT06:"Altro contributo previdenziale"};
   const T_CASSA = {TC01:"Cassa nazionale previdenza e assistenza avvocati e procuratori legali",TC02:"Cassa previdenza dottori commercialisti",TC03:"Cassa previdenza e assistenza geometri",TC04:"Cassa nazionale previdenza e assistenza ingegneri e architetti liberi professionisti",TC05:"Cassa nazionale del notariato",TC06:"Cassa nazionale previdenza e assistenza ragionieri e periti commerciali",TC07:"ENASARCO",TC08:"ENPACL — consulenti del lavoro",TC09:"ENPAM — medici",TC10:"ENPAF — farmacisti",TC11:"ENPAV — veterinari",TC12:"ENPAIA — impiegati agricoltura",TC13:"Fondo previdenza impiegati imprese di spedizione e agenzie marittime",TC14:"INPGI — giornalisti",TC15:"ONAOSI — orfani sanitari italiani",TC16:"CASAGIT — giornalisti",TC17:"EPPI — periti industriali",TC18:"EPAP — psicologi e altri",TC19:"ENPAB — biologi",TC20:"ENPAPI — infermieri",TC21:"ENPAP — psicologi",TC22:"INPS"};
@@ -858,7 +865,62 @@ const FattureKit = (() => {
       : [lordo, lordo - inv.ritenutaTot, lordo + bollo, lordo - inv.ritenutaTot + bollo]
           .some(v => Math.abs(v - inv.totale) < 0.02 || Math.abs(v + arr - inv.totale) < 0.02);
     inv.codiciIva = codiciIva(inv);
+    inv.metodo = metodoPagamento(inv);
     inv.id = "f" + Math.random().toString(36).slice(2, 10);
+  }
+
+  /* il metodo di pagamento dichiarato (ModalitaPagamento di ogni rata): codici, nomi, famiglia, importo in contanti.
+     Nella fattura è facoltativo: senza DatiPagamento il metodo resta «non indicato», mai indovinato. */
+  function metodoPagamento(inv){
+    const dett = (inv.pagamenti || []).reduce((a, p) => a.concat(p.dettagli || []), []);
+    const codici = [], imp = {};
+    dett.forEach(d => {
+      const k = String(d.modalita || "").trim().toUpperCase(); if (!k) return;
+      if (!codici.includes(k)) codici.push(k);
+      imp[k] = (imp[k] || 0) + (typeof d.importo === "number" && isFinite(d.importo) ? d.importo : 0);
+    });
+    if (!codici.length) return { codici: [], nome: "", famiglia: "nd", famiglie: [], contanti: 0, oltreSoglia: false, rate: dett.length };
+    const famiglie = codici.map(k => PAG_FAM[k] || "altro").filter((f, i, a) => a.indexOf(f) === i);
+    /* contanti veri e propri (MP01; MP04 è il versamento alla tesoreria di un ente pubblico): l'importo delle rate, o il totale se le rate non lo dicono */
+    let contanti = codici.includes("MP01") ? imp.MP01 : 0;
+    if (codici.includes("MP01") && !contanti && codici.length === 1) contanti = Math.abs(inv.totale || 0);
+    return { codici, nome: codici.map(k => T_PAG[k] || k).join(" + "), famiglia: famiglie.length === 1 ? famiglie[0] : "misto",
+      famiglie, contanti: Math.round(contanti * 100) / 100, oltreSoglia: contanti >= SOGLIA_CONTANTI, rate: dett.length };
+  }
+
+  /* l'etichetta del metodo (HTML, per gli elenchi a schermo): icona della famiglia e nome breve; i contanti in evidenza,
+     in rosso da 5.000 euro in su. Il titolo dice il codice e il nome completo. */
+  const PAG_ICO = {
+    contanti: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 12h.01M18 12h.01"/>',
+    carta: '<rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19M6.5 15h4"/>',
+    bonifico: '<path d="M3 10 12 4.5 21 10"/><path d="M5.5 10v7.5M10 10v7.5M14 10v7.5M18.5 10v7.5M3 20h18"/>',
+    assegno: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 14.5c1.4-2 2.4.8 3.8-1s2 .9 3.2-.2M15 10h3.5"/>',
+    addebito: '<path d="M17 3l3.5 3.5L17 10"/><path d="M3.5 11.5v-1A4 4 0 0 1 7.5 6.5h13"/><path d="M7 21l-3.5-3.5L7 14"/><path d="M20.5 12.5v1a4 4 0 0 1-4 4h-13"/>',
+    bollettino: '<path d="M5.5 3h13v18l-2.6-1.7-2.2 1.7-1.7-1.7-1.7 1.7-2.2-1.7L5.5 21z"/><path d="M9 8h6M9 12h6"/>',
+    altro: '<circle cx="12" cy="12" r="8.5"/><path d="M8.5 12h7"/>',
+    misto: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>'
+  };
+  const PAG_BREVE = { MP08: "Carta", MP04: "Contanti (tesoreria)", MP15: "Giroconto", MP14: "Quietanza erario", MP22: "Trattenuta", MP19: "SEPA Direct Debit",
+    MP20: "SDD CORE", MP21: "SDD B2B", MP16: "Domiciliazione bancaria", MP17: "Domiciliazione postale", MP18: "Bollettino postale" };
+  const escH = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  function metodoBreve(m){
+    if (!m || !m.codici || !m.codici.length) return "Non indicato";
+    return m.codici.length === 1 ? (PAG_BREVE[m.codici[0]] || T_PAG[m.codici[0]] || m.codici[0]) : m.codici.map(k => PAG_BREVE[k] || T_PAG[k] || k).join(" + ");
+  }
+  function metodoTitolo(m){
+    if (!m || !m.codici || !m.codici.length) return "Metodo di pagamento non indicato nella fattura";
+    let t = "Metodo di pagamento: " + m.codici.map(k => k + " " + (T_PAG[k] || "")).join(", ");
+    if (m.oltreSoglia) t += " \u2014 contanti per " + eur(m.contanti) + " euro: da 5.000 euro in su il contante non \u00e8 ammesso fra soggetti diversi (d.lgs. 231/2007). Da verificare.";
+    return t;
+  }
+  /* o.famiglia + o.label: l'etichetta di una famiglia intera (riepiloghi); o.soglia: in rosso */
+  function pagChip(m, o){
+    o = o || {};
+    const f = o.famiglia || (m && m.codici && m.codici.length ? m.famiglia : "nd"), soglia = o.famiglia ? !!o.soglia : !!(m && m.oltreSoglia);
+    const svg = PAG_ICO[f] ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + PAG_ICO[f] + "</svg>" : "";
+    const label = o.label || (f === "nd" ? "\u2014" : metodoBreve(m)), title = o.famiglia ? "" : ' title="' + escH(metodoTitolo(m)) + '"';
+    return '<span class="pag-chip f-' + f + (soglia ? " soglia" : "") + '"' + title + ">" + svg + escH(label) +
+      (soglia ? '<b aria-label="oltre la soglia del contante">!</b>' : "") + "</span>";
   }
 
   /* =========================================================================
@@ -2368,6 +2430,17 @@ const FattureKit = (() => {
       gi = Math.max(tb.fine, gi + 1);
     }
     if (!inv.ritenute.length && ritTot) inv.ritenute.push({ tipo: "", aliquota: null, importo: ritTot, causale: "" });
+    /* metodo di pagamento: il codice MPxx seguito dal suo nome («MP05 Bonifico»), come lo stampa ogni foglio di stile;
+       un codice da solo non basta (potrebbe essere un codice articolo) */
+    const mp = [];
+    for (let j = da; j < a; j++) (gruppi[j].righe || []).forEach(r => {
+      const t = String(r.testo || ""), re = /\bMP(0[1-9]|1\d|2[0-3])\b\s*[\u2014\u2013:\-]?\s*([A-Za-zÀ-ÿ]+)/g; let m;
+      while ((m = re.exec(t))) {
+        const k = "MP" + m[1], nome = T_PAG[k];
+        if (nome && nome.split(" ")[0].toLowerCase() === m[2].toLowerCase() && !mp.includes(k)) mp.push(k);
+      }
+    });
+    if (mp.length) inv.pagamenti = [{ condizioni: "", dettagli: mp.map(k => ({ modalita: k, importo: null, daPdf: true })) }];
     return inv;
   }
 
@@ -2593,7 +2666,7 @@ const FattureKit = (() => {
     leggiBytes, leggiPdf, zipRead, zipCreate, creaPdf, allegati, nomeFile, nomiUnivoci, esplodi, finalize,
     controparte, nomeControparte, serialeData, parseFatture, carveXml, estraiCms,
     fmt: { eur, qty, price, dt, dtFile, dtDash, nf },
-    tabelle: { T_DOC, T_DOC_BREVE, T_NATURA, T_PAG },
+    tabelle: { T_DOC, T_DOC_BREVE, T_NATURA, T_PAG, PAG_FAM, PAG_FAM_NOME }, metodoPagamento, metodoBreve, metodoTitolo, pagChip, SOGLIA_CONTANTI,
     _render: { renderStandard, renderMinisteriale, pdfEsteso },
   };
 })();

@@ -52,7 +52,13 @@ const LUOGHI = { 'Verdi Costruzioni S.r.l.': 'Modena', 'Bianchi Elettrotecnica S
       const perF = Object.entries(aa.per_fornitore).filter(([n, v]) => okA(B?.fornitori.find(g => g.nome === n)?.spesa ?? NaN, v)).length;
       const acq = { spesa: okA(B?.spesa, aa.spesa) && okA(B?.iva, aa.iva) && okA(B?.note, aa.note) && B?.nFatture === aa.fatture && B?.nFornitori === aa.fornitori, perF, nPerF: Object.keys(aa.per_fornitore).length, doppie: D.scartate.doppie === aa.doppie, td16: D.scartate.autofatture === 1,
         fatti: { principale: B?.top?.nome === aa.principale && A.scoperte.some(s => s.titolo.includes(aa.principale)), rincaro: B?.voci.find(v => v.desc === aa.rincaro)?.variazione > 0.1 && A.scoperte.some(s => s.titolo.includes(aa.rincaro)),
-          anche: B?.fornitori.filter(g => g.cliente).map(g => g.nome).join() === aa.anche_cliente, estero: !!B?.fornitori.find(g => g.nome === aa.estero)?.luogo?.estero, cassa: !!A.cassa && A.cassa[0].uscite > 0 && A.ivaTrim?.length > 0 } };
+          anche: B?.fornitori.filter(g => g.cliente).map(g => g.nome).join() === aa.anche_cliente, estero: !!B?.fornitori.find(g => g.nome === aa.estero)?.luogo?.estero, cassa: !!A.cassa && A.cassa[0].uscite > 0 && A.ivaTrim?.length > 0,
+          risparmio: B?.confronti?.[0]?.desc === aa.risparmio_voce && B.confronti[0].best.nome.startsWith('Cavi Veneto') && A.scoperte.some(s => /fornitore più conveniente/.test(s.titolo)),
+          margine: !!A.margini?.find(m => m.desc === aa.rivenduto && m.margine > 0.3 && m.margine < 0.42),
+          ritenute: okA(B?.ritenute?.tot, aa.ritenute) && A.scoperte.some(s => /Ritenute/.test(s.titolo)),
+          contanti: B?.contanti?.soglia.length === aa.contanti_soglia && A.scoperte.some(s => /contanti da 5\.000/.test(s.titolo)),
+          categorie: Object.entries(aa.categorie).every(([f, c]) => B?.fornitori.find(g => g.nome === f)?.voci.every(v => Vendite.nomeCat[Vendite.categoria(v)] === c || c === 'Merci e materiali')),
+          mappa: B?.terr?.luoghi.length >= 8 && B.terr.estero.length === 1 && B.terr.distanze?.fasce.some(f => f.n > 0) } };
       const t0 = performance.now(); Vendite.analizza(big, {}); const t1 = performance.now(); Vendite.analizza(big, { regione: 'Lombardia' }); const t2 = performance.now();
       return { acq, fatt: A.fatturato, note: A.note, nF: A.nFatture + A.nNote, nC: A.nClienti, cli, nCli: Object.keys(att.per_cliente).length, prod, nProd: Object.keys(att.per_prodotto).length, mesi, nMesi: Object.keys(att.per_mese).length, pos, nPos: Object.keys(luoghi).length, posTutti, nIta: ita.length, fatti, big: big.fatture.length, msBig: Math.round(t1 - t0), msFiltro: Math.round(t2 - t1) };
     }, [fs.readFileSync(ZIP).toString('base64'), ATT, LUOGHI]);
@@ -84,7 +90,7 @@ const LUOGHI = { 'Verdi Costruzioni S.r.l.': 'Modena', 'Bianchi Elettrotecnica S
     const [dl] = await Promise.all([page.waitForEvent('download'), page.locator('.modal.res .btn', { hasText: 'Scarica' }).first().click()]);
     const xb = fs.readFileSync(await dl.path()).toString('base64');
     const xl = await page.evaluate(async b64 => { const z = await JSZip.loadAsync(Uint8Array.from(atob(b64), c => c.charCodeAt(0))); const sh = Object.keys(z.files).filter(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n)); const s2 = await z.file('xl/worksheets/sheet2.xml').async('string'); return { fogli: sh.length, righeClienti: (s2.match(/<row /g) || []).length }; }, xb);
-    if (xl.fogli === 11 && xl.righeClienti === ATT.clienti + 1) ok.push('Excel con 11 fogli (vendite e acquisti) e tutti i clienti');
+    if (xl.fogli === 15 && xl.righeClienti === ATT.clienti + 1) ok.push('Excel con 15 fogli (vendite, acquisti, categorie, prezzi, margini, ritenute) e tutti i clienti');
     // fornitori: dalla scheda Fornitori alla scheda del fornitore con che cosa gli compri
     await page.keyboard.press('Escape').catch(() => {}); await page.waitForTimeout(200);
     await page.locator('.vd-tab', { hasText: 'Fornitori' }).click(); await page.locator('.vd-t tbody tr').first().click(); await page.waitForTimeout(300);
@@ -135,8 +141,9 @@ const LUOGHI = { 'Verdi Costruzioni S.r.l.': 'Modena', 'Bianchi Elettrotecnica S
     if (g) { await page.mouse.click(g[0], g[1]); await fermo(); if (await zoom() > z0 + 0.5) ok2.push('un gruppo si apre ingrandendo'); }
     const primo = await page.locator('.vd-zona .vd-clb b').first().innerText().catch(() => '');
     if (primo) { await page.locator('.vd-zona .vd-clb').first().click(); await fermo(); const side = await page.locator('.vd-side').innerText(); if (await zoom() >= 16 && side.includes(primo) && /posizione /.test(side)) ok2.push('elenco della zona → volo sull’edificio e scheda con l’indirizzo'); }
+    await page.locator('.vd-side .icon-btn[aria-label="Chiudi"]').click({ timeout: 3000 }).catch(() => {}); await page.evaluate(() => document.querySelector('.vd-glw').scrollIntoView({ block: 'center' })); await page.waitForTimeout(300);
     const pt = await page.evaluate(() => { const m = document.querySelector('.vd-gl')._mappa.map; const f = m.queryRenderedFeatures({ layers: ['punti'] }).find(f => { const p = m.project(f.geometry.coordinates); return p.x > 60 && p.y > 60 && p.x < m.getCanvas().clientWidth - 60 && p.y < m.getCanvas().clientHeight - 60; }); if (!f) return null; const p = m.project(f.geometry.coordinates), r = m.getCanvas().getBoundingClientRect(); return [r.left + p.x, r.top + p.y, f.properties.nome]; });
-    if (pt) { await page.locator('.vd-side .icon-btn[aria-label="Chiudi"]').click().catch(() => {}); await page.mouse.click(pt[0], pt[1]); await page.waitForTimeout(500); if ((await page.locator('.vd-side').innerText()).includes(pt[2])) ok2.push('tocco sul punto → scheda del cliente'); }
+    if (pt) { await page.mouse.click(pt[0], pt[1]); await page.waitForTimeout(500); const sd = await page.locator('.vd-side').innerText(); if (sd.includes(pt[2])) ok2.push('tocco sul punto → scheda del cliente o del fornitore'); else console.log('   (tocco sul punto', pt[2], '→', sd.slice(0, 80).replace(/\n/g, ' '), ')'); } else console.log('   (nessun punto da toccare)');
     await page.locator('.vd-tab', { hasText: 'Clienti' }).click(); await page.locator('.vd-t tbody tr').first().click(); await page.waitForTimeout(300);
     const btn = page.locator('.vd-side button', { hasText: 'Mostra sulla mappa' });
     if (await btn.count()) { await btn.click(); await pronta(); await fermo(); if (await zoom() >= 12) ok2.push('scheda del cliente → «Mostra sulla mappa»'); }
@@ -151,13 +158,13 @@ const LUOGHI = { 'Verdi Costruzioni S.r.l.': 'Modena', 'Bianchi Elettrotecnica S
         const shot = (await page.locator('.vd-gl canvas').screenshot()).toString('base64');
         tinte.push(await page.evaluate(async b64 => { const im = new Image(); im.src = 'data:image/png;base64,' + b64; await im.decode(); const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const g = c.getContext('2d'); g.drawImage(im, 0, 0); const d = g.getImageData(0, 0, c.width, c.height).data; let col = 0, vio = 0;
           for (let i = 0; i < d.length; i += 4 * 7) { const r = d[i] / 255, gg = d[i + 1] / 255, bb = d[i + 2] / 255, mx = Math.max(r, gg, bb), mn = Math.min(r, gg, bb), l = (mx + mn) / 2, s = mx === mn ? 0 : (mx - mn) / (1 - Math.abs(2 * l - 1)); if (s < 0.12 || mx - mn < 0.03) continue; col++;
-            let h = mx === r ? ((gg - bb) / (mx - mn)) % 6 : mx === gg ? (bb - r) / (mx - mn) + 2 : (r - gg) / (mx - mn) + 4; h = (h * 60 + 360) % 360; if (h >= 225 && h <= 295) vio++; }
+            let h = mx === r ? ((gg - bb) / (mx - mn)) % 6 : mx === gg ? (bb - r) / (mx - mn) + 2 : (r - gg) / (mx - mn) + 4; h = (h * 60 + 360) % 360; if ((h >= 225 && h <= 295) || (h >= 15 && h <= 40)) vio++; }
           return col > 500 ? vio / col : 0; }, shot));
         if (z === 17) dett.push(await page.evaluate(() => { const m = document.querySelector('.vd-gl')._mappa.map, L = new Set(m.queryRenderedFeatures().map(f => f.layer.id)); return [[...L].some(l => /buildings|edifici3d/.test(l)), [...L].some(l => /roads_(minor|major|other)/.test(l)), [...L].some(l => /roads_labels/.test(l))].filter(Boolean).length; }));
       }
     }
     await page.emulateMedia({ colorScheme: 'light' });
-    log('B3 colori della mappa nella tavolozza viola (pixel colorati, Italia e Bologna, chiaro e scuro)', +Math.min(...tinte).toFixed(3), tinte.map(x => (x * 100).toFixed(1) + '%').join(' · ')); M.B3 = Math.min(...tinte);
+    log('B3 colori della mappa nella tavolozza: viola clienti, arancio fornitori (pixel colorati, Italia e Bologna, chiaro e scuro)', +Math.min(...tinte).toFixed(3), tinte.map(x => (x * 100).toFixed(1) + '%').join(' · ')); M.B3 = Math.min(...tinte);
     log('B4 dettaglio a zoom 17: edifici, strade, nomi delle vie (chiaro, scuro)', `${Math.min(...dett)}/3`); M.B4 = Math.min(...dett) / 3;
     // I3 e S5: rotella del mouse (zoom avanti e indietro) e trascinamento, con il blocco più lungo del programma intanto
     await page.evaluate(() => { document.querySelector('.vd-gl')._mappa.tutta(); window.__lt = []; new PerformanceObserver(l => l.getEntries().forEach(e => window.__lt.push(e.duration))).observe({ type: 'longtask' }); });
