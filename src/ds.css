@@ -1281,9 +1281,8 @@ details.adv[open] > summary .adv-sum{display:none}
 @media (max-width:640px){.wb-drop .dz-ic::before{offset-path:path("M 66.8 10.1 A 45 37 -18 1 1 -18.8 37.9 A 45 37 -18 1 1 66.8 10.1 Z")}}
 @keyframes dz-orb{to{offset-distance:100%}}
 @media (prefers-reduced-motion:reduce){.wb-drop .dz-ic::before{animation:none}}
-/* fermo finché non serve: si muove sotto il puntatore o mentre si trascina un file (niente moto continuo nella pagina) */
-.wb-drop .dz-ic::before{animation-play-state:paused}
-.wb-drop:hover .dz-ic::before,.wb-drop.over .dz-ic::before,.wb-drop:focus-within .dz-ic::before{animation-play-state:running}
+/* il satellite gira sempre attorno all'icona di «Trascina qui il file» (con «Animazioni: No» non c'è proprio); sopra con il mouse accelera */
+.wb-drop:hover .dz-ic::before,.wb-drop.over .dz-ic::before{animation-duration:4.5s}
 .tl-w.fam.fam-long{display:flex;flex-direction:column;gap:2px}
 .tl-w.fam.fam-long .intent.tl{padding-right:46px;height:auto}
 .tl-w.fam.fam-long .fav-star{top:23px}
