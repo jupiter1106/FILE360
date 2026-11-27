@@ -1,7 +1,7 @@
 
 'use strict';
 /* =====================================================================
-   file360 — core
+   file360 \u2014 core
    ===================================================================== */
 const { PDFDocument, StandardFonts, rgb, degrees, BlendMode, LineCapStyle,
   pushGraphicsState, popGraphicsState, beginText, endText, setFontAndSize, showText,
@@ -36,17 +36,20 @@ const Later = {
     // sito: il codice del blocco è un file a parte, già scaricato in anticipo (prefetch); se non è ancora arrivato si legge ora
     if (el.dataset.src && !el.textContent) { const x = new XMLHttpRequest(); x.open('GET', el.dataset.src, false); x.send(); if (x.status !== 200) throw new Error('Impossibile scaricare un componente necessario: controlla la connessione e riprova.'); el.textContent = x.responseText; }
     if (!el.dataset.gz) return el.textContent; const bin = atob(testoAPezzi(el).trim()), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new TextDecoder().decode(pako.ungzip(u)); },
-  _run(el, strict = true) { const s = document.createElement('script'); s.textContent = (strict ? '"use strict";\n' : '') + this._src(el); document.head.append(s); s.remove(); el.remove(); },
+  _run(el, strict = true) { const s = document.createElement('script'); s.textContent = (strict ? '"use strict";\n' : '') + (el._txt ?? this._src(el)); el._txt = null; document.head.append(s); s.remove(); el.remove(); },
   next() { const b = this._blocks(); if (this.i >= b.length) return false; this._run(b[this.i++]); return true; },
   all() { while (this.next()); },
   // i blocchi fino a quello che definisce «name» (l'ordine conta: i blocchi dopo possono usare quelli prima); il resto a breve
   // moduli di un solo strumento in un blocco a parte (data-lib): si eseguono quando lo strumento si apre, dopo gli altri blocchi
-  LIBS: { startVendite: 'vendite', Vendite: 'vendite', Mappa: 'vendite' },
+  LIBS: { startVendite: 'vendite', Vendite: 'vendite', Mappa: 'vendite', startContratto: 'contratti', Contratti: 'contratti', startRilevaAI: 'rilevaai', RilevaAI: 'rilevaai', startIncassi: 'incassi', Incassi: 'incassi', startAutentica: 'autentica', Autentica: 'autentica', startLeggiContratto: 'leggicontratto', Clausole: 'leggicontratto' },
+  // esegue il blocco dello strumento se non è ancora stato eseguito (si può chiamare quante volte si vuole)
+  serve(name) { if (this.LIBS[name]) this.lib(this.LIBS[name]); },   // il blocco si esegue una volta sola (poi non c'è più)
   lib(nome) { const el = document.querySelector(`script[type="text/x-officina-later"][data-lib="${nome}"]`); if (!el) return; this.all(); this._run(el, false); },
   need(name) { if (this.LIBS[name] && !(name in globalThis)) { this.lib(this.LIBS[name]); return; } const b = this._blocks(); const k = name ? b.findIndex(el => (' ' + (el.dataset.defs || '') + ' ').includes(' ' + name + ' ')) : -1; if (k < 0) { if (name && !(name in globalThis)) this.all(); else { const go = () => { if (this.next()) setTimeout(go, 0); }; setTimeout(go, 0); } return; } /* non trovata nei blocchi né già definita: si esegue tutto; già definita: il resto subito dopo */ while (this.i <= k && this.next()); const go = () => { if (this.next()) setTimeout(go, 0); }; setTimeout(go, 0); },
   // sito: scarica in sottofondo il codice dei blocchi (si esegue sempre e solo quando serve)
   prefetch() { this._pre = Promise.all([...document.querySelectorAll('script[type="text/x-officina-later"][data-src]:not([data-lib="mappa"])')].filter(el => !el.textContent).map(el => fetch(el.dataset.src).then(r => r.ok ? r.text() : null).then(t => { if (t && !el.textContent) el.textContent = t; }).catch(() => { }))); return this._pre; },
-  idle() { const step = () => { if (!this.next()) return; (window.requestIdleCallback || (f => setTimeout(f, 16)))(step, { timeout: 400 }); }; (this._pre || Promise.resolve()).then(() => setTimeout(step, 50)); },
+  // nei momenti liberi ogni blocco in due tempi: prima si decomprime, poi (al momento libero dopo) si esegue: due attese brevi invece di una lunga
+  idle() { const later = f => (window.requestIdleCallback || (g => setTimeout(g, 16)))(f, { timeout: 400 }); const step = () => { const b = this._blocks(); if (this.i >= b.length) return; const el = b[this.i]; if (el._txt == null && el.isConnected) { try { el._txt = this._src(el); } catch { } later(step); return; } if (!this.next()) return; later(step); }; (this._pre || Promise.resolve()).then(() => setTimeout(step, 50)); },
 };
 
 /* ---------- pdf.js su richiesta ----------
@@ -247,6 +250,8 @@ const ICONS = {
   orbit:'<ellipse cx="12" cy="12.5" rx="10" ry="4" transform="rotate(-24 12 12.5)"/><path d="M9 6h4l3 3v7a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 8 16V7.5A1.5 1.5 0 0 1 9 6z"/>',
   disk:'<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
   wifi0:'<path d="M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0"/><path d="M3 3l18 18"/>',
+  contractcheck:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5"/><path d="M14 3v4a1 1 0 0 0 1 1h4v3"/><path d="M8.5 9h3M8.5 12.5h5M8.5 16h2.5"/><circle cx="17" cy="17" r="3.5"/><path d="m19.6 19.6 2 2"/>',
+  fingerprint:'<path d="M12 4a7 7 0 0 0-7 7v2"/><path d="M19 11a7 7 0 0 0-11.5-5.4"/><path d="M8.5 13v-2a3.5 3.5 0 0 1 7 0v3c0 2.5-.6 4.6-1.6 6.4"/><path d="M12 11v3c0 2.6-.9 5-2.4 6.8"/><path d="M19 13.5c0 1.6-.3 3.2-.8 4.6"/><path d="M5 16.5c.4.7.6 1.6.6 2.5"/>',
   shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/>',
   check:'<path d="M20 6 9 17l-5-5"/>',
   seal:'<path d="M12 2.6l2.3 1.5 2.8-.1.9 2.6 2.2 1.7-.9 2.7.9 2.7-2.2 1.7-.9 2.6-2.8-.1L12 21.4l-2.3-1.5-2.8.1-.9-2.6-2.2-1.7.9-2.7-.9-2.7 2.2-1.7.9-2.6 2.8.1z"/><path d="m8.8 12 2.2 2.2 4.2-4.4"/>',
@@ -369,7 +374,7 @@ const BgWork = {
   start() {
     if (this.on) return;
     this.on = true; this.t0 = Date.now();
-    if (this.base == null || !/^(\d+% · |✓ )/.test(document.title)) this.base = document.title;
+    if (this.base == null || !/^(\d+% · |\u2713 )/.test(document.title)) this.base = document.title;
     addEventListener('beforeunload', this.guard);
     try { navigator.locks?.request('officina-elaborazione', () => new Promise(r => { this.release = r; })).catch(() => {}); } catch { }
   },
@@ -381,7 +386,7 @@ const BgWork = {
     try { this.release?.(); } catch { } this.release = null;
     // finito mentre si lavorava su altro: lo dice il titolo della scheda finché non si torna qui
     if (document.hidden) {
-      document.title = `✓ Pronto · ${this.base}`;
+      document.title = `\u2713 Pronto · ${this.base}`;
       const back = () => { if (!document.hidden) { if (!this.on) document.title = this.base; document.removeEventListener('visibilitychange', back); } };
       document.addEventListener('visibilitychange', back);
     } else document.title = this.base;
@@ -425,11 +430,11 @@ function parseRanges(str, max) {
     const t = tok.trim();
     if (!t) continue;
     let a, b;
-    const m = t.match(/^(\d*)\s*[-–]\s*(\d*)$/);
+    const m = t.match(/^(\d*)\s*[-\u2013]\s*(\d*)$/);
     if (m && (m[1] || m[2])) { a = m[1] ? +m[1] : 1; b = m[2] ? +m[2] : max; }
     else if (/^\d+$/.test(t)) a = b = +t;
     else throw new Error(`"${t}" non è un intervallo valido (es. 1-3, 5, 8-)`);
-    if (a < 1 || b > max || a > b) throw new Error(`"${t}" è fuori dalle pagine 1–${max}`);
+    if (a < 1 || b > max || a > b) throw new Error(`"${t}" è fuori dalle pagine 1\u2013${max}`);
     const g = []; for (let i = a; i <= b; i++) g.push(i);
     groups.push(g);
   }
@@ -437,7 +442,7 @@ function parseRanges(str, max) {
   return groups;
 }
 
-// [2,3,4,7] → «2-4, 7»
+// [2,3,4,7] \u2192 «2-4, 7»
 function rangesText(list) {
   const a = [...new Set(list)].sort((x, y) => x - y), out = [];
   for (let i = 0; i < a.length; i++) { let j = i; while (j + 1 < a.length && a[j + 1] === a[j] + 1) j++; out.push(j > i ? `${a[i]}-${a[j]}` : `${a[i]}`); i = j; }
@@ -462,7 +467,7 @@ function showExtracted({ base, positions, extracted, rest = null }) {
   const ex = { name: `${base}-${lab}.pdf`, bytes: extracted, info: n === 1 ? 'pagina estratta' : `${n} pagine estratte` };
   const title = n === 1 ? 'Pagina estratta' : 'Pagine estratte';
   if (typeof Activity !== 'undefined') try { Activity.result(rest ? [ex, { name: `${base}-senza.pdf`, bytes: rest }] : [ex], { title }); } catch { }
-  if (!rest) return showResultNow([ex], { title, note: 'Il documento di partenza resta com’è: le pagine sono anche nel nuovo PDF.', noNext: true, _fromJob: true });
+  if (!rest) return showResultNow([ex], { title, note: 'Il documento di partenza resta com\u2019è: le pagine sono anche nel nuovo PDF.', noNext: true, _fromJob: true });
   const r = { name: `${base}-senza ${lab.replace(/^pagina-/, 'pagina ')}.pdf`, bytes: rest, info: 'il documento senza le pagine estratte' };
   return showResultNow([ex, r], { title, note: n === 1 ? 'La pagina è stata tolta dal documento: continui a lavorare sulla versione senza di essa.' : 'Le pagine sono state tolte dal documento: continui a lavorare sulla versione senza di esse.', primary: 0, version: 1, noNext: true, reloadAfter: true });
 }
@@ -497,7 +502,7 @@ function toastActions(msg, actions, ms = 7000) {
 
 /* ---------- busy overlay ---------- */
 /* ---------- attese e coda dei lavori ----------
-   Un lavoro (OCR, conversione, compressione…) parte con la finestra di attesa; con «Continua in secondo piano»
+   Un lavoro (OCR, conversione, compressione\u2026) parte con la finestra di attesa; con «Continua in secondo piano»
    (o cambiando strumento) passa nel pannello «Lavori» in basso e si può usare altro. Un lavoro chiesto mentre un
    altro è in corso va in coda: ogni lavoro usa già tutti i processori, quindi in fila si finisce prima che insieme.
    Le operazioni brevi (aprire un file) non entrano in coda. */
@@ -628,12 +633,12 @@ const Privacy = (() => {
         sec('Cosa resta su questo dispositivo',
           h('div', { class: 'pd-list' },
             item('project', 'Progetti e versioni', 'File aperti, versioni e risultati, per riprendere il lavoro.', z.projects ? `${z.projects} · ${kb(z.blobBytes)}` : '', 'Cancella', clearProjects, 'Progetti cancellati'),
-            item('activity', 'Registro delle attività', 'Le operazioni fatte, con l’impronta dei file (mai il contenuto).', z.log ? `${z.log} voci` : '', 'Cancella', clearLog, 'Registro cancellato'),
+            item('activity', 'Registro delle attività', 'Le operazioni fatte, con l\u2019impronta dei file (mai il contenuto).', z.log ? `${z.log} voci` : '', 'Cancella', clearLog, 'Registro cancellato'),
             item('form', 'Dati personali per i moduli', 'Profilo, valori ricordati, firme e timbri, bozza del contratto.' + (vaultOn() ? (locked ? ' Protetti e bloccati.' : ' Protetti.') : ''), z.personal ? kb(z.personal) : '', 'Cancella', async () => clearPersonal(), 'Dati personali cancellati'),
             item('star', 'Preferenze', 'Preferiti, ricette e scelte degli strumenti.', z.prefs ? kb(z.prefs) : '', 'Cancella', async () => clearPrefs(), 'Preferenze cancellate'),
             item('ocr', 'Letture in memoria', 'Testo letto dalle scansioni in questa scheda: sparisce chiudendola.', z.mem ? `${z.mem} pagine` : '', 'Svuota', async () => memClear(), 'Memoria svuotata'))),
         sec('Cancellazione automatica',
-          h('p', { class: 'pd-note' }, 'Progetti e registro più vecchi di così si cancellano da soli all’apertura.'),
+          h('p', { class: 'pd-note' }, 'Progetti e registro più vecchi di così si cancellano da soli all\u2019apertura.'),
           seg([[7, '7 giorni'], [30, '30 giorni'], [90, '90 giorni'], [0, 'Mai']], c.days ?? 90, v => { setCfg({ ...cfg(), days: +v }); toast(+v ? `Cancellazione dopo ${v} giorni` : 'Cancellazione automatica spenta'); }),
           h('div', { class: 'pd-check' }, checkbox('Nessuna traccia', !!c.temp, v => { setCfg({ ...cfg(), temp: !!v }); toast(v ? 'Nessuna traccia: tutto si cancella alla chiusura della scheda' : 'I progetti si conservano di nuovo'); }, 'Per i computer condivisi: tutto si cancella quando chiudi la scheda.'))),
         typeof crypto !== 'undefined' && crypto.subtle ? sec('Frase segreta per i dati personali',
@@ -659,7 +664,7 @@ const Errors = (() => {
     ['Bilanci', 'XBRL (.xbrl, .xml) anche firmati'], ['Archivi', 'ZIP (per fatture)']];
   function showFormats() {
     modal([h('h3', {}, 'Formati supportati'), h('div', { class: 'err-formats' }, FORMATS.map(([k, v]) => h('div', {}, h('b', {}, k), h('span', { class: 'muted small' }, v)))),
-      h('p', { class: 'muted small', style: { marginTop: '12px' } }, 'Documenti Word, Excel o pagine web vanno prima salvati in PDF dal programma che li apre (File › Salva come › PDF).')], { width: 460 });
+      h('p', { class: 'muted small', style: { marginTop: '12px' } }, 'Documenti Word, Excel o pagine web vanno prima salvati in PDF dal programma che li apre (File \u203a Salva come \u203a PDF).')], { width: 460 });
   }
   const curFile = ctx => ctx.file || (typeof CURRENT_INPUT !== 'undefined' && CURRENT_INPUT.length === 1 ? CURRENT_INPUT[0] : null);
   const userText = m => /[àèéìòù]|\b(il|la|non|del|della|file|pagina|prova)\b/i.test(m) && m.length < 400;
@@ -680,7 +685,7 @@ const Errors = (() => {
       return r('missing', 'File non trovato', 'Il file non è più disponibile: forse è stato spostato, rinominato o cancellato dopo averlo scelto.', [tool ? ['Ricarica il file', () => openTool(tool, null, { fresh: true })] : ['Ricarica il file', () => nav('')]]);
     if (name === 'FormatError' || name === 'UnknownErrorException' || code === 'FORMAT' || /formato non supportato|non è supportat|unsupported (format|image)/i.test(msg))
       return r('format', 'Formato non adatto', userText(msg) ? msg.replace(/^Error:\s*/, '') : 'Formato non supportato.', [['Formati supportati', showFormats]]);
-    // il file si apre ma non contiene ciò che lo strumento cerca (un bilancio, un estratto conto…): non è un guasto
+    // il file si apre ma non contiene ciò che lo strumento cerca (un bilancio, un estratto conto\u2026): non è un guasto
     if (code === 'CONTENT') return r('content', 'Contenuto non riconosciuto', msg.replace(/^Error:\s*/, ''), [retry]);
     if (name === 'QuotaExceededError' || /quota/i.test(msg))
       return r('space', 'Spazio esaurito', 'Lo spazio che il browser concede a file360 è pieno: elimina qualche progetto vecchio o una versione che non ti serve.', [['Apri i progetti', () => nav('progetti')]]);
@@ -714,7 +719,7 @@ const Errors = (() => {
     const text = ctx.skipped && ctx.file ? `«${ctx.file.name}» non è stato aggiunto. ${info.text}` : info.text;
     const t = h('div', { class: 'toast error act err-toast', role: 'alert' }, ic('alert', 16, 2.4), h('span', { class: 'toast-m', title: text }, text),
       ...acts.map(([label, fn]) => h('button', { class: 'toast-b', onclick: () => { t.remove(); fn(); } }, label)),
-      h('button', { class: 'toast-x', 'aria-label': 'Chiudi l’avviso', title: 'Chiudi', onclick: () => t.remove() }, ic('x', 15, 2.2)));
+      h('button', { class: 'toast-x', 'aria-label': 'Chiudi l\u2019avviso', title: 'Chiudi', onclick: () => t.remove() }, ic('x', 15, 2.2)));
     $('#toasts').replaceChildren(t);
     if (!ctx.noLog && typeof Activity !== 'undefined') Activity.error(info, ctx);
     return info;
@@ -743,7 +748,7 @@ const Repair = {
     let b = bytes;
     const head = new TextDecoder('latin1').decode(b.subarray(0, Math.min(b.length, 1 << 16)));
     const at = head.indexOf('%PDF-'); if (at > 0) b = b.subarray(at);
-    if (at < 0) throw codedError('Nel file non c’è un PDF da recuperare.', 'FORMAT');
+    if (at < 0) throw codedError('Nel file non c\u2019è un PDF da recuperare.', 'FORMAT');
     const tail = new TextDecoder('latin1').decode(b.subarray(Math.max(0, b.length - 4096)));
     const eof = tail.lastIndexOf('%%EOF'); if (eof >= 0) b = b.subarray(0, b.length - tail.length + eof + 5);
     try {
@@ -766,7 +771,7 @@ const Repair = {
     } finally { src.destroy(); }
   },
   async run(file, tool) {
-    const r = await withBusy('Riparazione del PDF…', async () => this.fix(new Uint8Array(await file.arrayBuffer())), { noErrorUi: true });
+    const r = await withBusy('Riparazione del PDF\u2026', async () => this.fix(new Uint8Array(await file.arrayBuffer())), { noErrorUi: true });
     if (!r) return;
     const name = stripExt(file.name) + ' - riparato.pdf';
     toast(r.how === 'struttura' ? 'PDF riparato: la struttura del file è stata ricostruita' : `PDF recuperato come immagini: ${r.pages} pagine su ${r.of} (il testo non si può più selezionare)`);
@@ -821,7 +826,7 @@ const Eta = {
 };
 /* ---------- titolo della scheda e notifiche: il lavoro si vede anche da un'altra scheda ---------- */
 const TabStatus = {
-  // il titolo della scheda (percentuale, «✓ Pronto») lo gestisce BgWork; qui le notifiche di sistema
+  // il titolo della scheda (percentuale, «\u2713 Pronto») lo gestisce BgWork; qui le notifiche di sistema
   tick() { },
   can: () => typeof Notification !== 'undefined' && !IS_ARTIFACT && (location.protocol === 'https:' || location.hostname === 'localhost' || location.protocol === 'file:'),
   notify(title, body) {
@@ -846,7 +851,7 @@ const Jobs = {
     if (fns) { if (gen === GEN) cleanups.push(...fns); else fns.forEach(f => { try { f(); } catch (e) { console.warn(e); } }); }
   },
   async run(title, fn, opts = {}) {
-    // un lavoro leggero (unire, ruotare, salvare…) chiesto mentre uno pesante è in secondo piano: parte subito, non in coda
+    // un lavoro leggero (unire, ruotare, salvare\u2026) chiesto mentre uno pesante è in secondo piano: parte subito, non in coda
     if (!opts.cancellable && this.running && this.running.bg) {
       this.light++;
       Busy.show(title);
@@ -857,7 +862,7 @@ const Jobs = {
     const J = { id: ++this.seq, title, msg: '', f: null, opts, gen: GEN, tool: typeof CURRENT_TOOL !== 'undefined' ? CURRENT_TOOL : null, subject: opts.subject || (typeof CURRENT_SUBJECT !== 'undefined' ? CURRENT_SUBJECT : ''),
       state: 'queued', cancelled: false, bg: false, result: null, error: null, t0: 0,
       inBytes: opts.bytes ?? (typeof CURRENT_INPUT !== 'undefined' ? CURRENT_INPUT.reduce((a, f) => a + (f?.size || 0), 0) : 0) };
-    J.durKey = (J.tool || '') + '|' + title.replace(/…$/, '');
+    J.durKey = (J.tool || '') + '|' + title.replace(/\u2026$/, '');
     // annullare deve funzionare anche se un motore (OCR) fermato non risponde più: le attese lunghe corrono contro questa
     J.cancelP = new Promise((_, rej) => { J.rejectCancel = rej; }); J.cancelP.catch(() => {});
     this.list.push(J); this._gen(J.gen, +1);
@@ -866,7 +871,7 @@ const Jobs = {
       // un altro lavoro è in corso: questo aspetta il suo turno nel pannello, intanto si lavora
       J.bg = true;
       J.turn = new Promise(r => { J.go = r; });
-      toast(`In coda: «${title.replace(/…$/, '')}» parte appena finisce il lavoro in corso`);
+      toast(`In coda: «${title.replace(/\u2026$/, '')}» parte appena finisce il lavoro in corso`);
       this.render();
       await J.turn;
       if (J.cancelled) { this._end(J, 'cancelled'); return null; }
@@ -888,7 +893,7 @@ const Jobs = {
     J.state = state; J.t1 = Date.now();
     if ((state === 'ready' || state === 'done') && J.t0) Durations.add(J.durKey, J.t1 - J.t0, J.inBytes);
     if (typeof Activity !== 'undefined') Activity.finish(J, state);
-    if (J.bg && state === 'error') TabStatus.notify('file360: errore', `${J.subject || J.title.replace(/…$/, '')}: ${J.error}`);
+    if (J.bg && state === 'error') TabStatus.notify('file360: errore', `${J.subject || J.title.replace(/\u2026$/, '')}: ${J.error}`);
     if (this.running === J) this.running = null;
     this._gen(J.gen, -1);
     if (state === 'done' || state === 'cancelled') this.list = this.list.filter(x => x !== J);
@@ -901,16 +906,16 @@ const Jobs = {
   },
   // risultato di un lavoro finito in secondo piano: si apre subito se si è ancora lì, altrimenti dal pannello
   _ready(J) {
-    TabStatus.notify('file360: pronto', `${J.subject || J.title.replace(/…$/, '')} · ${fmtDur(J.t1 - J.t0)}`);
+    TabStatus.notify('file360: pronto', `${J.subject || J.title.replace(/\u2026$/, '')} · ${fmtDur(J.t1 - J.t0)}`);
     if (J.gen === GEN && !OPEN_MODALS.size && !Busy.el && !document.hidden) return this.open(J, true);
-    toastActions(`Pronto: ${J.subject ? (TOOLS[J.tool]?.short || J.title.replace(/…$/, '')) + ' · ' + J.subject : J.title.replace(/…$/, '')}`, [['Apri', () => this.open(J)]], 9000);
+    toastActions(`Pronto: ${J.subject ? (TOOLS[J.tool]?.short || J.title.replace(/\u2026$/, '')) + ' · ' + J.subject : J.title.replace(/\u2026$/, '')}`, [['Apri', () => this.open(J)]], 9000);
   },
   // nello stesso strumento il risultato segue le regole di sempre (documento attivo); altrove si mostra e basta
   open(J, here = false) { const r = J.result; this.list = this.list.filter(x => x !== J); this.render(); if (r) showResultNow(r.outputs, { ...r.opts, _fromJob: !here || J.gen !== GEN }); },
   cancel(J) {
     J.cancelled = true;
     try { J.rejectCancel?.(new CancelError()); } catch { }
-    if (J.state === 'running') { J.msg = 'Annullamento…'; try { J.opts.onCancel?.(); } catch { } }
+    if (J.state === 'running') { J.msg = 'Annullamento\u2026'; try { J.opts.onCancel?.(); } catch { } }
     else if (J.state === 'queued') J.go?.();
     this.render();
   },
@@ -945,18 +950,18 @@ const Jobs = {
     const rows = items.map(j => {
       const tool = j.tool && TOOLS[j.tool];
       const qn = queued.indexOf(j) + 1;
-      const st = { running: j.msg || 'In corso…', queued: qn > 1 ? `In coda (${qn}° dopo quello in corso)` : 'In coda: parte appena finisce quello in corso', ready: `Pronto${j.t1 && j.t0 ? ' · in ' + fmtDur(j.t1 - j.t0) : ''}`, error: j.error || 'Errore', cancelled: 'Annullato', done: 'Fatto' }[j.state];
+      const st = { running: j.msg || 'In corso\u2026', queued: qn > 1 ? `In coda (${qn}° dopo quello in corso)` : 'In coda: parte appena finisce quello in corso', ready: `Pronto${j.t1 && j.t0 ? ' · in ' + fmtDur(j.t1 - j.t0) : ''}`, error: j.error || 'Errore', cancelled: 'Annullato', done: 'Fatto' }[j.state];
       const jf = j.state === 'running' ? j.f ?? Eta.guess(j) : null;
       return h('div', { class: 'job s-' + j.state, style: tool ? { '--hue': tool.hue } : null },
         h('div', { class: 'job-ic' }, ic(tool ? tool.icon : 'file', 18)),
-        h('div', { class: 'job-t' }, h('b', { title: j.title }, j.subject || j.title.replace(/…$/, '')), h('span', { class: 'muted small', title: st }, (tool ? tool.short + ' · ' : '') + (j.subject && j.state === 'running' && !j.msg ? j.title.replace(/…$/, '') : st)),
+        h('div', { class: 'job-t' }, h('b', { title: j.title }, j.subject || j.title.replace(/\u2026$/, '')), h('span', { class: 'muted small', title: st }, (tool ? tool.short + ' · ' : '') + (j.subject && j.state === 'running' && !j.msg ? j.title.replace(/\u2026$/, '') : st)),
           j.state === 'running' ? h('div', { class: 'job-bar' + (jf == null ? ' indet' : '') }, h('i', { style: { width: (jf == null ? 30 : Math.max(2, Math.round(clamp(jf, 0, 1) * 100))) + '%' } })) : null,
           j.state === 'running' ? h('span', { class: 'job-eta small muted' }, [jf != null ? Math.round(clamp(jf, 0, 1) * 100) + '%' + (j.f == null ? ' (stima)' : '') : null, Eta.line(j)].filter(Boolean).join(' · ')) : null,
           j.state === 'error' && j.errInfo ? h('div', { class: 'job-err' }, j.errInfo.actions.map(([l, f]) => h('button', { class: 'linkish', onclick: () => { this.toggle(false); f(); } }, l)),
             h('details', {}, h('summary', {}, 'Dettaglio tecnico'), h('pre', {}, j.errInfo.tech))) : null),
         j.state === 'ready' ? h('button', { class: 'btn sm primary', onclick: () => this.open(j) }, 'Apri') : null,
         (j.state === 'running' && j.opts.cancellable) || j.state === 'queued' ? h('button', { class: 'btn sm ghost', title: 'Annulla', onclick: () => this.cancel(j) }, ic('x', 15))
-          : j.state !== 'running' ? h('button', { class: 'btn sm ghost', title: 'Togli dall’elenco', onclick: () => { this.list = this.list.filter(x => x !== j); this.render(); } }, ic('x', 15)) : null);
+          : j.state !== 'running' ? h('button', { class: 'btn sm ghost', title: 'Togli dall\u2019elenco', onclick: () => { this.list = this.list.filter(x => x !== j); this.render(); } }, ic('x', 15)) : null);
     });
     const keepOpen = this.tray.querySelector('details[open]');   // un dettaglio aperto non si richiude a ogni aggiornamento
     if (keepOpen && run) return;
@@ -982,12 +987,12 @@ const Busy = {
   set cancelled(v) { if (Jobs.running) Jobs.running.cancelled = v; else this._cancelled = v; },
   get gen() { return this.job ? this.job.gen : this._gen; },
   set gen(v) { this._gen = v; },
-  // attesa breve (aprire un file…): finestra semplice; se un lavoro è in secondo piano non ne prende il posto
+  // attesa breve (aprire un file\u2026): finestra semplice; se un lavoro è in secondo piano non ne prende il posto
   show(title, { cancellable = false, onCancel = null } = {}) {
     if (this.job) return this._retitle(title);
     this.hide();
     this._gen = GEN; this._cancelled = false; this.onCancel = onCancel;
-    this._build(title, cancellable ? () => { this._cancelled = true; this.set(null, 'Annullamento…'); this.onCancel?.(); } : null, null);
+    this._build(title, cancellable ? () => { this._cancelled = true; this.set(null, 'Annullamento\u2026'); this.onCancel?.(); } : null, null);
     this.quick = !!(Jobs.running && Jobs.running.bg);
     // attesa breve: la barra non resta ferma e vuota (dopo un attimo si vede che si sta lavorando)
     setTimeout(() => { if (this.el && this._f == null) this.barEl?.parentNode?.classList.add('indet'); }, 700);
@@ -1020,7 +1025,7 @@ const Busy = {
     this.hide();
     this.job = J;
     const canBg = !(typeof Flow !== 'undefined' && Flow.isCapturing && Flow.isCapturing());
-    this._build(J.title, J.opts.cancellable ? () => { Jobs.cancel(J); this.set(null, 'Annullamento…'); } : null, canBg ? () => { Jobs.toBackground(J); } : null);
+    this._build(J.title, J.opts.cancellable ? () => { Jobs.cancel(J); this.set(null, 'Annullamento\u2026'); } : null, canBg ? () => { Jobs.toBackground(J); } : null);
   },
   _close() { const j = this.job; this.job = null; this._dom(); if (j) j.modalClosed = true; },
   _dom() { if (this._q) { clearTimeout(this._q); this._q = null; } this.el?.remove(); this.el = null; this.quick = false; document.body.classList.remove('is-busy'); },
@@ -1158,7 +1163,7 @@ async function download(data, name, type = 'application/pdf') {
     } catch (e) {
       const c = e && e.code;
       if (c === 'declined') return;
-      if (c === 'rate_limited') return toast('C’è già una richiesta di salvataggio aperta', 'error');
+      if (c === 'rate_limited') return toast('C\u2019è già una richiesta di salvataggio aperta', 'error');
       toast('Salvataggio non riuscito' + (e && e.message ? ': ' + e.message : ''), 'error');
     }
     return;
@@ -1167,7 +1172,7 @@ async function download(data, name, type = 'application/pdf') {
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 60000);
 }
-/* native share sheet (phones): WhatsApp, Mail, PEC apps… */
+/* native share sheet (phones): WhatsApp, Mail, PEC apps\u2026 */
 function canShareFiles() {
   if (IS_ARTIFACT || !navigator.canShare) return false;
   try { return navigator.canShare({ files: [new File(['x'], 'a.pdf', { type: 'application/pdf' })] }); } catch { return false; }
@@ -1209,7 +1214,7 @@ function showResultNow(outputs, { note, title, zipName, extra, primary = null, v
   const COMPARE = new Set(['comprimi', 'pdfa', 'oscura', 'numeri', 'ocr', 'modifica', 'moduli', 'ruota']);
   if (fr.pushed && COMPARE.has(CURRENT_TOOL) && outputs.length === 1 && !outputs[0].from && typeof Flow.prevBytes === 'function') { const pb = Flow.prevBytes(); if (pb) outputs[0].from = pb; }
   const cmpBtn = (o, big) => o.from && /\.pdf$/i.test(o.name) && typeof compareModal === 'function'
-    ? h('button', { class: big ? 'btn big res-cmp' : 'btn sm res-cmp', title: 'Confronta con l’originale', 'aria-label': 'Confronta con l’originale', onclick: () => compareModal(o.from, o.bytes) }, ic('swap', big ? 18 : 16), big ? 'Confronta' : null) : null;
+    ? h('button', { class: big ? 'btn big res-cmp' : 'btn sm res-cmp', title: 'Confronta con l\u2019originale', 'aria-label': 'Confronta con l\u2019originale', onclick: () => compareModal(o.from, o.bytes) }, ic('swap', big ? 18 : 16), big ? 'Confronta' : null) : null;
   // ritocco del documento aperto: niente finestra, solo un avviso con «Scarica» e «Annulla»
   // ritocco del documento aperto: si vede sempre il risultato (anteprima e download); chiusa la finestra si continua sulla nuova versione
   const reload = fr.quick || (reloadAfter && fr.pushed) ? Flow.reloader(reloadAfter) : null;
@@ -1217,7 +1222,7 @@ function showResultNow(outputs, { note, title, zipName, extra, primary = null, v
   const multi = outputs.length > 1 && primary == null;
   // nomi: quelli di sempre, oppure letti dal contenuto; ognuno si può correggere con un clic
   const nameEls = [];
-  const refreshNames = () => nameEls.forEach(([o, el, sub]) => { el.textContent = o.name; el.title = o.name + ' — clicca per rinominare'; if (sub) sub.textContent = o.name !== o._orig ? `era «${o._orig}»` : ''; });
+  const refreshNames = () => nameEls.forEach(([o, el, sub]) => { el.textContent = o.name; el.title = o.name + ' \u2014 clicca per rinominare'; if (sub) sub.textContent = o.name !== o._orig ? `era «${o._orig}»` : ''; });
   const namesBar = resultNames(outputs, refreshNames);
   const list = h('div', { class: 'res-list' }, outputs.map(o => h('div', { class: 'res-row' },
     h('span', { class: 'muted' }, ic(/\.txt$/.test(o.name) ? 'type' : /\.docx$/.test(o.name) ? 'textedit' : 'file', 22)),
@@ -1294,7 +1299,7 @@ function resNext(pdfOut, onGo) {
   const first = [...new Set([...rel, ...['comprimi', 'unisci', 'modifica', 'pdfa', 'oscura', 'proteggi'].filter(t => all.includes(t))])].slice(0, 5), rest = all.filter(t => !first.includes(t));
   const chip = id => h('button', { class: 'chip', style: { '--hue': TOOLS[id].hue }, onclick: () => { onGo(); handoff(id, new File([pdfOut.bytes], pdfOut.name, { type: 'application/pdf' })); } }, ic(TOOLS[id].icon, 14), TOOLS[id].short);
   const box = h('div', { class: 'chips' }, first.map(chip));
-  if (rest.length) box.append(h('button', { class: 'chip more', onclick: e => { e.currentTarget.replaceWith(...rest.map(chip)); } }, `Altri ${rest.length}…`));
+  if (rest.length) box.append(h('button', { class: 'chip more', onclick: e => { e.currentTarget.replaceWith(...rest.map(chip)); } }, `Altri ${rest.length}\u2026`));
   return h('div', { class: 'res-next' }, h('div', { class: 'sec-t' }, 'Cosa fare dopo'), box);
 }
 /* la miniatura del risultato: la prima pagina del PDF (o l'immagine), altrimenti la sigla del formato */
@@ -1319,9 +1324,9 @@ function resStat(outputs, { multi, primary }) {
   const o = outputs[primary ?? 0], inB = typeof CURRENT_INPUT !== 'undefined' ? CURRENT_INPUT.reduce((a, f) => a + (f?.size || 0), 0) : 0, outB = multi ? outputs.reduce((a, x) => a + (x.bytes?.length || 0), 0) : (o.bytes?.length || 0);
   const samePdf = !multi && /\.pdf$/i.test(o.name) && CURRENT_INPUT.length === 1 && /\.pdf$/i.test(CURRENT_INPUT[0]?.name || '');
   if (samePdf && inB > 0 && outB < inB * 0.95) {
-    const pct = Math.round((1 - outB / inB) * 100), big = h('b', { class: 'tnum' }, `−${pct}%`);
+    const pct = Math.round((1 - outB / inB) * 100), big = h('b', { class: 'tnum' }, `\u2212${pct}%`);
     // il numero sale da zero (in un attimo): si vede il risparmio «accadere»
-    if (!senzaMoto()) { const t0 = performance.now(), step = t => { const k = Math.min(1, (t - t0) / 700), e = 1 - (1 - k) ** 3; big.textContent = `−${Math.round(pct * e)}%`; if (k < 1 && big.isConnected) requestAnimationFrame(step); }; big.textContent = '−0%'; requestAnimationFrame(step); }
+    if (!senzaMoto()) { const t0 = performance.now(), step = t => { const k = Math.min(1, (t - t0) / 700), e = 1 - (1 - k) ** 3; big.textContent = `\u2212${Math.round(pct * e)}%`; if (k < 1 && big.isConnected) requestAnimationFrame(step); }; big.textContent = '\u22120%'; requestAnimationFrame(step); }
     const el = h('div', {}, h('div', { class: 'res-stat', role: 'img', 'aria-label': `Peso ridotto del ${pct} per cento: da ${fmtSize(inB)} a ${fmtSize(outB)}` }, big, h('span', {}, `da ${fmtSize(inB)} a ${fmtSize(outB)}`)),
       h('div', { class: 'res-meter', 'aria-hidden': 'true' }, h('i', { style: { '--to': String(Math.max(0.03, outB / inB)) } })));
     return { el, celebrate: pct >= 60, saving: true };
@@ -1352,7 +1357,7 @@ function resConfetti(box) {
    sono generici) e ogni nome si può correggere a mano. La scelta si ricorda. */
 const AutoName = (() => {
   const GENERIC = /^(?:scan|scansion[ei]|scanned|img|image|immagine|foto|photo|dsc|dcim|pxl|cam|doc|documento|document|file|senza[\s_-]*titolo|untitled|nuovo[\s_-]*documento|stampa|print|whatsapp|wa|download|allegato|attachment|pdf|output|copia|copy|nuovo|new|cattura|screenshot)(?=[\s_\-().\d]|$)[\w\s\-().]*$/i;
-  const TECH = /[-_ ](?:ocr|compresso|ruotato|unito|diviso|pdfa|testo|raddrizzato|pagine?[\s_-]*\d+(?:[-–]\d+)?|parte[\s_-]*\d+|\d+)$/i;
+  const TECH = /[-_ ](?:ocr|compresso|ruotato|unito|diviso|pdfa|testo|raddrizzato|pagine?[\s_-]*\d+(?:[-\u2013]\d+)?|parte[\s_-]*\d+|\d+)$/i;
   const core = name => { let b = stripExt(name); for (let i = 0; i < 3 && TECH.test(b); i++) b = b.replace(TECH, ''); return b.trim(); };
   const isGeneric = name => { const b = core(name); return !b || GENERIC.test(b) || /^[\d\s_\-.()]+$/.test(b) || /^[a-f0-9\-]{12,}$/i.test(b) || /^\d{6,}[_-]/.test(b) && b.replace(/^\d+[_-]/, '').length < 4; };
   const clean = s => String(s).replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '-').replace(/\s+/g, ' ').replace(/^[.\s-]+|[.\s-]+$/g, '').trim();
@@ -1362,7 +1367,7 @@ const AutoName = (() => {
     const label = k.type ? cap(k.label) : 'Documento';
     const parts = [k.date || null, label + (k.number ? ` n. ${String(k.number).replace(/[\/\\]+/g, '-')}` : '')].filter(Boolean).join(' ');
     let name = parts;
-    // forme societarie scritte in breve nei nomi dei file («S.R.L.» → «Srl»)
+    // forme societarie scritte in breve nei nomi dei file («S.R.L.» \u2192 «Srl»)
     const party = k.party && k.party.replace(/\bS\.?\s?R\.?\s?L\.?(\s?S\.?)?$/i, (m, s2) => s2 ? 'Srls' : 'Srl').replace(/\bS\.?\s?P\.?\s?A\.?$/i, 'Spa').replace(/\bS\.?\s?N\.?\s?C\.?$/i, 'Snc').replace(/\bS\.?\s?A\.?\s?S\.?$/i, 'Sas').trim();
     if (party && !new RegExp(party.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(name)) name += ' - ' + party;
     if (k.subject && name.length < 70) name += ' - ' + k.subject.split(/\s+/).slice(0, 9).join(' ');
@@ -1393,7 +1398,7 @@ const AutoName = (() => {
   const setPref = v => { try { localStorage.setItem(PREF, v); } catch { } };
   return { propose, isGeneric, core, clean, fromKind, pref, setPref };
 })();
-// rende univoci i nomi di un elenco (« (2)», « (3)»…)
+// rende univoci i nomi di un elenco (« (2)», « (3)»\u2026)
 function dedupeNames(outputs) {
   const seen = new Map();
   for (const o of outputs) { const k = o.name.toLowerCase(); const c = seen.get(k) || 0; seen.set(k, c + 1); if (c) o.name = o.name.replace(/(\.[^.]+)?$/, m => ` (${c + 1})${m}`); }
@@ -1428,7 +1433,7 @@ function resultNames(outputs, onChange) {
 }
 // nome modificabile con un clic
 function editableName(o, el, onChange) {
-  el.title = o.name + ' — clicca per rinominare';
+  el.title = o.name + ' \u2014 clicca per rinominare';
   el.classList.add('rn-edit');
   el.onclick = () => {
     const ext = o.name.match(/\.[^.]+$/)?.[0] || '';
@@ -1565,7 +1570,7 @@ function baselineFor(css, lh = 1.2) {
   if (loaded) _blCache.set(key, v);
   return v;
 }
-const WINANSI_EXTRA = { '−': '-', '‐': '-', '‑': '-', ' ': ' ', ' ': ' ', ' ': ' ', ' ': ' ', '′': "'", '″': '"', 'ﬁ': 'fi', 'ﬂ': 'fl' };
+const WINANSI_EXTRA = { '\u2212': '-', '\u2010': '-', '\u2011': '-', ' ': ' ', '\u2007': ' ', '\u202f': ' ', '\u2009': ' ', '\u2032': "'", '\u2033': '"', '\ufb01': 'fi', '\ufb02': 'fl' };
 const _fontChars = new WeakMap();
 function pdfSafe(font, s) {
   let cache = _fontChars.get(font); if (!cache) { cache = { ok: new Set(), bad: new Set() }; _fontChars.set(font, cache); }
@@ -1799,34 +1804,54 @@ function iconBtn(icon, title, onclick, cls = 'icon-btn') {
 /* annulla, ripeti e «ripristina tutto» per gli strumenti che modificano. get() dà lo stato (copiabile in JSON), set(s) lo
    rimette e ridisegna. Si chiama prima() PRIMA di ogni modifica. Ctrl+Z, Ctrl+Y e Ctrl+Maiusc+Z finché lo strumento è aperto
    (non dentro un campo di testo). «Ripristina tutto» torna allo stato dell'apertura e si annulla a sua volta. */
-function storiaModifiche({ get, set, cosa = 'documento' }) {
-  const hist = [], fut = [], cur = () => JSON.stringify(get()), orig = cur(); const btns = {};
-  const agg = () => { if (btns.u) btns.u.disabled = !hist.some(x => x !== cur()); if (btns.r) btns.r.disabled = !fut.length; if (btns.t) btns.t.disabled = cur() === orig; };
+/* errori tipici dell'OCR su codici e importi (estratti conto, F24, fatture): «O» al posto di 0 e «l», «I», «|» al posto di 1
+   dentro i numeri, «1T» al posto di «IT» in partite IVA e IBAN, «O» nei codici ente dell'F24 (H5O1). Le parole restano com'erano:
+   si tocca solo ciò che ha almeno due cifre vere e nessun'altra lettera. */
+function correggiOcrCodici(t) {
+  t = String(t ?? '');
+  if (/^[1lI]T\d{11}$/.test(t) || /^[1lI]T\d{2}[A-Z]\d{10}[A-Z0-9]{12}$/i.test(t)) return 'IT' + t.slice(2);
+  const cifre = (t.match(/\d/g) || []).length;
+  if (cifre >= 2 && /[OoIl|]/.test(t) && /^[-+(]?[\d.,'\/OoIl|-]+[)%\u20ac]?$/.test(t)) return t.replace(/[Oo]/g, '0').replace(/[Il|]/g, '1');
+  if (cifre >= 1 && /^[A-Z][0-9O]{3}$/.test(t) && /O/.test(t)) return t[0] + t.slice(1).replace(/O/g, '0');
+  return t;
+}
+function storiaModifiche({ get, set, cosa = 'documento', tasti = true, pulsanti = 'tbtn' }) {
+  // prima(): si chiama PRIMA di una modifica; registra(): DOPO (per gli strumenti che confrontano con l'ultimo stato);
+  // fissa(): lo stato attuale diventa quello «dell'apertura» (dopo aver letto campi e dati del documento)
+  const hist = [], fut = [], cur = () => JSON.stringify(get()); let orig = cur(), ultimo = orig; const btns = { u: [], r: [], t: [] }, cbs = [];
+  const agg = () => { const c = cur(); btns.u.forEach(b => { b.disabled = !hist.some(x => x !== c); }); btns.r.forEach(b => { b.disabled = !fut.length; }); btns.t.forEach(b => { b.disabled = c === orig; }); cbs.forEach(f => { try { f(); } catch { } }); };
+  const metti = s => { set(JSON.parse(s)); ultimo = cur(); };
   const H = {
-    prima() { const c = cur(); if (hist[hist.length - 1] === c) return; hist.push(c); if (hist.length > 100) hist.shift(); fut.length = 0; setTimeout(agg, 0); },
+    prima() { const c = cur(); if (hist[hist.length - 1] === c) return; hist.push(c); if (hist.length > 100) hist.shift(); fut.length = 0; ultimo = c; setTimeout(agg, 0); },
+    registra() { const c = cur(); if (c === ultimo) return false; hist.push(ultimo); if (hist.length > 100) hist.shift(); ultimo = c; fut.length = 0; agg(); return true; },
+    fissa() { orig = ultimo = cur(); hist.length = 0; fut.length = 0; agg(); },
+    aggiungi(snap) { if (!snap || snap === cur() || hist[hist.length - 1] === snap) return; hist.push(snap); if (hist.length > 100) hist.shift(); fut.length = 0; agg(); },   // uno stato «prima» già salvato
     // un'istantanea uguale allo stato attuale (presa entrando in un campo senza poi cambiare nulla) non è un passo: si salta
-    undo() { const c = cur(); while (hist.length && hist[hist.length - 1] === c) hist.pop(); if (!hist.length) { agg(); return false; } fut.push(c); set(JSON.parse(hist.pop())); agg(); return true; },
-    redo() { const c = cur(); while (fut.length && fut[fut.length - 1] === c) fut.pop(); if (!fut.length) { agg(); return false; } hist.push(c); set(JSON.parse(fut.pop())); agg(); return true; },
+    undo() { const c = cur(); while (hist.length && hist[hist.length - 1] === c) hist.pop(); if (!hist.length) { agg(); return false; } fut.push(c); metti(hist.pop()); agg(); return true; },
+    redo() { const c = cur(); while (fut.length && fut[fut.length - 1] === c) fut.pop(); if (!fut.length) { agg(); return false; } hist.push(c); metti(fut.pop()); agg(); return true; },
     async tutto() {
-      const c = cur(); if (c === orig) return toast(`Il ${cosa} è già com’era all’apertura`);
+      const c = cur(); if (c === orig) return toast(`Il ${cosa} è già com\u2019era all\u2019apertura`);
       if (typeof confirmDlg === 'undefined') Later.all();
-      if (!(await confirmDlg(`Tolgo tutte le modifiche e torno al ${cosa} com’era all’apertura? Puoi rimetterle con Annulla (Ctrl+Z).`, { ok: 'Ripristina tutto' }))) return;
-      hist.push(c); fut.length = 0; set(JSON.parse(orig)); agg(); toast(`Ripristinato com’era all’apertura`);
+      if (!(await confirmDlg(`Tolgo tutte le modifiche e torno al ${cosa} com\u2019era all\u2019apertura? Puoi rimetterle con Annulla (Ctrl+Z).`, { ok: 'Ripristina tutto' }))) return;
+      hist.push(c); fut.length = 0; metti(orig); agg(); toast(`Ripristinato com\u2019era all\u2019apertura`);
     },
     agg,
-    bottoni() {
-      btns.u = toolBtn('undo', 'Annulla', 'Annulla l’ultima modifica (Ctrl+Z)', () => H.undo()); btns.r = toolBtn('redo', 'Ripeti', 'Ripeti (Ctrl+Y)', () => H.redo());
-      btns.t = toolBtn('reset', 'Ripristina', `Ripristina tutto: il ${cosa} com’era all’apertura`, () => H.tutto()); agg(); return [btns.u, btns.r, btns.t];
+    get passi() { return hist.length; }, get avanti() { return fut.length; }, get originale() { return orig; }, get modificato() { return cur() !== orig; },
+    quando(f) { cbs.push(f); },
+    // i pulsanti (anche più serie, per barre diverse dello stesso strumento): Annulla, Ripeti, Ripristina tutto
+    bottoni({ ripeti = true } = {}) {
+      const u = toolBtn('undo', 'Annulla', 'Annulla l\u2019ultima modifica (Ctrl+Z)', () => H.undo()), r = ripeti ? toolBtn('redo', 'Ripeti', 'Ripeti (Ctrl+Y)', () => H.redo()) : null;
+      const t = toolBtn('reset', pulsanti === 'compatti' ? '' : 'Ripristina', `Ripristina tutto: il ${cosa} com\u2019era all\u2019apertura`, () => H.tutto());
+      btns.u.push(u); if (r) btns.r.push(r); btns.t.push(t); agg(); return [u, r, t];
     },
   };
   const key = e => {
-    if (!(e.ctrlKey || e.metaKey) || e.altKey || document.querySelector('.scrim')) return;
+    if (e.defaultPrevented || !(e.ctrlKey || e.metaKey) || e.altKey || document.querySelector('.scrim')) return;
     const a = document.activeElement; if (a && (a.isContentEditable || a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && /^(text|search|email|url|tel|password|number)$/.test(a.type || 'text')))) return;
     const k = e.key.toLowerCase();
     if (k === 'z' && !e.shiftKey ? H.undo() : (k === 'y' || (k === 'z' && e.shiftKey)) && H.redo()) e.preventDefault();
   };
-  document.addEventListener('keydown', key);
-  if (typeof onLeave === 'function') onLeave(() => document.removeEventListener('keydown', key));
+  if (tasti) { document.addEventListener('keydown', key); if (typeof onLeave === 'function') onLeave(() => document.removeEventListener('keydown', key)); }
   return H;
 }
 function toolBtn(icon, label, title, onclick) {
@@ -1930,7 +1955,7 @@ const Store = (() => {
     r.onupgradeneeded = () => { for (const [n, o] of Object.entries(STORES)) if (!r.result.objectStoreNames.contains(n)) r.result.createObjectStore(n, o || undefined); };
     r.onsuccess = () => { const d = r.result; d.onversionchange = () => { d.close(); dbp = null; }; res(d); };
     r.onerror = () => rej(r.error);
-    r.onblocked = () => rej(new Error('Archivio locale bloccato da un’altra scheda di file360'));
+    r.onblocked = () => rej(new Error('Archivio locale bloccato da un\u2019altra scheda di file360'));
   });
   db().catch(() => { dbp = null; });
   // una richiesta in una transazione; si risolve a transazione conclusa (dati davvero scritti)
@@ -1994,7 +2019,7 @@ const Sha256 = (() => {
 })();
 
 /* =====================================================================
-   Brand — logo, colori e carattere di file360, gli stessi nel sito
+   Brand \u2014 logo, colori e carattere di file360, gli stessi nel sito
    e nei file prodotti (PDF del bilancio XBRL, ricevute, rapporti, Excel).
    Logo «Orbita»: il foglio al centro, un'orbita che gli gira intorno (tutto quello che puoi fare al file,
    senza che il file se ne vada) e un satellite giallo, il risultato che arriva.
@@ -2027,7 +2052,7 @@ const Brand = (() => {
   function logoSvg(size = 32, { title = 'file360', mono = null, live = false } = {}) {
     if (live && !mono && !matchMedia('(prefers-reduced-motion: reduce)').matches && document.documentElement.dataset.anim !== 'off') return liveSvg(size, title);
     const o = mono || C.orbit, sw = size < 24 ? 5 : 4;
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 64 64" role="img" aria-label="${title}">` +
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 64 64" role="img" aria-label="${title}"${live && !mono ? ` data-live-size="${size}"` : ''}>` +
       `<path d="${ORBIT_BACK}" fill="none" stroke="${o}" stroke-width="${sw}" stroke-linecap="round"/>` +
       `<path d="${PAGE}" fill="${mono || C.accent}"/><path d="${FOLD}" fill="${mono ? mono : C.fold}" ${mono ? 'opacity=".55"' : ''}/>` +
       `<path d="${ORBIT_FRONT}" fill="none" stroke="${o}" stroke-width="${sw}" stroke-linecap="round"/>` +
@@ -2055,7 +2080,7 @@ const Brand = (() => {
   // attesa: il satellite gira sull'orbita intorno al foglio (si muove solo lui, un punto: costa pochissimo)
   const spinnerSvg = (size = 56) => `<span class="brand-spin" style="width:${size}px;height:${size}px"><svg width="${size}" height="${size}" viewBox="0 0 64 64" aria-hidden="true"><path d="${ORBIT_BACK}" fill="none" stroke="${C.orbit}" stroke-width="4" stroke-linecap="round" opacity=".55"/><path d="${PAGE}" fill="${C.accent}"/><path d="${FOLD}" fill="${C.fold}"/><path d="${ORBIT_FRONT}" fill="none" stroke="${C.orbit}" stroke-width="4" stroke-linecap="round"/></svg><span class="orbit" style="transform:scale(${size / 64})"><i class="sat"></i></span></span>`;
   const favicon = () => 'data:image/svg+xml,' + encodeURIComponent(logoSvg(64));
-  /* —— nei PDF (pdf-lib): logo e caratteri —— */
+  /* \u2014\u2014 nei PDF (pdf-lib): logo e caratteri \u2014\u2014 */
   const rgbHex = hx => { const n = parseInt(hx.slice(1), 16); return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255); };
   function drawLogo(page, x, yTop, size) {
     const s = size / 64;
@@ -2088,7 +2113,7 @@ const Brand = (() => {
   function decorate(pdf, F, { label = '', ml = 42, mr = 42, foot = 30 } = {}) {
     const pages = pdf.getPages(), N = pages.length;
     const ink = rgbHex(C.ink), mute = rgbHex(C.muted), line = rgbHex(C.line), acc = rgbHex(C.accent);
-    const fit = (t, f, s, w) => { t = pdfSafe(f, t); while (t.length > 4 && f.widthOfTextAtSize(t, s) > w) t = t.slice(0, -2).replace(/\s*$/, '') + '…'; return t; };
+    const fit = (t, f, s, w) => { t = pdfSafe(f, t); while (t.length > 4 && f.widthOfTextAtSize(t, s) > w) t = t.slice(0, -2).replace(/\s*$/, '') + '\u2026'; return t; };
     pages.forEach((p, i) => {
       const { width: W, height: H } = p.getSize();
       p.drawRectangle({ x: 0, y: H - 3.5, width: W, height: 3.5, color: acc });
@@ -2103,7 +2128,7 @@ const Brand = (() => {
     });
     pdf.setProducer('file360'); pdf.setCreator('file360'); pdf.setLanguage('it-IT');
   }
-  /* —— in Excel —— */
+  /* \u2014\u2014 in Excel \u2014\u2014 */
   const XL = { font: 'Instrument Sans', head: C.ink, headInk: '#FFFFFF', accent: C.accent, band: C.surface2, soft: C.soft, muted: C.muted, line: C.line2 };
   return { C, logoSvg, spinnerSvg, favicon, drawLogo, pdfFonts, italic, rgbHex, XL, hexPath, decorate, ORBIT };
 })();
@@ -2229,10 +2254,10 @@ const PT = (() => {
   }
 
   /* ---------- encodings & glyph names ---------- */
-  // (i codici senza carattere oltre lo spazio valgono il pallino «•», come dice la norma PDF per WinAnsiEncoding)
-  const WIN = (() => { const d = new TextDecoder('windows-1252'); return Array.from({ length: 256 }, (_, c) => [127, 0x81, 0x8D, 0x8F, 0x90, 0x9D].includes(c) ? '•' : d.decode(Uint8Array.of(c))); })();
+  // (i codici senza carattere oltre lo spazio valgono il pallino «\u2022», come dice la norma PDF per WinAnsiEncoding)
+  const WIN = (() => { const d = new TextDecoder('windows-1252'); return Array.from({ length: 256 }, (_, c) => [127, 0x81, 0x8D, 0x8F, 0x90, 0x9D].includes(c) ? '\u2022' : d.decode(Uint8Array.of(c))); })();
   const MAC = (() => { try { const d = new TextDecoder('macintosh'); return Array.from({ length: 256 }, (_, c) => d.decode(Uint8Array.of(c))); } catch { return WIN; } })();
-  const STDENC = (() => { const a = WIN.slice(); a[0x27] = '’'; a[0x60] = '‘'; for (let c = 0x80; c < 256; c++) a[c] = ''; return a; })();
+  const STDENC = (() => { const a = WIN.slice(); a[0x27] = '\u2019'; a[0x60] = '\u2018'; for (let c = 0x80; c < 256; c++) a[c] = ''; return a; })();
   let NAME2UNI = null;
   function glyphUni(name) {
     if (!NAME2UNI) {
@@ -2241,7 +2266,7 @@ const PT = (() => {
         const m = PDFLib.StandardFontEmbedder.for(StandardFonts.Helvetica).encoding.unicodeMappings;
         for (const cp of Object.keys(m)) NAME2UNI.set(m[cp][1], String.fromCodePoint(+cp));
       } catch { }
-      Object.entries({ fi: 'ﬁ', fl: 'ﬂ', ff: 'ﬀ', ffi: 'ﬃ', ffl: 'ﬄ', minus: '−', nbspace: ' ', nonbreakingspace: ' ', Delta: 'Δ', Omega: 'Ω', mu: 'µ', apostrophe: "'", sfthyphen: '­', afii61664: '‌', Euro: '€', dotlessi: 'ı', fraction: '⁄', lozenge: '◊' }).forEach(([k, v]) => NAME2UNI.set(k, v));
+      Object.entries({ fi: '\ufb01', fl: '\ufb02', ff: '\ufb00', ffi: '\ufb03', ffl: '\ufb04', minus: '\u2212', nbspace: ' ', nonbreakingspace: ' ', Delta: '\u0394', Omega: '\u2126', mu: 'µ', apostrophe: "'", sfthyphen: '­', afii61664: '\u200c', Euro: '\u20ac', dotlessi: '\u0131', fraction: '\u2044', lozenge: '\u25ca' }).forEach(([k, v]) => NAME2UNI.set(k, v));
     }
     if (NAME2UNI.has(name)) return NAME2UNI.get(name);
     let m = /^uni([0-9A-Fa-f]{4})$/.exec(name); if (m) return String.fromCharCode(parseInt(m[1], 16));
@@ -2855,7 +2880,7 @@ const PT = (() => {
   /* ---------- blocchi di testo «come in Word» ----------
      Ogni blocco toglie dal contenuto della pagina i glifi delle sue righe originali (srcs) e scrive il nuovo testo
      a pezzi già impaginati (pieces: una parola o un frammento con il suo stile e la sua posizione).
-     Coordinate: punti della vista pdf.js a scala 1 (origine in alto a sinistra); vt = utente → vista.
+     Coordinate: punti della vista pdf.js a scala 1 (origine in alto a sinistra); vt = utente \u2192 vista.
      blocks: [{ id, srcs: [{ x, w, base, size, text, cover: { x, y, w, h, color } }],
                 pieces: [{ x, base, w, t, size, fontName, bold, italic, fam, color, fill, u, s, hl }] }]
      Le righe che non si possono togliere dal contenuto (testo invisibile di una scansione, font illeggibile)
@@ -3005,7 +3030,7 @@ const PT = (() => {
     // via i glifi delle righe originali (le posizioni dei glifi che restano nella stessa istruzione non cambiano)
     const repl = new Map();
     // ruoli dei glifi nelle righe modificate in modo fedele
-    const role = new Map();   // glifo → { drop } | { shift } ; ancora: { before: piano } | { after: piano }
+    const role = new Map();   // glifo \u2192 { drop } | { shift } ; ancora: { before: piano } | { after: piano }
     for (const pl of natPlans) {
       const a0 = pl.removed.length ? pl.removed[0] : null, a1 = pl.removed.length ? pl.removed[pl.removed.length - 1] : null;
       const dir = (() => { const g = pl.glyphs.find(x => Math.hypot(x.p1[0] - x.p0[0], x.p1[1] - x.p0[1]) > 1e-6) || pl.anchor; const l = Math.hypot(g.p1[0] - g.p0[0], g.p1[1] - g.p0[1]) || 1; return [(g.p1[0] - g.p0[0]) / l, (g.p1[1] - g.p0[1]) / l]; })();
@@ -3155,7 +3180,7 @@ const SEO = (() => {
     desc: 'Unisci, comprimi, modifica e converti PDF in Word ed Excel. OCR, PDF/A, P7M, fatture XML e bilanci XBRL. Gratis, senza limiti e senza registrazione.',
     why: [
       ['shield', 'I file non vengono caricati', 'Ogni operazione avviene nel browser che stai usando, su computer o telefono. Nessun server riceve i documenti: puoi lavorare anche su contratti, buste paga e dati sanitari.'],
-      ['layers', 'Un documento, tanti strumenti', 'Apri un PDF una volta e passa da uno strumento all’altro: modifichi, riordini, comprimi e converti mantenendo ogni versione, con la possibilità di tornare indietro.'],
+      ['layers', 'Un documento, tanti strumenti', 'Apri un PDF una volta e passa da uno strumento all\u2019altro: modifichi, riordini, comprimi e converti mantenendo ogni versione, con la possibilità di tornare indietro.'],
       ['seal', 'Anche i formati del Fisco', 'Fatture elettroniche XML e P7M, bilanci XBRL, PDF/A per PEC e processo telematico: i file di tutti i giorni di chi lavora con la pubblica amministrazione.'],
     ],
     faq: [
@@ -3172,26 +3197,26 @@ const SEO = (() => {
   const P = {
     unisci: {
       slug: 'unire-pdf', title: 'Unire PDF online gratis, anche con immagini',
-      desc: 'Unisci più PDF e immagini in un unico file, nell’ordine che vuoi. Gratis e senza limiti, senza registrazione né upload su server. Trascina i file e inizia.',
+      desc: 'Unisci più PDF e immagini in un unico file, nell\u2019ordine che vuoi. Gratis e senza limiti, senza registrazione né upload su server. Trascina i file e inizia.',
       h1: 'Unisci PDF', h2: 'Come unire due o più PDF in un unico file', rel: ["comprimi", "ordina", "numeri"],
       steps: ['Trascina i PDF (e, se vuoi, foto JPG o PNG) nel riquadro.', 'Riordinali trascinandoli o con le frecce.', 'Premi «Unisci» e scarica il PDF unico.'],
       faq: [
-        ['Come unisco due PDF in uno solo?', 'Trascina i due file nel riquadro, mettili nell’ordine giusto trascinandoli o con le frecce e premi «Unisci»: scarichi subito un unico PDF. Funziona allo stesso modo con tre, dieci o cinquanta file.'],
+        ['Come unisco due PDF in uno solo?', 'Trascina i due file nel riquadro, mettili nell\u2019ordine giusto trascinandoli o con le frecce e premi «Unisci»: scarichi subito un unico PDF. Funziona allo stesso modo con tre, dieci o cinquanta file.'],
         ['Posso unire i PDF dal telefono?', 'Sì: dal browser di Android o iPhone scegli i PDF (e, se vuoi, le foto) dalla memoria del telefono, riordinali e scarica il PDF unico. Non serve installare app.'],
         ['Posso unire PDF e immagini insieme?', 'Sì: JPG, PNG, HEIC e le altre immagini diventano pagine del PDF, nella posizione che scegli.'],
-        ['C’è un limite al numero di file?', 'No, il limite è solo la memoria del dispositivo. Anche decine di documenti si uniscono in pochi secondi.'],
+        ['C\u2019è un limite al numero di file?', 'No, il limite è solo la memoria del dispositivo. Anche decine di documenti si uniscono in pochi secondi.'],
         ['I segnalibri e la qualità restano uguali?', 'Le pagine vengono copiate così come sono, senza ricompressione: testo, immagini e qualità non cambiano.'],
       ],
     },
     immagini: {
       slug: 'jpg-in-pdf', title: 'JPG in PDF: converti foto, PNG e HEIC gratis',
-      desc: 'Trasforma foto JPG, PNG e HEIC dell’iPhone in un PDF ordinato, con formato pagina e margini a scelta. Gratis e senza limiti. Scegli le foto e crea il PDF.',
+      desc: 'Trasforma foto JPG, PNG e HEIC dell\u2019iPhone in un PDF ordinato, con formato pagina e margini a scelta. Gratis e senza limiti. Scegli le foto e crea il PDF.',
       h1: 'JPG in PDF', h2: 'Come trasformare foto e immagini in un PDF', rel: ["unisci", "comprimi", "ocr"],
       steps: ['Scegli o scatta le foto, anche più di una.', 'Ordina le pagine e scegli formato, orientamento e margini.', 'Crea il PDF e scaricalo.'],
       faq: [
         ['Posso mettere più foto in un unico PDF?', 'Sì: scegli tutte le foto insieme, ordinale trascinandole e ottieni un solo PDF con una foto per pagina, nel formato e con i margini che preferisci.'],
-        ['Come converto in PDF una foto HEIC dell’iPhone?', 'Scegli la foto dalla galleria o trascinala nel riquadro: il formato HEIC viene letto direttamente, senza convertirlo prima in JPG, e l’orientamento viene rispettato.'],
-        ['Le foto HEIC dell’iPhone sono supportate?', 'Sì, insieme a JPG, PNG, TIFF multipagina, WebP, GIF e BMP. L’orientamento della foto viene rispettato.'],
+        ['Come converto in PDF una foto HEIC dell\u2019iPhone?', 'Scegli la foto dalla galleria o trascinala nel riquadro: il formato HEIC viene letto direttamente, senza convertirlo prima in JPG, e l\u2019orientamento viene rispettato.'],
+        ['Le foto HEIC dell\u2019iPhone sono supportate?', 'Sì, insieme a JPG, PNG, TIFF multipagina, WebP, GIF e BMP. L\u2019orientamento della foto viene rispettato.'],
         ['Posso fare un PDF dalle foto del telefono?', 'Sì: dal telefono puoi scegliere le foto dalla galleria o scattarle al momento, e ottenere subito il PDF.'],
         ['Le immagini perdono qualità?', 'No: le foto vengono inserite alla risoluzione originale, a meno che tu non scelga di ridurne il peso.'],
       ],
@@ -3202,7 +3227,7 @@ const SEO = (() => {
       h1: 'Dividi PDF', h2: 'Come dividere un PDF o estrarre solo alcune pagine', rel: ["ordina", "unisci"],
       steps: ['Apri il PDF da dividere.', 'Scegli come dividerlo: ogni pagina, ogni N pagine, per intervalli o selezionando le pagine.', 'Scarica i file ottenuti, anche tutti insieme in un archivio ZIP.'],
       faq: [
-        ['Come salvo una sola pagina di un PDF?', 'Seleziona la pagina nelle anteprime (o scrivi il suo numero negli intervalli) e scarica: ottieni un nuovo PDF con quella sola pagina, mentre l’originale resta intatto.'],
+        ['Come salvo una sola pagina di un PDF?', 'Seleziona la pagina nelle anteprime (o scrivi il suo numero negli intervalli) e scarica: ottieni un nuovo PDF con quella sola pagina, mentre l\u2019originale resta intatto.'],
         ['Posso dividere un PDF ogni 2 o ogni 10 pagine?', 'Sì: con «Ogni N» scegli il numero di pagine per file e ottieni tanti file quanti servono, scaricabili tutti insieme in un archivio ZIP.'],
         ['Posso estrarre solo alcune pagine?', 'Sì: selezionale nelle anteprime o scrivi gli intervalli (per esempio 1-3, 7, 10-12) per ottenere un nuovo PDF con quelle pagine.'],
         ['Come ricevo i file divisi?', 'Un solo file si scarica direttamente; più file arrivano in un archivio ZIP con i nomi in ordine.'],
@@ -3218,8 +3243,8 @@ const SEO = (() => {
         ['Perché il mio PDF è così pesante?', 'Quasi sempre per le immagini: scansioni e foto ad alta risoluzione occupano molto spazio. Un PDF di solo testo è già leggero, mentre una scansione può ridursi molto con i livelli «Consigliata», «Forte» o «Massima».'],
         ['Il PDF è ancora troppo grande per il portale: cosa posso fare?', 'Prova il livello «Forte» o «Massima» e controlla il peso indicato prima e dopo. Se il limite è molto basso, puoi anche dividere il documento in più parti con «Dividi PDF».'],
         ['Quanto si riduce un PDF?', 'Dipende dal contenuto: le scansioni e i PDF con molte foto si riducono molto; quelli di solo testo sono già leggeri e cambiano poco.'],
-        ['Il testo resta selezionabile?', 'Con il livello «Senza perdita» sì: testo e qualità restano identici. Negli altri livelli le pagine diventano immagini; se ti serve il testo, passa poi il file all’OCR.'],
-        ['Posso comprimere un PDF per inviarlo via PEC?', 'Sì: il livello «Consigliata» (150 dpi) è pensato per email e PEC; per i portali con limiti stretti c’è «Massima».'],
+        ['Il testo resta selezionabile?', 'Con il livello «Senza perdita» sì: testo e qualità restano identici. Negli altri livelli le pagine diventano immagini; se ti serve il testo, passa poi il file all\u2019OCR.'],
+        ['Posso comprimere un PDF per inviarlo via PEC?', 'Sì: il livello «Consigliata» (150 dpi) è pensato per email e PEC; per i portali con limiti stretti c\u2019è «Massima».'],
       ],
     },
     modifica: {
@@ -3229,10 +3254,10 @@ const SEO = (() => {
       steps: ['Apri il PDF da modificare.', 'Fai clic sul testo per riscriverlo, oppure aggiungi testo, immagini, firma e forme.', 'Salva e scarica il PDF modificato.'],
       faq: [
         ['Come scrivo su un PDF?', 'Apri il PDF e aggiungi un testo nel punto dove vuoi scrivere; per correggere una frase già presente fai clic sulla riga e riscrivila. Poi salva e scarica.'],
-        ['Posso modificare un PDF senza Adobe Acrobat?', 'Sì: l’editor funziona nel browser, su computer e telefono, senza installare programmi e senza account.'],
+        ['Posso modificare un PDF senza Adobe Acrobat?', 'Sì: l\u2019editor funziona nel browser, su computer e telefono, senza installare programmi e senza account.'],
         ['Posso cambiare il testo già scritto nel PDF?', 'Sì: fai clic su una riga e riscrivila. Il carattere, la dimensione e il colore originali vengono mantenuti il più possibile.'],
         ['Posso firmare un PDF?', 'Sì: disegna la firma o ricavala dalla foto di una firma su carta, poi posizionala dove serve. Per una firma digitale con valore legale serve invece il dispositivo di firma.'],
-        ['Funziona anche con i PDF scansionati?', 'Sulle scansioni puoi aggiungere testo, immagini e firme; per riscrivere il testo esistente, la pagina si riconosce prima con l’OCR, con un clic.'],
+        ['Funziona anche con i PDF scansionati?', 'Sulle scansioni puoi aggiungere testo, immagini e firme; per riscrivere il testo esistente, la pagina si riconosce prima con l\u2019OCR, con un clic.'],
       ],
     },
     ruota: {
@@ -3254,35 +3279,35 @@ const SEO = (() => {
       h1: 'Elimina e riordina pagine PDF', h2: 'Come eliminare, spostare e aggiungere pagine in un PDF', rel: ["dividi", "unisci", "ruota"],
       steps: ['Apri il PDF.', 'Trascina le anteprime per riordinarle, elimina, duplica o inserisci pagine bianche.', 'Salva il nuovo PDF.'],
       faq: [
-        ['Come sposto una pagina in un PDF?', 'Trascina l’anteprima della pagina nella nuova posizione: le altre si spostano da sole. Quando l’ordine è giusto, salva il nuovo PDF.'],
+        ['Come sposto una pagina in un PDF?', 'Trascina l\u2019anteprima della pagina nella nuova posizione: le altre si spostano da sole. Quando l\u2019ordine è giusto, salva il nuovo PDF.'],
         ['Posso eliminare più pagine insieme?', 'Sì: selezionale nelle anteprime e premi elimina una volta sola.'],
         ['Come elimino una pagina da un PDF?', 'Selezionala nelle anteprime e premi elimina; puoi rimuoverne anche più di una alla volta.'],
         ['Posso aggiungere una pagina bianca?', 'Sì, nel punto che preferisci, con lo stesso formato delle pagine vicine.'],
-        ['Posso tornare all’ordine di partenza?', 'Sì: «Ripristina ordine originale» annulla gli spostamenti; dopo il salvataggio le versioni precedenti del documento restano disponibili.'],
+        ['Posso tornare all\u2019ordine di partenza?', 'Sì: «Ripristina ordine originale» annulla gli spostamenti; dopo il salvataggio le versioni precedenti del documento restano disponibili.'],
       ],
     },
     numeri: {
       slug: 'numerare-pagine-pdf', title: 'Numerare pagine PDF online gratis',
       desc: 'Aggiungi i numeri di pagina a un PDF («Pagina 1 di 12», «Pag. 1»), intestazione e piè di pagina, con anteprima dal vivo. Gratis e senza limiti. Prova ora.',
       h1: 'Numera pagine PDF', h2: 'Come inserire i numeri di pagina in un PDF', rel: ["unisci", "pdfa"],
-      steps: ['Apri il PDF.', 'Scegli posizione, formato e prima pagina da numerare; aggiungi intestazione e calce.', 'Controlla l’anteprima e scarica.'],
+      steps: ['Apri il PDF.', 'Scegli posizione, formato e prima pagina da numerare; aggiungi intestazione e calce.', 'Controlla l\u2019anteprima e scarica.'],
       faq: [
         ['Posso iniziare la numerazione da un numero diverso da 1?', 'Sì: scegli il numero da cui iniziare a contare e le pagine da numerare, per esempio per continuare la numerazione di un altro documento o saltare la copertina.'],
-        ['Posso escludere la copertina?', 'Sì: puoi escludere la prima pagina, scegliere l’intervallo di pagine e il numero da cui iniziare a contare.'],
+        ['Posso escludere la copertina?', 'Sì: puoi escludere la prima pagina, scegliere l\u2019intervallo di pagine e il numero da cui iniziare a contare.'],
         ['Quali formati di numerazione ci sono?', '«Pagina 1», «Pagina 1 di 12», «Pag. 1» o un formato personalizzato, in sei posizioni, con carattere, dimensione e colore a scelta.'],
-        ['Posso aggiungere un’intestazione con il nome dello studio?', 'Sì: intestazione e piè di pagina accettano testo libero, a sinistra, al centro o a destra.'],
+        ['Posso aggiungere un\u2019intestazione con il nome dello studio?', 'Sì: intestazione e piè di pagina accettano testo libero, a sinistra, al centro o a destra.'],
       ],
     },
     ocr: {
       slug: 'ocr-pdf', title: 'OCR PDF gratis: scansioni ricercabili',
-      desc: 'Riconosci il testo di PDF scansionati e foto: il documento diventa ricercabile e copiabile, con correzione dell’italiano. Gratis e senza limiti. Prova ora.',
+      desc: 'Riconosci il testo di PDF scansionati e foto: il documento diventa ricercabile e copiabile, con correzione dell\u2019italiano. Gratis e senza limiti. Prova ora.',
       h1: 'OCR PDF', h2: 'Come rendere ricercabile un PDF scansionato', rel: ["word", "excel", "oscura"],
-      steps: ['Carica la scansione o la foto del documento.', 'Scegli la lingua e la qualità del riconoscimento.', 'Scarica il PDF ricercabile, identico all’originale ma con il testo selezionabile.'],
+      steps: ['Carica la scansione o la foto del documento.', 'Scegli la lingua e la qualità del riconoscimento.', 'Scarica il PDF ricercabile, identico all\u2019originale ma con il testo selezionabile.'],
       faq: [
-        ['Come copio il testo da un PDF scansionato?', 'Passa la scansione all’OCR: il PDF che scarichi ha lo stesso aspetto dell’originale ma il testo si può selezionare, copiare e cercare. Se ti serve un documento da modificare, usa «PDF in Word».'],
+        ['Come copio il testo da un PDF scansionato?', 'Passa la scansione all\u2019OCR: il PDF che scarichi ha lo stesso aspetto dell\u2019originale ma il testo si può selezionare, copiare e cercare. Se ti serve un documento da modificare, usa «PDF in Word».'],
         ['Funziona con le foto dei documenti fatte col telefono?', 'Sì: puoi caricare anche immagini JPG, PNG o HEIC; pagine storte o capovolte vengono raddrizzate prima del riconoscimento.'],
         ['Quali lingue riconosce?', 'Italiano, inglese, francese, tedesco e spagnolo, anche insieme nello stesso documento.'],
-        ['Le pagine storte o capovolte vengono corrette?', 'Sì: l’orientamento e l’inclinazione vengono rilevati e corretti prima del riconoscimento.'],
+        ['Le pagine storte o capovolte vengono corrette?', 'Sì: l\u2019orientamento e l\u2019inclinazione vengono rilevati e corretti prima del riconoscimento.'],
         ['La scansione viene inviata a un servizio esterno?', 'No: il riconoscimento avviene nel browser. La prima volta viene scaricato solo il modello della lingua.'],
       ],
     },
@@ -3290,12 +3315,12 @@ const SEO = (() => {
       slug: 'pdf-in-word', title: 'PDF in Word gratis: convertire in DOCX',
       desc: 'Converti PDF e scansioni in un Word modificabile, con tabelle, stili e immagini al loro posto. Gratis e senza limiti, senza registrazione. Prova ora.',
       h1: 'PDF in Word', h2: 'Come convertire un PDF in Word modificabile', rel: ["ocr", "excel"],
-      steps: ['Apri il PDF o la scansione.', 'Avvia la conversione: le scansioni vengono prima riconosciute con l’OCR.', 'Scarica il file .docx e modificalo in Word, LibreOffice o Google Documenti.'],
+      steps: ['Apri il PDF o la scansione.', 'Avvia la conversione: le scansioni vengono prima riconosciute con l\u2019OCR.', 'Scarica il file .docx e modificalo in Word, LibreOffice o Google Documenti.'],
       faq: [
         ['Come trasformo un PDF in un Word modificabile gratis?', 'Apri il PDF, avvia la conversione e scarica il file .docx: lo modifichi in Word, LibreOffice o Google Documenti. Il servizio è gratuito e senza limiti di utilizzo.'],
         ['La formattazione resta uguale?', 'Paragrafi, tabelle, stili e immagini vengono ricostruiti al loro posto; nei layout molto elaborati (colonne, grafiche sovrapposte) può servire qualche ritocco nel documento Word.'],
         ['Le tabelle restano tabelle?', 'Sì: righe e colonne vengono ricostruite come tabelle di Word, modificabili come quelle scritte a mano.'],
-        ['Posso convertire un PDF scansionato in Word?', 'Sì: il testo della scansione viene riconosciuto con l’OCR e diventa testo modificabile.'],
+        ['Posso convertire un PDF scansionato in Word?', 'Sì: il testo della scansione viene riconosciuto con l\u2019OCR e diventa testo modificabile.'],
         ['Loghi e firme vengono mantenuti?', 'Sì: restano immagini che puoi spostare o eliminare nel documento Word.'],
       ],
     },
@@ -3305,8 +3330,8 @@ const SEO = (() => {
       h1: 'Converti PDF in PDF/A', h2: 'Come trasformare un PDF in PDF/A-1b o PDF/A-2b', rel: ["verificapdfa", "comprimi", "firme"],
       steps: ['Trascina uno o più PDF.', 'Scegli la versione: PDF/A-1b o PDF/A-2b.', 'Controlla la verifica di conformità pagina per pagina e scarica i PDF/A.'],
       faq: [
-        ['Che differenza c’è tra PDF e PDF/A?', 'Il PDF/A è un PDF «autosufficiente» pensato per durare nel tempo: incorpora caratteri e colori e non può dipendere da elementi esterni. Per questo lo chiedono la conservazione digitale e molti portali pubblici.'],
-        ['Che cos’è il PDF/A?', 'È la versione del PDF pensata per la conservazione a lungo termine: incorpora i caratteri e i colori e non dipende da elementi esterni.'],
+        ['Che differenza c\u2019è tra PDF e PDF/A?', 'Il PDF/A è un PDF «autosufficiente» pensato per durare nel tempo: incorpora caratteri e colori e non può dipendere da elementi esterni. Per questo lo chiedono la conservazione digitale e molti portali pubblici.'],
+        ['Che cos\u2019è il PDF/A?', 'È la versione del PDF pensata per la conservazione a lungo termine: incorpora i caratteri e i colori e non dipende da elementi esterni.'],
         ['Quale versione scegliere?', 'PDF/A-1b è la più accettata dai portali pubblici; PDF/A-2b consente trasparenze e una compressione migliore.'],
         ['Va bene per il deposito telematico?', 'Sì: il formato prodotto è quello richiesto per gli atti del processo telematico e per molti portali della pubblica amministrazione.'],
       ],
@@ -3332,7 +3357,7 @@ const SEO = (() => {
       faq: [
         ['Come converto un file P7M in PDF?', 'Trascina il file .p7m nel riquadro: il documento firmato viene estratto e puoi aprirlo o scaricarlo. Con un file .pdf.p7m ottieni direttamente il PDF originale.'],
         ['Il PDF estratto ha ancora valore legale?', 'La firma digitale vale per il file .p7m: il PDF estratto è una copia da leggere e stampare. Conserva sempre anche il file .p7m originale, insieme al rapporto di verifica se ti serve.'],
-        ['Che cos’è un file P7M?', 'È un documento firmato digitalmente in formato CAdES: contiene il file originale (spesso un PDF) insieme alla firma e al certificato di chi ha firmato.'],
+        ['Che cos\u2019è un file P7M?', 'È un documento firmato digitalmente in formato CAdES: contiene il file originale (spesso un PDF) insieme alla firma e al certificato di chi ha firmato.'],
         ['Posso aprire un .p7m senza programmi di firma?', 'Sì: il documento viene estratto nel browser e puoi leggerlo, stamparlo o salvarlo come PDF.'],
         ['Viene controllata anche la marca temporale?', 'Sì: vengono verificate più firme nello stesso file, le controfirme e le marche temporali, anche nei file .tsd e .m7m. Puoi scaricare il rapporto di verifica in PDF.'],
       ],
@@ -3345,33 +3370,33 @@ const SEO = (() => {
       faq: [
         ['Come si apre un file XBRL?', 'Il file .xbrl è un XML pensato per i computer, non per la lettura. Trascinalo qui: viene ricostruito il bilancio con i prospetti e le voci della tassonomia, da leggere, stampare in PDF o esportare in Excel.'],
         ['Il mio bilancio finisce in .xbrl.p7m: posso aprirlo?', 'Sì: la busta di firma viene rimossa automaticamente e il bilancio si legge come un normale file .xbrl.'],
-        ['Quali tassonomie sono supportate?', 'Le tassonomie del bilancio d’esercizio italiano usate per il deposito al Registro delle imprese, comprese le versioni precedenti.'],
-        ['Posso analizzare il bilancio in Excel?', 'Sì: il foglio «Bilancio» riporta ogni voce con l’esercizio e l’esercizio precedente, pronti per i calcoli, più tutti i dati per sezione.'],
+        ['Quali tassonomie sono supportate?', 'Le tassonomie del bilancio d\u2019esercizio italiano usate per il deposito al Registro delle imprese, comprese le versioni precedenti.'],
+        ['Posso analizzare il bilancio in Excel?', 'Sì: il foglio «Bilancio» riporta ogni voce con l\u2019esercizio e l\u2019esercizio precedente, pronti per i calcoli, più tutti i dati per sezione.'],
         ['Viene inclusa la nota integrativa?', 'Sì: le tabelle e i testi della nota integrativa sono riportati nel PDF.'],
       ],
     },
     excel: {
       slug: 'pdf-in-excel', title: 'PDF in Excel gratis: tabelle e importi',
-      desc: 'Estrai le tabelle di un PDF in Excel: colonne riconosciute anche senza linee, importi e date come numeri, scansioni lette con l’OCR. Gratis e senza limiti.',
+      desc: 'Estrai le tabelle di un PDF in Excel: colonne riconosciute anche senza linee, importi e date come numeri, scansioni lette con l\u2019OCR. Gratis e senza limiti.',
       h1: 'PDF in Excel', h2: 'Come convertire un PDF in Excel mantenendo le tabelle', rel: ["ocr", "word"],
       steps: ['Apri il PDF con le tabelle (estratti conto, listini, report).', 'Controlla righe e colonne riconosciute.', 'Scarica il file .xlsx, con importi e date pronti per i calcoli.'],
       faq: [
-        ['Come converto un estratto conto PDF in Excel?', 'Apri l’estratto conto e scegli «Tutto in un foglio»: le pagine finiscono una sotto l’altra, le intestazioni ripetute compaiono una volta sola e importi e date diventano numeri e date di Excel.'],
-        ['Gli importi diventano numeri?', 'Sì: «1.234,56 €» diventa il numero 1234,56 e le date diventano date di Excel, pronte per somme e filtri.'],
-        ['Funziona con un PDF scansionato?', 'Sì: le scansioni vengono riconosciute con l’OCR prima di ricostruire le tabelle.'],
-        ['Le tabelle su più pagine vengono unite?', 'Sì: con «Tutto in un foglio» le pagine vanno una sotto l’altra e le intestazioni ripetute compaiono una volta sola, ideale per estratti conto ed elenchi lunghi.'],
+        ['Come converto un estratto conto PDF in Excel?', 'Apri l\u2019estratto conto e scegli «Tutto in un foglio»: le pagine finiscono una sotto l\u2019altra, le intestazioni ripetute compaiono una volta sola e importi e date diventano numeri e date di Excel.'],
+        ['Gli importi diventano numeri?', 'Sì: «1.234,56 \u20ac» diventa il numero 1234,56 e le date diventano date di Excel, pronte per somme e filtri.'],
+        ['Funziona con un PDF scansionato?', 'Sì: le scansioni vengono riconosciute con l\u2019OCR prima di ricostruire le tabelle.'],
+        ['Le tabelle su più pagine vengono unite?', 'Sì: con «Tutto in un foglio» le pagine vanno una sotto l\u2019altra e le intestazioni ripetute compaiono una volta sola, ideale per estratti conto ed elenchi lunghi.'],
       ],
     },
     fatture: {
       slug: 'fattura-elettronica-pdf', title: 'Fattura elettronica XML e P7M in PDF gratis',
       desc: 'Visualizza e converti in PDF le fatture elettroniche XML e P7M, anche ZIP del cassetto fiscale o cartelle intere. Registro in Excel. Gratis e senza limiti.',
       h1: 'Visualizzatore fatture elettroniche', h2: 'Come aprire una fattura elettronica XML e convertirla in PDF', rel: ["firme", "pdfa", "unisci"],
-      steps: ['Trascina le fatture XML o P7M, uno ZIP o un’intera cartella.', 'Cerca, filtra e ordina le fatture nel registro.', 'Scarica i PDF, gli allegati o il registro in Excel.'],
+      steps: ['Trascina le fatture XML o P7M, uno ZIP o un\u2019intera cartella.', 'Cerca, filtra e ordina le fatture nel registro.', 'Scarica i PDF, gli allegati o il registro in Excel.'],
       faq: [
-        ['Come apro una fattura elettronica XML?', 'Trascina il file .xml (o .xml.p7m) nel riquadro: la fattura si apre già impaginata, nel layout del foglio di stile dell’Agenzia delle Entrate o in quello esteso, e la scarichi in PDF.'],
-        ['Posso convertire in PDF tutte le fatture del cassetto fiscale insieme?', 'Sì: trascina lo ZIP scaricato dal cassetto fiscale o un’intera cartella. Ottieni il registro con tutte le fatture, da cui scaricare i PDF, gli allegati e l’Excel.'],
+        ['Come apro una fattura elettronica XML?', 'Trascina il file .xml (o .xml.p7m) nel riquadro: la fattura si apre già impaginata, nel layout del foglio di stile dell\u2019Agenzia delle Entrate o in quello esteso, e la scarichi in PDF.'],
+        ['Posso convertire in PDF tutte le fatture del cassetto fiscale insieme?', 'Sì: trascina lo ZIP scaricato dal cassetto fiscale o un\u2019intera cartella. Ottieni il registro con tutte le fatture, da cui scaricare i PDF, gli allegati e l\u2019Excel.'],
         ['Posso aprire una fattura .xml.p7m?', 'Sì: la busta di firma viene rimossa automaticamente e la fattura si legge come le altre.'],
-        ['Che layout ha il PDF?', 'Puoi scegliere il layout del foglio di stile ufficiale dell’Agenzia delle Entrate oppure un layout esteso, più leggibile, con tutti i dati della fattura.'],
+        ['Che layout ha il PDF?', 'Puoi scegliere il layout del foglio di stile ufficiale dell\u2019Agenzia delle Entrate oppure un layout esteso, più leggibile, con tutti i dati della fattura.'],
         ['Posso esportare le fatture in Excel?', 'Sì: un foglio con il registro delle fatture e uno con le singole righe, con imponibili, IVA e totali.'],
       ],
     },
@@ -3379,9 +3404,9 @@ const SEO = (() => {
       slug: 'preparare-pdf-pec-portali', title: 'Preparare un PDF per PEC, portali e stampa',
       desc: 'Dici cosa ti serve (PEC, portale con limite di peso, stampa, archivio) e file360 sceglie i passaggi: raddrizza, comprime, rende ricercabile, converte in PDF/A.',
       h1: 'Fai tutto tu', h2: 'Come preparare un PDF per PEC, portali e stampa in un passaggio', rel: ['comprimi', 'pdfa', 'ocr'],
-      steps: ['Carica uno o più PDF.', 'Scegli l’obiettivo (PEC, portale, email, stampa, archivio) o scrivilo con parole tue.', 'Controlla i passaggi proposti e scarica il risultato.'],
+      steps: ['Carica uno o più PDF.', 'Scegli l\u2019obiettivo (PEC, portale, email, stampa, archivio) o scrivilo con parole tue.', 'Controlla i passaggi proposti e scarica il risultato.'],
       faq: [
-        ['Che cosa fa «Fai tutto tu»?', 'Guarda il documento (scansioni, pagine storte, peso, firme) e, in base all’obiettivo, sceglie da solo i passaggi giusti: raddrizzare, rendere ricercabile, comprimere, convertire in PDF/A, togliere i metadati.'],
+        ['Che cosa fa «Fai tutto tu»?', 'Guarda il documento (scansioni, pagine storte, peso, firme) e, in base all\u2019obiettivo, sceglie da solo i passaggi giusti: raddrizzare, rendere ricercabile, comprimere, convertire in PDF/A, togliere i metadati.'],
         ['Posso chiedere un PDF sotto 1 MB per un portale?', 'Sì: scrivi per esempio «portale, massimo 1 MB» e la compressione si regola per stare nel limite mantenendo il testo leggibile.'],
         ['Posso salvare i passaggi come ricetta?', 'Sì: una sequenza usata spesso si salva come ricetta e si riapplica con un clic.'],
       ],
@@ -3392,7 +3417,7 @@ const SEO = (() => {
       h1: 'PDF in immagini', h2: 'Come trasformare un PDF in immagini JPG o PNG', rel: ['immagini', 'comprimi', 'dividi'],
       steps: ['Apri il PDF.', 'Scegli cosa ottenere: pagine come immagini, immagini contenute, testo o allegati.', 'Scegli formato e risoluzione e scarica.'],
       faq: [
-        ['Come salvo una pagina di un PDF come JPG?', 'Seleziona la pagina, scegli JPG e la risoluzione (per esempio 150 o 300 dpi) e scarica l’immagine.'],
+        ['Come salvo una pagina di un PDF come JPG?', 'Seleziona la pagina, scegli JPG e la risoluzione (per esempio 150 o 300 dpi) e scarica l\u2019immagine.'],
         ['Posso estrarre le foto originali da un PDF?', 'Sì: con «Immagini» le foto contenute vengono estratte nel loro formato originale, senza ricompressione.'],
         ['Quali formati sono disponibili?', 'JPG, PNG, WebP e TIFF, da 72 a 600 dpi.'],
       ],
@@ -3401,11 +3426,11 @@ const SEO = (() => {
       slug: 'impaginare-pdf', title: 'Impaginare PDF: A4, più pagine per foglio, libretto',
       desc: 'Porta tutte le pagine in A4, metti 2, 4 o 9 pagine per foglio, crea un libretto da piegare, aggiungi o togli margini, dividi le scansioni a doppia pagina. Gratis.',
       h1: 'Impagina PDF', h2: 'Come cambiare formato e impaginazione delle pagine di un PDF', rel: ['ordina', 'numeri', 'dividi'],
-      steps: ['Apri il PDF.', 'Scegli: formato uniforme, più pagine per foglio, libretto, margini o divisione delle pagine doppie.', 'Controlla l’anteprima e scarica.'],
+      steps: ['Apri il PDF.', 'Scegli: formato uniforme, più pagine per foglio, libretto, margini o divisione delle pagine doppie.', 'Controlla l\u2019anteprima e scarica.'],
       faq: [
         ['Come stampo due pagine per foglio?', 'Scegli «Più pagine per foglio» e 2: ottieni un PDF con due pagine affiancate su ogni foglio, pronto da stampare.'],
         ['Posso creare un libretto da piegare?', 'Sì: le pagine vengono riordinate per la stampa fronte e retro, così piegando i fogli si legge in ordine.'],
-        ['Come porto tutte le pagine in A4?', 'Con «Formato uniforme» ogni pagina viene adattata all’A4 (o al formato scelto) senza deformarla.'],
+        ['Come porto tutte le pagine in A4?', 'Con «Formato uniforme» ogni pagina viene adattata all\u2019A4 (o al formato scelto) senza deformarla.'],
       ],
     },
     proteggi: {
@@ -3434,18 +3459,18 @@ const SEO = (() => {
       slug: 'estrarre-dati-documenti', title: 'Estrarre dati da PDF e scansioni in Excel',
       desc: 'Trova da soli i dati chiave di uno o più documenti, anche scansioni: tipo, data, numero, importi, codici fiscali, partite IVA, IBAN, CIG, CUP, PEC. In Excel, Word o PDF.',
       h1: 'Estrai i dati', h2: 'Come estrarre i dati principali da tanti documenti', rel: ['excel', 'ocr', 'confronta'],
-      steps: ['Carica uno o più documenti, anche scansioni.', 'Controlla i dati trovati e correggili se serve.', 'Scarica l’elenco in Excel, Word o PDF.'],
+      steps: ['Carica uno o più documenti, anche scansioni.', 'Controlla i dati trovati e correggili se serve.', 'Scarica l\u2019elenco in Excel, Word o PDF.'],
       faq: [
         ['Quali dati vengono trovati?', 'Tipo di documento, data, numero, controparte, importi, codici fiscali, partite IVA, IBAN, CIG, CUP, PEC e altro.'],
-        ['Funziona con documenti scansionati?', 'Sì: le scansioni vengono lette con l’OCR prima dell’estrazione.'],
-        ['Posso elaborare molti documenti insieme?', 'Sì: ogni documento diventa una riga dell’elenco in Excel.'],
+        ['Funziona con documenti scansionati?', 'Sì: le scansioni vengono lette con l\u2019OCR prima dell\u2019estrazione.'],
+        ['Posso elaborare molti documenti insieme?', 'Sì: ogni documento diventa una riga dell\u2019elenco in Excel.'],
       ],
     },
     verificapdfa: {
       slug: 'verifica-pdf-a', title: 'Verificare se un PDF è PDF/A valido (validatore gratis)',
       desc: 'Controlla se un PDF è davvero PDF/A-1b, 2b, 2u, 3b o livello A secondo la norma ISO 19005: font, colori, metadati, trasparenze. Rapporto in PDF o Word, gratis.',
       h1: 'Verifica PDF/A', h2: 'Come controllare se un PDF/A è valido', rel: ['pdfa', 'firme', 'comprimi'],
-      steps: ['Carica uno o più PDF.', 'Leggi l’esito: conforme o no, con l’elenco dei problemi per area e per pagina.', 'Scarica il rapporto in PDF o Word, oppure converti i file non conformi in PDF/A.'],
+      steps: ['Carica uno o più PDF.', 'Leggi l\u2019esito: conforme o no, con l\u2019elenco dei problemi per area e per pagina.', 'Scarica il rapporto in PDF o Word, oppure converti i file non conformi in PDF/A.'],
       faq: [
         ['Come faccio a sapere se un PDF è PDF/A?', 'Caricalo qui: leggo la dichiarazione nei metadati (per esempio PDF/A-1b) e verifico se il file rispetta davvero le regole di quella parte della norma ISO 19005.'],
         ['Un PDF che dichiara di essere PDF/A è sempre valido?', 'No: molti programmi scrivono la dichiarazione ma lasciano font non incorporati, colori senza profilo o metadati incoerenti. La verifica controlla le regole una per una.'],
@@ -3454,26 +3479,26 @@ const SEO = (() => {
       ],
     },
     analisi: {
-      slug: 'analisi-di-bilancio', title: 'Analisi di bilancio gratis: indici, flussi e valore dell’azienda',
-      desc: 'Dal bilancio XBRL o PDF un’analisi chiara: riclassificati, indici, rendiconto finanziario, valore stimato dell’azienda e che cosa pesa di più sul risultato. Relazione in PDF, Word ed Excel.',
-      h1: 'Analisi di bilancio', h2: 'Come analizzare un bilancio e stimare il valore di un’azienda', rel: ['xbrl', 'excel', 'confronta'],
+      slug: 'analisi-di-bilancio', title: 'Analisi di bilancio gratis: indici, flussi e valore dell\u2019azienda',
+      desc: 'Dal bilancio XBRL o PDF un\u2019analisi chiara: riclassificati, indici, rendiconto finanziario, valore stimato dell\u2019azienda e che cosa pesa di più sul risultato. Relazione in PDF, Word ed Excel.',
+      h1: 'Analisi di bilancio', h2: 'Come analizzare un bilancio e stimare il valore di un\u2019azienda', rel: ['xbrl', 'excel', 'confronta'],
       steps: ['Carica uno o più bilanci (XBRL o PDF, anche scansionati): più anni danno trend e flussi di cassa.', 'Esplora sintesi, riclassificati, indici, flussi e diagnosi; correggi i dati se serve.', 'Scarica la relazione in PDF o Word e il foglio Excel.'],
       faq: [
-        ['Quali bilanci posso analizzare?', 'Il bilancio depositato in XBRL (anche firmato .p7m) oppure il PDF, anche scansionato: ordinario, abbreviato e micro. Caricando più anni ottieni trend, rendiconto finanziario e che cosa è cambiato da un anno all’altro.'],
+        ['Quali bilanci posso analizzare?', 'Il bilancio depositato in XBRL (anche firmato .p7m) oppure il PDF, anche scansionato: ordinario, abbreviato e micro. Caricando più anni ottieni trend, rendiconto finanziario e che cosa è cambiato da un anno all\u2019altro.'],
         ['Quali indici vengono calcolati?', 'Redditività (ROE, ROI, ROS, margine EBITDA), liquidità, solidità (leva, PFN/EBITDA, copertura degli interessi), giorni di incasso, pagamento e scorta, e i margini di struttura e di tesoreria.'],
-        ['Come viene stimato il valore dell’azienda?', 'Combinando più metodi di valutazione ricavati dal bilancio in un unico valore indicativo: non è una perizia.'],
-        ['Che cosa dice la diagnosi?', 'Che cosa ha migliorato o peggiorato il risultato rispetto all’anno prima, da dove arriva e dove va la cassa e su cosa si spendono i ricavi, ordinato per peso: senza soglie fisse, perché ogni attività ha le sue regole.'],
-        ['Il bilancio abbreviato va bene?', 'Sì: dove non indica il dettaglio (per esempio i debiti verso banche) l’analisi usa una stima dichiarata, che puoi correggere inserendo il dato.'],
+        ['Come viene stimato il valore dell\u2019azienda?', 'Combinando più metodi di valutazione ricavati dal bilancio in un unico valore indicativo: non è una perizia.'],
+        ['Che cosa dice la diagnosi?', 'Che cosa ha migliorato o peggiorato il risultato rispetto all\u2019anno prima, da dove arriva e dove va la cassa e su cosa si spendono i ricavi, ordinato per peso: senza soglie fisse, perché ogni attività ha le sue regole.'],
+        ['Il bilancio abbreviato va bene?', 'Sì: dove non indica il dettaglio (per esempio i debiti verso banche) l\u2019analisi usa una stima dichiarata, che puoi correggere inserendo il dato.'],
       ],
     },
     confronta: {
       slug: 'confrontare-pdf', title: 'Confrontare due PDF e trovare le differenze',
       desc: 'Confronta due o più versioni di un documento, anche scansioni: aggiunte, eliminazioni e modifiche evidenziate parola per parola, importi e date cambiati in primo piano.',
       h1: 'Confronta PDF', h2: 'Come confrontare due versioni di un PDF', rel: ['estrai', 'modifica', 'ocr'],
-      steps: ['Carica due o più versioni dello stesso documento.', 'Scorri le differenze: aggiunte, eliminazioni e modifiche, con le pagine affiancate.', 'Scarica il PDF evidenziato, il rapporto in PDF o Word o l’elenco in Excel.'],
+      steps: ['Carica due o più versioni dello stesso documento.', 'Scorri le differenze: aggiunte, eliminazioni e modifiche, con le pagine affiancate.', 'Scarica il PDF evidenziato, il rapporto in PDF o Word o l\u2019elenco in Excel.'],
       faq: [
         ['Posso confrontare due contratti?', 'Sì: ogni parola aggiunta, tolta o cambiata viene evidenziata, con importi e date in primo piano.'],
-        ['Funziona con documenti scansionati?', 'Sì: le scansioni vengono lette con l’OCR prima del confronto.'],
+        ['Funziona con documenti scansionati?', 'Sì: le scansioni vengono lette con l\u2019OCR prima del confronto.'],
         ['Posso confrontare più di due versioni?', 'Sì: ciascuna con la precedente o tutte con la prima.'],
       ],
     },
@@ -3481,12 +3506,12 @@ const SEO = (() => {
       slug: 'oscurare-pdf', title: 'Oscurare PDF: anonimizza i dati sensibili',
       desc: 'Oscura per sempre nomi, codici fiscali, IBAN e indirizzi in un PDF: vengono trovati da soli, anche nelle scansioni. Gratis e senza limiti. Apri il PDF.',
       h1: 'Oscura PDF', h2: 'Come oscurare parti di un PDF in modo definitivo', rel: ["ocr", "pdfa", "comprimi"],
-      steps: ['Apri il PDF da anonimizzare.', 'Premi «Trova i dati sensibili» o cerca le parole da coprire, poi controlla i riquadri.', 'Applica l’oscuramento e scarica il PDF anonimizzato.'],
+      steps: ['Apri il PDF da anonimizzare.', 'Premi «Trova i dati sensibili» o cerca le parole da coprire, poi controlla i riquadri.', 'Applica l\u2019oscuramento e scarica il PDF anonimizzato.'],
       faq: [
         ['Basta coprire il testo con un rettangolo nero?', 'No: un rettangolo disegnato sopra lascia il testo nel file, che si può ancora copiare o cercare. Qui il testo coperto viene eliminato dal PDF, non solo nascosto.'],
         ['Posso anonimizzare un atto prima di pubblicarlo?', 'Sì: «Trova i dati sensibili» individua nomi, codici fiscali, IBAN, indirizzi e altri dati; controlli i riquadri, aggiungi quelli mancanti e scarichi il PDF anonimizzato. Rileggi sempre il risultato prima di pubblicarlo.'],
-        ['L’oscuramento è definitivo?', 'Sì: il testo coperto viene eliminato dal file, non solo nascosto da un rettangolo, e non si può più copiare né cercare.'],
-        ['Quali dati vengono trovati automaticamente?', 'Nomi e cognomi, codici fiscali e partite IVA (con controllo del codice), IBAN, numeri di telefono, indirizzi, email, date e luoghi di nascita, documenti d’identità e targhe.'],
+        ['L\u2019oscuramento è definitivo?', 'Sì: il testo coperto viene eliminato dal file, non solo nascosto da un rettangolo, e non si può più copiare né cercare.'],
+        ['Quali dati vengono trovati automaticamente?', 'Nomi e cognomi, codici fiscali e partite IVA (con controllo del codice), IBAN, numeri di telefono, indirizzi, email, date e luoghi di nascita, documenti d\u2019identità e targhe.'],
         ['Funziona su pagine con sfondo scuro?', 'Sì: il colore del riquadro si adatta allo sfondo di ogni dato, oppure puoi sceglierlo tu, riquadro per riquadro.'],
       ],
     },
@@ -3497,10 +3522,10 @@ const SEO = (() => {
       steps: ['Trascina uno o più estratti conto in PDF (anche scansioni o foto).', 'Controlla i movimenti letti e la verifica dei saldi.', 'Scarica il foglio Excel con tutti i movimenti.'],
       faq: [
         ['Come trasformo un estratto conto PDF in Excel?', 'Trascina il PDF nel riquadro: i movimenti vengono letti e messi in colonne (data, valuta, descrizione, entrate, uscite, saldo). Controlli la verifica dei saldi e scarichi il file Excel.'],
-        ['Come faccio a sapere che non manca nessun movimento?', 'Viene fatto un controllo automatico: saldo iniziale più movimenti deve dare il saldo finale indicato nell’estratto. Se i conti non tornano, lo vedi subito.'],
+        ['Come faccio a sapere che non manca nessun movimento?', 'Viene fatto un controllo automatico: saldo iniziale più movimenti deve dare il saldo finale indicato nell\u2019estratto. Se i conti non tornano, lo vedi subito.'],
         ['Posso unire gli estratti conto di più mesi?', 'Sì: trascinali insieme e ottieni un unico foglio con i movimenti di tutti i periodi, in ordine.'],
         ['Funziona con gli estratti conto scansionati?', 'Sì: le scansioni e le foto vengono lette con il riconoscimento del testo (OCR), direttamente nel browser.'],
-        ['I miei dati bancari vengono inviati da qualche parte?', 'No: l’estratto conto viene letto nel tuo browser e non viene caricato su alcun server.'],
+        ['I miei dati bancari vengono inviati da qualche parte?', 'No: l\u2019estratto conto viene letto nel tuo browser e non viene caricato su alcun server.'],
       ],
     },
     f24: {
@@ -3509,10 +3534,10 @@ const SEO = (() => {
       h1: 'F24 e dichiarazioni in Excel', h2: 'Come portare F24 e dichiarazioni dei redditi in Excel', rel: ["estrattoconto", "excel", "fatture"],
       steps: ['Trascina i modelli F24 o le dichiarazioni in PDF, anche tanti insieme.', 'Controlla i dati letti e la verifica del saldo.', 'Scarica il foglio Excel con il riepilogo per codice tributo.'],
       faq: [
-        ['Come metto in Excel i dati di un F24?', 'Trascina l’F24 nel riquadro: sezioni (erario, INPS, regioni, IMU), codici tributo, anni di riferimento e importi finiscono in colonne, con il controllo del saldo del modello.'],
+        ['Come metto in Excel i dati di un F24?', 'Trascina l\u2019F24 nel riquadro: sezioni (erario, INPS, regioni, IMU), codici tributo, anni di riferimento e importi finiscono in colonne, con il controllo del saldo del modello.'],
         ['Quali modelli vengono letti?', 'F24 (sezioni erario, INPS, regioni e IMU), Certificazione Unica (CU), 730, Redditi, IRAP e dichiarazione IVA: righi, colonne e importi.'],
         ['Posso elaborare gli F24 di tutti i clienti insieme?', 'Sì: trascina tanti file insieme e ottieni un unico foglio con un riepilogo per codice tributo.'],
-        ['Funziona con le quietanze scansionate?', 'Sì: le scansioni vengono lette con l’OCR nel browser. Controlla sempre gli importi segnalati come incerti.'],
+        ['Funziona con le quietanze scansionate?', 'Sì: le scansioni vengono lette con l\u2019OCR nel browser. Controlla sempre gli importi segnalati come incerti.'],
         ['I dati fiscali escono dal mio computer?', 'No: i documenti vengono letti nel browser e non vengono caricati su alcun server.'],
       ],
     },
@@ -3525,7 +3550,7 @@ const SEO = (() => {
         ['Quali dati vengono letti da una visura camerale?', 'Denominazione, forma giuridica, codice fiscale e partita IVA, numero REA, PEC, sede, codice ATECO, capitale sociale e amministratori con le cariche.'],
         ['E da una visura catastale?', 'Comune, foglio, particella e subalterno, categoria, classe, consistenza, rendita, intestati con le quote e il valore ai fini IMU calcolato dalla rendita.'],
         ['Posso elaborare più visure insieme?', 'Sì: trascinale insieme e ottieni un foglio con una riga per ogni impresa o immobile.'],
-        ['Il valore IMU è quello da versare?', 'È la base imponibile calcolata dalla rendita con i coefficienti di legge: per l’imposta servono l’aliquota del Comune e la quota di possesso.'],
+        ['Il valore IMU è quello da versare?', 'È la base imponibile calcolata dalla rendita con i coefficienti di legge: per l\u2019imposta servono l\u2019aliquota del Comune e la quota di possesso.'],
         ['Le visure vengono caricate su un server?', 'No: vengono lette nel browser, sul tuo dispositivo.'],
       ],
     },
@@ -3536,35 +3561,35 @@ const SEO = (() => {
       steps: ['Trascina uno o più referti in PDF o in foto.', 'Controlla la tabella: i valori fuori intervallo sono evidenziati.', 'Scarica la tabella in Excel, con il confronto tra le date.'],
       faq: [
         ['Come confronto gli esami del sangue di date diverse?', 'Trascina insieme i referti: ogni esame diventa una riga e ogni data una colonna, così vedi come cambiano i valori nel tempo.'],
-        ['Quali valori vengono evidenziati?', 'Quelli fuori dall’intervallo di riferimento indicato nel referto stesso. Non è un parere medico: per l’interpretazione rivolgiti al tuo medico.'],
-        ['Posso usare la foto del referto?', 'Sì: le foto e le scansioni vengono lette con l’OCR nel browser.'],
+        ['Quali valori vengono evidenziati?', 'Quelli fuori dall\u2019intervallo di riferimento indicato nel referto stesso. Non è un parere medico: per l\u2019interpretazione rivolgiti al tuo medico.'],
+        ['Posso usare la foto del referto?', 'Sì: le foto e le scansioni vengono lette con l\u2019OCR nel browser.'],
         ['I miei dati sanitari sono al sicuro?', 'Il referto non viene caricato su alcun server: viene letto nel browser, sul tuo dispositivo.'],
         ['Posso fare la tabella per un familiare?', 'Sì, con qualsiasi referto di laboratorio in formato PDF o immagine.'],
       ],
     },
     qrsepa: {
       slug: 'qr-pagamento-sepa', title: 'QR di pagamento SEPA per bonifico, anche dalla fattura',
-      desc: 'Crea il codice QR per pagare con bonifico (standard EPC): con l’app della banca si compilano IBAN, beneficiario, importo e causale. Dalla fattura XML o a mano.',
+      desc: 'Crea il codice QR per pagare con bonifico (standard EPC): con l\u2019app della banca si compilano IBAN, beneficiario, importo e causale. Dalla fattura XML o a mano.',
       h1: 'QR di pagamento SEPA', h2: 'Come creare un QR code per ricevere un bonifico', rel: ["fatture", "conforme", "numeri"],
       steps: ['Trascina la fattura (XML, P7M, ZIP o PDF) oppure scrivi i dati a mano.', 'Controlla IBAN, beneficiario, importo e causale.', 'Scarica il QR in PNG o SVG, o stampalo sulla fattura.'],
       faq: [
-        ['Che cos’è il QR di pagamento SEPA?', 'È un codice QR secondo lo standard europeo EPC per i bonifici: inquadrato con l’app di una banca che lo supporta, compila IBAN, beneficiario, importo e causale senza doverli scrivere.'],
+        ['Che cos\u2019è il QR di pagamento SEPA?', 'È un codice QR secondo lo standard europeo EPC per i bonifici: inquadrato con l\u2019app di una banca che lo supporta, compila IBAN, beneficiario, importo e causale senza doverli scrivere.'],
         ['Posso metterlo sulla fattura?', 'Sì: dalla fattura in PDF ottieni lo stesso PDF con il QR stampato nella posizione che scegli; dalla fattura elettronica XML i dati si compilano da soli.'],
         ['Tutte le app bancarie lo leggono?', 'Molte app italiane ed europee lo leggono. Se la tua non lo fa, i dati del bonifico restano scritti accanto al codice.'],
-        ['L’IBAN viene controllato?', 'Sì: viene verificato il codice di controllo dell’IBAN prima di creare il QR, per evitare bonifici a un conto sbagliato.'],
+        ['L\u2019IBAN viene controllato?', 'Sì: viene verificato il codice di controllo dell\u2019IBAN prima di creare il QR, per evitare bonifici a un conto sbagliato.'],
         ['Serve un account o un servizio a pagamento?', 'No: il QR si crea nel browser, gratis e senza registrazione.'],
       ],
     },
     conforme: {
-      slug: 'copia-conforme-pdf', title: 'Copia conforme all’originale: dicitura sul PDF',
-      desc: 'Aggiungi al PDF la dicitura di conformità all’originale, con luogo, data, nome e impronta del file, in calce, su ogni pagina o su un foglio a parte. Gratis.',
-      h1: 'Copia conforme', h2: 'Come aggiungere l’attestazione di conformità a un PDF', rel: ["pdfa", "firme", "numeri"],
-      steps: ['Apri il PDF da dichiarare conforme.', 'Scegli il testo dell’attestazione, dove metterla e i tuoi dati.', 'Scarica il PDF e firmalo con il tuo dispositivo di firma digitale.'],
+      slug: 'copia-conforme-pdf', title: 'Copia conforme all\u2019originale: dicitura sul PDF',
+      desc: 'Aggiungi al PDF la dicitura di conformità all\u2019originale, con luogo, data, nome e impronta del file, in calce, su ogni pagina o su un foglio a parte. Gratis.',
+      h1: 'Copia conforme', h2: 'Come aggiungere l\u2019attestazione di conformità a un PDF', rel: ["pdfa", "firme", "numeri"],
+      steps: ['Apri il PDF da dichiarare conforme.', 'Scegli il testo dell\u2019attestazione, dove metterla e i tuoi dati.', 'Scarica il PDF e firmalo con il tuo dispositivo di firma digitale.'],
       faq: [
-        ['Chi può usare la dicitura di conformità?', 'Avvocati, notai, pubblici ufficiali e professionisti che possono attestare la conformità di una copia all’originale: lo strumento prepara il documento, la responsabilità dell’attestazione resta di chi firma.'],
-        ['Dove viene messa l’attestazione?', 'In calce all’ultima pagina, su una pagina aggiunta in fondo, su ogni pagina (una riga breve su ciascuna e la dicitura completa sull’ultima) oppure in un documento separato che lascia il PDF intatto e ne cita nome e impronta.'],
-        ['A cosa serve l’impronta del file?', 'L’impronta (hash SHA-256) identifica in modo univoco il documento: chi lo riceve può verificare che sia proprio quello attestato.'],
-        ['La firma digitale si fa qui?', 'No: scarichi il PDF con l’attestazione e lo firmi con il tuo dispositivo o servizio di firma digitale.'],
+        ['Chi può usare la dicitura di conformità?', 'Avvocati, notai, pubblici ufficiali e professionisti che possono attestare la conformità di una copia all\u2019originale: lo strumento prepara il documento, la responsabilità dell\u2019attestazione resta di chi firma.'],
+        ['Dove viene messa l\u2019attestazione?', 'In calce all\u2019ultima pagina, su una pagina aggiunta in fondo, su ogni pagina (una riga breve su ciascuna e la dicitura completa sull\u2019ultima) oppure in un documento separato che lascia il PDF intatto e ne cita nome e impronta.'],
+        ['A cosa serve l\u2019impronta del file?', 'L\u2019impronta (hash SHA-256) identifica in modo univoco il documento: chi lo riceve può verificare che sia proprio quello attestato.'],
+        ['La firma digitale si fa qui?', 'No: scarichi il PDF con l\u2019attestazione e lo firmi con il tuo dispositivo o servizio di firma digitale.'],
         ['Il PDF viene caricato su un server?', 'No: tutto avviene nel browser.'],
       ],
     },
@@ -3572,12 +3597,12 @@ const SEO = (() => {
       slug: 'misurare-pdf-in-scala', title: 'Misurare distanze e superfici su un PDF in scala',
       desc: 'Misura distanze, percorsi, superfici e angoli su tavole e planimetrie in PDF: imposta la scala o tarala su una quota nota. Misure salvate nel PDF e in Excel.',
       h1: 'Misure in scala sul PDF', h2: 'Come misurare una planimetria in PDF', rel: ["tavola", "modifica", "impagina"],
-      steps: ['Apri la tavola o la planimetria in PDF.', 'Imposta la scala (1:100, 1:50…) o tarala su una quota nota.', 'Misura distanze, superfici e angoli e salva le misure nel PDF o in Excel.'],
+      steps: ['Apri la tavola o la planimetria in PDF.', 'Imposta la scala (1:100, 1:50\u2026) o tarala su una quota nota.', 'Misura distanze, superfici e angoli e salva le misure nel PDF o in Excel.'],
       faq: [
-        ['Come misuro una superficie su una planimetria?', 'Imposta la scala, scegli la misura di superficie e fai clic sui vertici del perimetro: l’area viene calcolata in metri quadrati.'],
+        ['Come misuro una superficie su una planimetria?', 'Imposta la scala, scegli la misura di superficie e fai clic sui vertici del perimetro: l\u2019area viene calcolata in metri quadrati.'],
         ['E se non conosco la scala?', 'Tarala su una quota nota: tracci un segmento di cui conosci la lunghezza reale (una porta, una quota scritta) e la scala si calcola da sola.'],
         ['Le misure sono precise?', 'Sui PDF esportati dal CAD sì, perché le linee sono vettoriali. Sulle scansioni la precisione dipende dalla qualità e dalla deformazione della scansione.'],
-        ['Posso consegnare le misure?', 'Sì: restano disegnate nel PDF e puoi scaricarne l’elenco in Excel.'],
+        ['Posso consegnare le misure?', 'Sì: restano disegnate nel PDF e puoi scaricarne l\u2019elenco in Excel.'],
         ['Serve un programma CAD?', 'No: basta il browser, anche su tablet.'],
       ],
     },
@@ -3589,7 +3614,7 @@ const SEO = (() => {
       faq: [
         ['Quante battute ha una cartella editoriale?', 'La cartella editoriale standard è di 1.800 battute, spazi inclusi: il numero di cartelle viene calcolato così.'],
         ['Gli spazi vengono contati?', 'Vengono mostrati entrambi i valori: caratteri spazi inclusi e caratteri senza spazi.'],
-        ['Posso contare le parole di un PDF scansionato?', 'Sì: le pagine scansionate e le foto vengono lette con l’OCR prima del conteggio.'],
+        ['Posso contare le parole di un PDF scansionato?', 'Sì: le pagine scansionate e le foto vengono lette con l\u2019OCR prima del conteggio.'],
         ['Posso contare più file insieme?', 'Sì: ottieni il conteggio di ogni file e il totale.'],
         ['Posso fissare un limite di caratteri?', 'Sì: imposti il limite e vedi subito quanto manca o quanto lo superi.'],
       ],
@@ -3602,7 +3627,7 @@ const SEO = (() => {
       faq: [
         ['Cosa contiene il modello Word?', 'Frontespizio con i tuoi dati, indice automatico, capitoli con gli stili dei titoli, bibliografia (note a piè di pagina o autore-anno), margini, interlinea, carattere e numeri di pagina già impostati.'],
         ['Cosa viene controllato nel PDF della tesi?', 'Margini, carattere e dimensione, interlinea, numero di pagine e di parole, e se il file è un PDF/A valido.'],
-        ['L’università chiede la tesi in PDF/A: come faccio?', 'Il controllo ti dice se il file è già PDF/A; se non lo è, con «PDF in PDF/A» lo converti e lo verifichi, nel browser.'],
+        ['L\u2019università chiede la tesi in PDF/A: come faccio?', 'Il controllo ti dice se il file è già PDF/A; se non lo è, con «PDF in PDF/A» lo converti e lo verifichi, nel browser.'],
         ['Il testo della tesi viene inviato a qualcuno?', 'No: il PDF viene analizzato nel browser, sul tuo dispositivo.'],
         ['Va bene per qualsiasi ateneo?', 'Scegli tra le impostazioni più diffuse per triennale, magistrale e dottorato; verifica sempre le indicazioni del tuo corso di laurea.'],
       ],
@@ -3614,10 +3639,10 @@ const SEO = (() => {
       steps: ['Trascina la foto o la scansione del timbro, del logo o della firma.', 'Regola colori, spessore e pulizia delle macchie.', 'Scarica in SVG o in PNG trasparente, o salvalo tra i tuoi timbri.'],
       faq: [
         ['Come ottengo un timbro senza sfondo?', 'Fotografa il timbro su carta bianca e trascina la foto: lo sfondo viene tolto e ottieni un PNG trasparente o un SVG da mettere sui documenti.'],
-        ['Che differenza c’è tra SVG e PNG?', 'L’SVG è vettoriale: si ingrandisce senza perdere nitidezza ed è adatto a stampe e loghi. Il PNG è un’immagine a punti, comoda per incollarla ovunque.'],
+        ['Che differenza c\u2019è tra SVG e PNG?', 'L\u2019SVG è vettoriale: si ingrandisce senza perdere nitidezza ed è adatto a stampe e loghi. Il PNG è un\u2019immagine a punti, comoda per incollarla ovunque.'],
         ['Posso usarlo poi nei PDF?', 'Sì: salvato tra i tuoi timbri, lo inserisci con un clic in «Modifica PDF».'],
         ['Funziona con i loghi a più colori?', 'Sì: scegli quanti colori tenere e vengono separati in zone pulite.'],
-        ['L’immagine viene caricata su un server?', 'No: viene elaborata nel browser.'],
+        ['L\u2019immagine viene caricata su un server?', 'No: viene elaborata nel browser.'],
       ],
     },
     tavola: {
@@ -3629,7 +3654,7 @@ const SEO = (() => {
         ['Come stampo una tavola A1 con una stampante A4?', 'Apri la tavola, scegli fogli A4: ottieni un PDF con tanti fogli quanti servono, ciascuno numerato, da stampare al 100% (senza «adatta alla pagina») e da unire.'],
         ['La scala resta quella reale?', 'Sì: le misure sulla carta restano quelle della tavola. Stampa sempre al 100% delle dimensioni.'],
         ['Come unisco i fogli?', 'Ogni foglio ha una parte che si sovrappone al vicino, con crocini e numero di riga e colonna: allinea i crocini e incolla.'],
-        ['Posso invece ridurla su un solo foglio?', 'Sì: puoi stampare l’intera tavola ridotta su un unico A4 o A3.'],
+        ['Posso invece ridurla su un solo foglio?', 'Sì: puoi stampare l\u2019intera tavola ridotta su un unico A4 o A3.'],
         ['Serve un programma CAD?', 'No: basta il PDF della tavola e il browser.'],
       ],
     },
@@ -3637,10 +3662,10 @@ const SEO = (() => {
       slug: 'word-excel-in-pdf', title: 'Word, Excel e PowerPoint in PDF, gratis e senza upload',
       desc: 'Converti documenti Word (.docx), fogli Excel (.xlsx), presentazioni PowerPoint (.pptx), testi e pagine HTML in PDF nel browser: titoli, tabelle, immagini e numeri di pagina al loro posto.',
       h1: 'Word, Excel e PowerPoint in PDF', h2: 'Come trasformare un documento Word, un foglio Excel o una presentazione in PDF', rel: ["unisci", "pdfa", "comprimi"],
-      steps: ['Trascina uno o più file Word, Excel, testo o HTML.', 'Scegli il formato della pagina e, per Excel, l’orientamento.', 'Converti e scarica il PDF (o un PDF per file).'],
+      steps: ['Trascina uno o più file Word, Excel, testo o HTML.', 'Scegli il formato della pagina e, per Excel, l\u2019orientamento.', 'Converti e scarica il PDF (o un PDF per file).'],
       faq: [
-        ['Come trasformo un documento Word in PDF senza Word?', 'Trascina il file .docx nel riquadro e premi «Converti in PDF»: la conversione avviene nel browser, con caratteri dalle stesse misure di Arial, Times New Roman e Courier, così il testo occupa lo stesso spazio che nell’originale.'],
-        ['Un foglio Excel largo esce tagliato?', 'No: ogni foglio si adatta alla larghezza della pagina e, se serve, gira in orizzontale. Se le colonne sono davvero troppe, vengono divise in gruppi uno dopo l’altro, senza perdere dati.'],
+        ['Come trasformo un documento Word in PDF senza Word?', 'Trascina il file .docx nel riquadro e premi «Converti in PDF»: la conversione avviene nel browser, con caratteri dalle stesse misure di Arial, Times New Roman e Courier, così il testo occupa lo stesso spazio che nell\u2019originale.'],
+        ['Un foglio Excel largo esce tagliato?', 'No: ogni foglio si adatta alla larghezza della pagina e, se serve, gira in orizzontale. Se le colonne sono davvero troppe, vengono divise in gruppi uno dopo l\u2019altro, senza perdere dati.'],
         ['Cosa viene mantenuto del documento Word?', 'Titoli, paragrafi con allineamento e rientri, grassetti e colori, elenchi puntati e numerati, tabelle con celle unite e sfondi, immagini, salti di pagina, intestazioni e piè di pagina con il numero di pagina.'],
         ['Posso convertire una presentazione PowerPoint?', 'Sì: ogni diapositiva diventa una pagina, con caselle di testo, elenchi, colori del tema, immagini e tabelle al loro posto. Grafici e SmartArt non sono ancora inclusi: il PDF lo segnala.'],
         ['Posso convertire i vecchi .doc, .xls e .ppt?', 'Il browser non sa leggere quei formati: aprili con il programma che li ha creati e salvali come .docx, .xlsx o .pptx (oppure direttamente in PDF).'],
@@ -3651,9 +3676,9 @@ const SEO = (() => {
       slug: 'filigrana-pdf', title: 'Filigrana su PDF: scritta o logo su ogni pagina',
       desc: 'Aggiungi una filigrana a un PDF: «COPIA», «BOZZA» o il tuo logo, in diagonale, al centro, in basso o ripetuta, su tutte le pagine o solo su alcune. Gratis e senza upload.',
       h1: 'Filigrana PDF', h2: 'Come aggiungere una filigrana a un PDF', rel: ["numeri", "proteggi", "modifica"],
-      steps: ['Apri il PDF.', 'Scrivi il testo o scegli un’immagine, la disposizione e l’intensità: l’anteprima si aggiorna subito.', 'Applica e scarica il PDF con la filigrana.'],
+      steps: ['Apri il PDF.', 'Scrivi il testo o scegli un\u2019immagine, la disposizione e l\u2019intensità: l\u2019anteprima si aggiorna subito.', 'Applica e scarica il PDF con la filigrana.'],
       faq: [
-        ['Come metto la scritta «COPIA» su tutte le pagine?', 'Apri il PDF, scrivi «COPIA» (o «BOZZA», «RISERVATO»…), scegli la disposizione in diagonale e premi «Applica la filigrana»: la scritta compare su ogni pagina, semitrasparente.'],
+        ['Come metto la scritta «COPIA» su tutte le pagine?', 'Apri il PDF, scrivi «COPIA» (o «BOZZA», «RISERVATO»\u2026), scegli la disposizione in diagonale e premi «Applica la filigrana»: la scritta compare su ogni pagina, semitrasparente.'],
         ['Posso usare il logo dello studio?', 'Sì: scegli «Immagine» e un file PNG (meglio con lo sfondo trasparente) o JPG; puoi metterlo al centro, in basso o ripeterlo su tutta la pagina.'],
         ['Posso mettere la filigrana solo su alcune pagine?', 'Sì: tutte, solo le dispari, solo le pari oppure un intervallo come 1-3, 5.'],
         ['Il testo del documento resta selezionabile?', 'Sì: la filigrana si aggiunge sopra la pagina senza trasformarla in immagine.'],
@@ -3662,28 +3687,28 @@ const SEO = (() => {
     },
     pdftesto: {
       slug: 'pdf-in-testo', title: 'PDF in testo e HTML: estrai il testo, anche dalle scansioni',
-      desc: 'Estrai il testo di un PDF nell’ordine di lettura, anche dalle scansioni con l’OCR: file .txt e pagina web .html con titoli e paragrafi. Gratis e senza upload.',
+      desc: 'Estrai il testo di un PDF nell\u2019ordine di lettura, anche dalle scansioni con l\u2019OCR: file .txt e pagina web .html con titoli e paragrafi. Gratis e senza upload.',
       h1: 'PDF in testo e HTML', h2: 'Come estrarre il testo da un PDF', rel: ["ocr", "word", "conta"],
-      steps: ['Apri il PDF.', 'Controlla il testo nell’anteprima (le scansioni si leggono da sole).', 'Scarica il .txt, la pagina .html o entrambi.'],
+      steps: ['Apri il PDF.', 'Controlla il testo nell\u2019anteprima (le scansioni si leggono da sole).', 'Scarica il .txt, la pagina .html o entrambi.'],
       faq: [
-        ['Come copio tutto il testo di un PDF?', 'Apri il PDF: il testo compare nell’anteprima nell’ordine di lettura, con i paragrafi. Scarica il file .txt e copialo dove ti serve.'],
-        ['Funziona con un PDF scansionato?', 'Sì: le pagine senza testo vengono lette con l’OCR, nel browser. Controlla nomi e numeri, che la lettura può sbagliare.'],
+        ['Come copio tutto il testo di un PDF?', 'Apri il PDF: il testo compare nell\u2019anteprima nell\u2019ordine di lettura, con i paragrafi. Scarica il file .txt e copialo dove ti serve.'],
+        ['Funziona con un PDF scansionato?', 'Sì: le pagine senza testo vengono lette con l\u2019OCR, nel browser. Controlla nomi e numeri, che la lettura può sbagliare.'],
         ['A cosa serve la versione HTML?', 'È una pagina web con titoli e paragrafi: si legge bene sul telefono, si ingrandisce senza scorrere di lato ed è comoda per i lettori di schermo.'],
-        ['Le colonne restano nell’ordine giusto?', 'Il testo segue l’ordine di lettura della pagina, colonna per colonna.'],
+        ['Le colonne restano nell\u2019ordine giusto?', 'Il testo segue l\u2019ordine di lettura della pagina, colonna per colonna.'],
         ['Il PDF viene caricato su un server?', 'No: tutto avviene sul tuo dispositivo.'],
       ],
     },
     pdfppt: {
       slug: 'pdf-in-powerpoint', title: 'PDF in PowerPoint modificabile, anche da scansione, gratis',
-      desc: 'Trasforma un PDF in una presentazione PowerPoint (.pptx) con il testo modificabile: carattere, dimensione, colore e posizione dell’originale. Anche dalle scansioni. Senza upload.',
+      desc: 'Trasforma un PDF in una presentazione PowerPoint (.pptx) con il testo modificabile: carattere, dimensione, colore e posizione dell\u2019originale. Anche dalle scansioni. Senza upload.',
       h1: 'PDF in PowerPoint', h2: 'Come trasformare un PDF in una presentazione modificabile', rel: ["officepdf", "immaginipdf", "word"],
       steps: ['Apri il PDF.', 'Scegli «Testo modificabile» (oppure «Pagine identiche») e la qualità delle immagini.', 'Crea la presentazione e aprila con PowerPoint, Keynote o Google Presentazioni.'],
       faq: [
-        ['Posso modificare il testo nelle diapositive?', 'Sì: il testo diventa caselle di testo vere, a paragrafi, con il carattere, la dimensione, il colore, l’interlinea e l’allineamento dell’originale. Immagini, linee e colori di fondo restano identici sotto il testo.'],
-        ['Funziona con un PDF scansionato?', 'Sì: le pagine scansionate vengono lette con l’OCR, sul tuo dispositivo; la scritta originale si toglie dall’immagine e al suo posto c’è il testo modificabile, inclinato come nella scansione. Dove la carta intorno non è uniforme (timbri, cornici) la scritta resta nell’immagine e il suo testo va nelle note. Controlla nomi e numeri.'],
-        ['Le diapositive sono uguali al PDF?', 'Sì, a meno di differenze minime dovute ai caratteri installati sul computer. Se ti serve la copia esatta, scegli «Pagine identiche»: ogni pagina diventa un’immagine fedele e il testo va nelle note del relatore.'],
+        ['Posso modificare il testo nelle diapositive?', 'Sì: il testo diventa caselle di testo vere, a paragrafi, con il carattere, la dimensione, il colore, l\u2019interlinea e l\u2019allineamento dell\u2019originale. Immagini, linee e colori di fondo restano identici sotto il testo.'],
+        ['Funziona con un PDF scansionato?', 'Sì: le pagine scansionate vengono lette con l\u2019OCR, sul tuo dispositivo; la scritta originale si toglie dall\u2019immagine e al suo posto c\u2019è il testo modificabile, inclinato come nella scansione. Dove la carta intorno non è uniforme (timbri, cornici) la scritta resta nell\u2019immagine e il suo testo va nelle note. Controlla nomi e numeri.'],
+        ['Le diapositive sono uguali al PDF?', 'Sì, a meno di differenze minime dovute ai caratteri installati sul computer. Se ti serve la copia esatta, scegli «Pagine identiche»: ogni pagina diventa un\u2019immagine fedele e il testo va nelle note del relatore.'],
         ['Con quali programmi si apre?', 'Con PowerPoint, Keynote, Google Presentazioni e LibreOffice Impress.'],
-        ['C’è un limite di pagine?', 'No: il limite è la memoria del dispositivo. 300 pagine di testo si convertono in meno di un minuto.'],
+        ['C\u2019è un limite di pagine?', 'No: il limite è la memoria del dispositivo. 300 pagine di testo si convertono in meno di un minuto.'],
         ['Il PDF viene caricato su un server?', 'No: la presentazione si crea nel browser.'],
       ],
     },
@@ -3694,24 +3719,57 @@ const SEO = (() => {
       steps: ['Apri il PDF.', 'Scegli Evidenzia, Sottolinea, Barra, Nota o Testo e lavora sulla pagina; scrivi i commenti nel pannello.', 'Salva il PDF con i commenti (e, se vuoi, il riepilogo).'],
       faq: [
         ['I commenti si vedono in Acrobat?', 'Sì: sono annotazioni PDF vere, con autore e data. Si vedono, si spostano e si rispondono in Acrobat Reader, Anteprima di macOS, Chrome, Edge e Firefox.'],
-        ['Posso evidenziare un PDF scansionato?', 'Sì: sulle scansioni l’evidenziatura segue il riquadro che trascini; sui PDF con testo segue le righe del testo.'],
+        ['Posso evidenziare un PDF scansionato?', 'Sì: sulle scansioni l\u2019evidenziatura segue il riquadro che trascini; sui PDF con testo segue le righe del testo.'],
         ['Come raccolgo tutti i commenti?', 'Insieme al PDF puoi scaricare il riepilogo: per ogni commento la pagina, il tipo, il testo evidenziato e la nota.'],
-        ['Il testo del documento cambia?', 'No: i commenti stanno sopra la pagina e si possono togliere; il documento resta com’è.'],
+        ['Il testo del documento cambia?', 'No: i commenti stanno sopra la pagina e si possono togliere; il documento resta com\u2019è.'],
         ['Il PDF viene caricato su un server?', 'No: tutto avviene nel browser.'],
       ],
     },
     contratto: {
       slug: 'contratto-affitto-comodato', title: 'Contratto di affitto e comodato gratuito: compilazione guidata, PDF e Word',
-      desc: 'Contratto di locazione 4+4, 3+2 a canone concordato, transitorio, per studenti, a uso negozio o ufficio, uso foresteria, box auto, affitto di terreni agricoli e comodato d’uso gratuito: compilazione guidata, clausole a scelta, testo modificabile, PDF e Word. Senza upload.',
+      desc: 'Contratto di locazione 4+4, 3+2 a canone concordato, transitorio, per studenti, a uso negozio o ufficio, uso foresteria, box auto, affitto di terreni agricoli e comodato d\u2019uso gratuito: compilazione guidata, clausole a scelta, testo modificabile, PDF e Word. Senza upload.',
       h1: 'Contratto di affitto e comodato', h2: 'Come scrivere un contratto di affitto o di comodato', rel: ["visure", "firme", "modifica"],
       steps: ['Scegli il tipo di contratto (4+4, 3+2, transitorio, studenti, uso diverso, foresteria, box auto, fondo rustico o comodato).', 'Compila i dati nella colonna: quelli obbligatori sono segnati, i dati catastali si leggono anche dalla visura in PDF.', 'Scegli le clausole facoltative, modifica gli articoli che vuoi e scarica PDF, Word e il promemoria di registrazione.'],
       faq: [
-        ['Quali contratti posso fare?', 'Locazione abitativa a canone libero (4+4), a canone concordato (3+2), transitoria (da 1 a 18 mesi), per studenti universitari (da 6 a 36 mesi), locazione a uso diverso (negozio, ufficio, laboratorio: 6+6), locazione a uso foresteria (a un’impresa per i suoi dipendenti), locazione di box auto o posto auto, affitto di fondo rustico (terreni agricoli, legge 203/1982, anche con patti in deroga) e comodato d’uso gratuito di immobile.'],
-        ['Il contratto rispetta la legge?', 'Il testo segue la legge 431/1998, la legge 392/1978, il D.M. 16 gennaio 2017, la legge 203/1982 sui contratti agrari e il codice civile, citati articolo per articolo. Durate minime, deposito massimo di tre mensilità, clausola sull’APE e pagamento tracciabile sono applicati da soli; le clausole nulle non vengono mai proposte. Per i casi particolari è sempre bene farlo vedere a un professionista.'],
-        ['Posso modificare il testo?', 'Sì: ogni articolo si modifica direttamente nell’anteprima, si può togliere un articolo facoltativo e aggiungere clausole personalizzate. Il Word scaricato si modifica come qualsiasi documento.'],
-        ['Mi dice come registrarlo?', 'Sì: insieme al contratto c’è il promemoria con la scadenza della registrazione, l’imposta di registro e i bolli calcolati, la cedolare secca (con la lettera per l’inquilino) e le comunicazioni da fare.'],
+        ['Quali contratti posso fare?', 'Locazione abitativa a canone libero (4+4), a canone concordato (3+2), transitoria (da 1 a 18 mesi), per studenti universitari (da 6 a 36 mesi), locazione a uso diverso (negozio, ufficio, laboratorio: 6+6), locazione a uso foresteria (a un\u2019impresa per i suoi dipendenti), locazione di box auto o posto auto, affitto di fondo rustico (terreni agricoli, legge 203/1982, anche con patti in deroga) e comodato d\u2019uso gratuito di immobile.'],
+        ['Il contratto rispetta la legge?', 'Il testo segue la legge 431/1998, la legge 392/1978, il D.M. 16 gennaio 2017, la legge 203/1982 sui contratti agrari e il codice civile, citati articolo per articolo. Durate minime, deposito massimo di tre mensilità, clausola sull\u2019APE e pagamento tracciabile sono applicati da soli; le clausole nulle non vengono mai proposte. Per i casi particolari è sempre bene farlo vedere a un professionista.'],
+        ['Posso modificare il testo?', 'Sì: ogni articolo si modifica direttamente nell\u2019anteprima, si può togliere un articolo facoltativo e aggiungere clausole personalizzate. Il Word scaricato si modifica come qualsiasi documento.'],
+        ['Mi dice come registrarlo?', 'Sì: insieme al contratto c\u2019è il promemoria con la scadenza della registrazione, l\u2019imposta di registro e i bolli calcolati, la cedolare secca (con la lettera per l\u2019inquilino) e le comunicazioni da fare.'],
         ['Posso usare la visura catastale?', 'Sì: trascina la visura in PDF e foglio, particella, subalterno, categoria, rendita, indirizzo, pertinenze e proprietari si compilano da soli.'],
         ['I dati vengono inviati da qualche parte?', 'No: tutto avviene nel browser. La bozza resta solo su questo dispositivo, oppure la salvi tu in un file.'],
+      ],
+    },
+    leggicontratto: {
+      slug: 'analisi-contratto-clausole', title: 'Analisi di un contratto ricevuto: clausole vessatorie e illegittime prima di firmare',
+      desc: 'Carica il contratto da firmare (PDF anche scansionato, Word o testo): deposito oltre tre mensilità, durata sotto il minimo, foro sbagliato, recesso escluso, spese straordinarie all\u2019inquilino, rinnovo tacito, penali, modifiche unilaterali, clausole senza doppia firma. Frase esatta, norma e modifica da chiedere. Senza upload.',
+      h1: 'Analisi di un contratto ricevuto', h2: 'Come controllare un contratto prima di firmarlo', rel: ["contratto", "confronta", "oscura"],
+      steps: ['Carica il contratto (PDF, anche scansionato, Word, foto) oppure incolla il testo.', 'Guarda le clausole da cambiare, da guardare e da sapere: per ognuna la frase esatta evidenziata nel testo, la norma e la modifica da chiedere.', 'Copia la lettera con le richieste di modifica, aggiungi le scadenze al calendario e scarica il rapporto.'],
+      faq: [
+        ['Che contratti controlla?', 'Locazioni abitative (4+4, 3+2, transitorie, per studenti), locazioni a uso diverso, foresteria, box, comodato, e contratti di servizi o fornitura con un consumatore. Le regole seguono la legge 431/1998, la legge 392/1978, il codice civile e il Codice del consumo.'],
+        ['È un parere legale?', 'No: è un controllo automatico che trova le clausole note per essere nulle, contestabili o onerose e spiega perché, citando la norma. Per i contratti importanti fatti assistere da un professionista.'],
+        ['Il contratto viene caricato su un server?', 'No: tutto avviene nel browser. Il testo non lascia il dispositivo.'],
+      ],
+    },
+    autentica: {
+      slug: 'verifica-autenticita-pdf', title: 'Verifica di autenticità di un PDF: il documento è stato modificato?',
+      desc: 'Controlla se un PDF ricevuto (fattura, contratto, certificato, estratto conto) è stato modificato dopo la creazione: versioni precedenti rimaste nel file e che cosa è cambiato, testo cambiato dopo la firma digitale, date e programmi dei metadati, cifre in un carattere diverso, testo nascosto, coperture bianche sulle scansioni. Senza upload.',
+      h1: 'Verifica di autenticità di un PDF', h2: 'Come capire se un PDF è stato modificato', rel: ["firme", "confronta", "verificapdfa"],
+      steps: ['Trascina il PDF da controllare, anche più di uno.', 'Guarda l\u2019esito e i controlli: ogni segno è spiegato e, quando riguarda un punto preciso, è evidenziato sulla pagina.', 'Se il file contiene versioni precedenti, scaricale o confrontale con quella finale; scarica il rapporto in PDF.'],
+      faq: [
+        ['Può dire con certezza che un PDF è autentico?', 'No, e nessun programma può: un documento ricreato da zero o ristampato non porta tracce. Può trovare i segni concreti di una modifica: versioni precedenti rimaste nel file, testo cambiato dopo una firma, date incoerenti, cifre scritte con un altro carattere, rettangoli bianchi sopra una scansione.'],
+        ['Che cosa sono le versioni precedenti?', 'Molti programmi, quando salvano un PDF modificato, aggiungono le modifiche in coda al file e lasciano dentro la versione di prima. Qui vengono recuperate: si possono scaricare, confrontare parola per parola con quella finale e ottenere il PDF con le modifiche evidenziate.'],
+        ['Il file viene caricato su un server?', 'No: tutto avviene nel browser. Il PDF non lascia il dispositivo.'],
+      ],
+    },
+    incassi: {
+      slug: 'incassi-estratto-conto-fatture', title: 'Incassi e pagamenti veri: estratto conto abbinato alle fatture, scaduti e solleciti',
+      desc: 'Carica l\u2019estratto conto (PDF anche scansionato o CSV dell\u2019home banking) e le fatture emesse e ricevute: quali fatture sono state davvero incassate o pagate, quando e con quanto ritardo, quali sono scadute, il sollecito già scritto, i movimenti senza fattura. Senza upload.',
+      h1: 'Incassi e pagamenti veri', h2: 'Come sapere quali fatture sono state davvero pagate', rel: ["vendite", "estrattoconto", "fatture"],
+      steps: ['Carica insieme le fatture (XML, P7M, lo ZIP del cassetto fiscale o i PDF della fattura elettronica) e l\u2019estratto conto dello stesso periodo, in PDF o CSV.', 'Il programma abbina ogni movimento alla fattura che paga: importo, rate, nome della controparte e numero della fattura nella causale, anche un bonifico per più fatture o una fattura pagata in più volte.', 'Guarda le fatture scadute e non incassate, il ritardo vero di ogni cliente e i movimenti senza fattura; copia il sollecito o scaricalo in PDF; scarica tutto in Excel.'],
+      faq: [
+        ['Come capisce quale movimento paga una fattura?', 'Confronta l\u2019importo con il totale da pagare (o con le rate scritte in fattura) e cerca nella causale il nome della controparte e il numero della fattura. Riconosce anche un bonifico che paga più fatture dello stesso cliente e una fattura pagata in più volte. Le fatture successive all\u2019ultimo movimento dell\u2019estratto restano «da giudicare».'],
+        ['Va bene l\u2019estratto conto scansionato?', 'Sì: le pagine si migliorano e si leggono con il riconoscimento del testo (OCR), sul dispositivo. Il CSV dell\u2019home banking è ancora più preciso.'],
+        ['I dati vengono inviati da qualche parte?', 'No: tutto avviene nel browser. Fatture ed estratti conto non lasciano il dispositivo.'],
       ],
     },
     vendite: {
@@ -3722,21 +3780,21 @@ const SEO = (() => {
       faq: [
         ['Quali dati usa?', 'Solo quelli scritti nelle fatture: cliente e sede, data, righe con prodotti, quantità e prezzi, imponibile, IVA, modalità e scadenze di pagamento. La posizione sulla mappa è quella del Comune della sede del cliente, presa da un elenco dei Comuni italiani incorporato nel programma.'],
         ['Le fatture vengono caricate su un server?', 'No: tutto avviene nel browser, anche la mappa. Nessun dato esce dal dispositivo.'],
-        ['Che cosa scopre?', 'La concentrazione del fatturato sui primi clienti, i clienti abituali che non comprano da più tempo del loro solito, il mese migliore e il peggiore, i prodotti comprati insieme, le variazioni di prezzo, il raggio d’azione dalla sede, i termini di pagamento e una stima dei prossimi tre mesi.'],
-        ['E se carico anche le fatture di acquisto?', 'Il programma riconosce l’azienda (chi ha emesso più fatture) e analizza solo le vendite; le fatture di acquisto vengono contate ed escluse. Se nei file ci sono più aziende, si sceglie quale analizzare.'],
+        ['Che cosa scopre?', 'La concentrazione del fatturato sui primi clienti, i clienti abituali che non comprano da più tempo del loro solito, il mese migliore e il peggiore, i prodotti comprati insieme, le variazioni di prezzo, il raggio d\u2019azione dalla sede, i termini di pagamento e una stima dei prossimi tre mesi.'],
+        ['E se carico anche le fatture di acquisto?', 'Il programma riconosce l\u2019azienda (chi ha emesso più fatture) e analizza solo le vendite; le fatture di acquisto vengono contate ed escluse. Se nei file ci sono più aziende, si sceglie quale analizzare.'],
       ],
     },
     rilevaai: {
       slug: 'rilevatore-testo-ai', title: 'Rilevatore di testo AI e antiplagio: Claude, ChatGPT, Gemini, senza upload',
       desc: 'Verifica se un compito, una tesina o un documento è stato scritto con Claude (Haiku, Sonnet, Opus): modello statistico dello stile, passaggi evidenziati, prove nei file Word, PowerPoint, Excel e PDF, residui di chat, testo nascosto, passaggi identici. Tutto sul tuo dispositivo.',
-      h1: 'Testo scritto con l’AI?', h2: 'Come verificare se un testo è stato scritto con l’AI', rel: ["confronta", "conta", "oscura"],
-      steps: ['Trascina uno o più file (Word, PowerPoint, Excel, PDF, OpenDocument) oppure incolla il testo.', 'Leggi l’esito: lo stile confrontato con quello di Claude, con i passaggi evidenziati, e le prove trovate (programma che ha creato il file, nomi di assistenti, caratteri delle chat, residui di conversazione, testo nascosto).', 'Confronta il testo con altri compiti o con le risposte dell’AI alla stessa consegna, e scarica il rapporto.'],
+      h1: 'Testo scritto con l\u2019AI?', h2: 'Come verificare se un testo è stato scritto con l\u2019AI', rel: ["confronta", "conta", "oscura"],
+      steps: ['Trascina uno o più file (Word, PowerPoint, Excel, PDF, OpenDocument) oppure incolla il testo.', 'Leggi l\u2019esito: lo stile confrontato con quello di Claude, con i passaggi evidenziati, e le prove trovate (programma che ha creato il file, nomi di assistenti, caratteri delle chat, residui di conversazione, testo nascosto).', 'Confronta il testo con altri compiti o con le risposte dell\u2019AI alla stessa consegna, e scarica il rapporto.'],
       faq: [
-        ['Come riconosce un testo scritto da Claude?', 'Con un modello statistico calcolato sul tuo dispositivo, addestrato su 970 testi scritti da Claude (Haiku, Sonnet e Opus, in 47 generi, anche su richieste come «scrivilo in modo che non sembri fatto con l’AI») e su oltre 40.000 testi scritti da persone prima degli assistenti AI. Su testi di prova riconosce il 98% dei testi di Haiku, il 90% di Sonnet e l’80% di Opus.'],
+        ['Come riconosce un testo scritto da Claude?', 'Con un modello statistico calcolato sul tuo dispositivo, addestrato su 970 testi scritti da Claude (Haiku, Sonnet e Opus, in 47 generi, anche su richieste come «scrivilo in modo che non sembri fatto con l\u2019AI») e su oltre 40.000 testi scritti da persone prima degli assistenti AI. Su testi di prova riconosce il 98% dei testi di Haiku, il 90% di Sonnet e l\u201980% di Opus.'],
         ['Quanto spesso sbaglia su un testo scritto da una persona?', 'La soglia è tarata per segnalare al massimo 3 testi umani su 1.000 in ogni gruppo misurato. Su testi mai visti dal modello: nessun falso allarme su 901 brani di letteratura, 733 articoli di Fanpage e 700 temi e appunti di studenti, 1 su 500 tra le tesi, 5 su 707 tra gli articoli del Post, i testi umani più simili allo stile di Claude. È una valutazione statistica, non una prova: un testo segnalato va verificato.'],
-        ['Quali prove trova?', 'Le impronte dei programmi con cui gli assistenti AI creano i file (per esempio python-docx, docx.js, PptxGenJS, openpyxl, ReportLab), nomi di assistenti nei metadati, i caratteri tipografici delle interfacce delle chat rimasti nel documento, frasi della conversazione («Spero che ti sia utile», «Fammi sapere se…»), formattazione Markdown e testo nascosto con caratteri invisibili.'],
+        ['Quali prove trova?', 'Le impronte dei programmi con cui gli assistenti AI creano i file (per esempio python-docx, docx.js, PptxGenJS, openpyxl, ReportLab), nomi di assistenti nei metadati, i caratteri tipografici delle interfacce delle chat rimasti nel documento, frasi della conversazione («Spero che ti sia utile», «Fammi sapere se\u2026»), formattazione Markdown e testo nascosto con caratteri invisibili.'],
         ['Funziona con un testo incollato?', 'Sì: scrivi o incolla il testo. Se lo incolli da Word o da una pagina web, si controllano anche i caratteri tipografici.'],
-        ['Posso controllare i compiti di tutta la classe?', 'Sì: trascina tutti i file insieme. Per ognuno vedi l’esito e, tra i file, i passaggi identici di almeno 8 parole.'],
+        ['Posso controllare i compiti di tutta la classe?', 'Sì: trascina tutti i file insieme. Per ognuno vedi l\u2019esito e, tra i file, i passaggi identici di almeno 8 parole.'],
         ['I testi vengono inviati a un server?', 'No: tutto avviene nel browser, sul tuo dispositivo.'],
       ],
     },
@@ -3753,9 +3811,9 @@ const SEO = (() => {
    ===================================================================== */
 const TOOLS = {
   unisci:   { title: 'Unisci PDF', short: 'Unisci', icon: 'merge', hue: '#7C5CFC', accept: '.pdf,application/pdf,' + IMG_ACCEPT, multiple: true,
-              desc: 'Combina più PDF (e immagini) in un unico documento, nell’ordine che preferisci.', start: (...a) => startMerge(...a) },
+              desc: 'Combina più PDF (e immagini) in un unico documento, nell\u2019ordine che preferisci.', start: (...a) => startMerge(...a) },
   immagini: { title: 'Immagini in PDF', short: 'Immagini', icon: 'photo', hue: '#DB2777', accept: IMG_ACCEPT, multiple: true, pdfIn: false,
-              desc: 'Converti foto e scansioni (JPG, PNG, HEIC, TIFF, WebP…) in PDF, con formato e margini a scelta.', start: (...a) => startImages(...a) },
+              desc: 'Converti foto e scansioni (JPG, PNG, HEIC, TIFF, WebP\u2026) in PDF, con formato e margini a scelta.', start: (...a) => startImages(...a) },
   dividi:   { title: 'Dividi PDF', short: 'Dividi', icon: 'split', hue: '#1E88E5', accept: '.pdf,application/pdf', multiple: false,
               desc: 'Separa ogni pagina, dividi ogni N pagine, per intervalli o estrai solo quelle scelte.', start: (...a) => startSplit(...a) },
   assistente: { title: 'Fai tutto tu', short: 'Fai tutto', icon: 'spark', hue: '#5A2BFF', accept: '.pdf,application/pdf', multiple: true,
@@ -3773,7 +3831,7 @@ const TOOLS = {
   modifica: { title: 'Modifica PDF', short: 'Modifica', icon: 'edit', hue: '#F2711C', accept: '.pdf,application/pdf', multiple: false,
               desc: 'Riscrivi il testo esistente come in Word, aggiungi testo, immagini, firma, forme ed evidenziazioni.', start: (...a) => startEdit(...a) },
   ruota:    { title: 'Ruota PDF', short: 'Ruota', icon: 'rotate', hue: '#3E63DD', accept: '.pdf,application/pdf', multiple: false,
-              desc: 'Ruota singole pagine, quelle selezionate o l’intero documento.', start: (...a) => startRotate(...a) },
+              desc: 'Ruota singole pagine, quelle selezionate o l\u2019intero documento.', start: (...a) => startRotate(...a) },
   ordina:   { title: 'Organizza pagine', short: 'Organizza', icon: 'order', hue: '#E5484D', accept: '.pdf,application/pdf', multiple: false,
               desc: 'Riordina le pagine trascinandole, aggiungi pagine bianche, duplicale o eliminale.', start: (...a) => startOrder(...a) },
   numeri:   { title: 'Numeri di pagina e intestazioni', short: 'Numeri', icon: 'hash', hue: '#A855F7', accept: '.pdf,application/pdf', multiple: false,
@@ -3790,69 +3848,78 @@ const TOOLS = {
               desc: 'Scrivi nei moduli PDF: gli spazi da compilare vengono trovati da soli, anche nelle scansioni. Puoi anche renderli compilabili per chi li riceve.', start: (...a) => startForms(...a) },
   firme:    { title: 'Firme digitali e P7M', short: 'Firme', icon: 'seal', hue: '#0F766E', accept: '', multiple: true, anyFile: true,
               desc: 'Apri i file firmati .p7m (anche .tsd e .m7m): estrai il PDF e verifica chi ha firmato, quando e con quale certificato. Controlla anche le firme dentro i PDF. Anche tanti file insieme.', start: (...a) => startFirme(...a) },
-  xbrl:     { title: 'XBRL in PDF, CSV ed Excel', short: 'XBRL', icon: 'xbrl', hue: '#4F46E5', accept: '.xbrl,.xml,.p7m,.zip', multiple: true, anyFile: true, dzText: 'Bilanci XBRL (.xbrl, anche firmati .xbrl.p7m) — uno o più insieme',
+  xbrl:     { title: 'XBRL in PDF, CSV ed Excel', short: 'XBRL', icon: 'xbrl', hue: '#4F46E5', accept: '.xbrl,.xml,.p7m,.zip', multiple: true, anyFile: true, dzText: 'Bilanci XBRL (.xbrl, anche firmati .xbrl.p7m) \u2014 uno o più insieme',
               desc: 'Trasforma il bilancio depositato in formato XBRL in un PDF leggibile (dati anagrafici, stato patrimoniale, conto economico, rendiconto e nota integrativa) e in CSV ed Excel con tutti i valori.', start: (...a) => startXbrl(...a) },
   excel:    { title: 'PDF in Excel', short: 'Excel', icon: 'table', hue: '#1D6F42', accept: '.pdf,application/pdf,' + IMG_ACCEPT, multiple: true,
-              desc: 'Trasforma le tabelle del PDF in un foglio Excel: colonne riconosciute anche senza linee, importi e date come numeri, scansioni lette con l’OCR. Più PDF insieme: un Excel per ciascuno.', start: (...a) => startExcel(...a) },
+              desc: 'Trasforma le tabelle del PDF in un foglio Excel: colonne riconosciute anche senza linee, importi e date come numeri, scansioni lette con l\u2019OCR. Più PDF insieme: un Excel per ciascuno.', start: (...a) => startExcel(...a) },
   fatture:  { title: 'Fatture elettroniche', short: 'Fatture', icon: 'invoice', hue: '#0B7285', accept: '.xml,.p7m,.zip,.pdf', multiple: true, anyFile: true, folder: true, chain: false,
-              dzText: 'Fatture XML, .xml.p7m, ZIP del cassetto fiscale o PDF nel formato del foglio di stile — anche l’intera cartella',
+              dzText: 'Fatture XML, .xml.p7m, ZIP del cassetto fiscale o PDF nel formato del foglio di stile \u2014 anche l\u2019intera cartella',
               resume: () => typeof FT !== 'undefined' && FT.fatture.length > 0,
-              desc: 'Trasforma le fatture elettroniche (XML, P7M, ZIP) in PDF leggibili, nel layout dell’Agenzia o esteso, ed esporta le prestazioni in Excel. Legge anche i PDF delle fatture.', start: (...a) => startFatture(...a) },
+              desc: 'Trasforma le fatture elettroniche (XML, P7M, ZIP) in PDF leggibili, nel layout dell\u2019Agenzia o esteso, ed esporta le prestazioni in Excel. Legge anche i PDF delle fatture.', start: (...a) => startFatture(...a) },
   estrai:   { title: 'Estrai i dati', short: 'Dati', icon: 'search', hue: '#0369A1', accept: '.pdf,application/pdf,' + IMG_ACCEPT, multiple: true,
               desc: 'Trova da solo i dati chiave di uno o più documenti (anche scansioni): tipo, data, numero, controparte, importi, codici fiscali, partite IVA, IBAN, CIG, CUP, PEC. In Excel, Word o PDF.', start: (...a) => startEstrai(...a) },
   analisi:  { title: 'Analisi di bilancio', short: 'Analisi', icon: 'chart', hue: '#0D7A5F', accept: '.xbrl,.xml,.p7m,.zip,.pdf,application/pdf,' + IMG_ACCEPT, multiple: true, anyFile: true, dzText: 'Uno o più bilanci (XBRL o PDF, anche scansionati): più anni insieme danno trend, flussi di cassa e che cosa è cambiato',
-              desc: 'Dal bilancio (XBRL o PDF, anche scansionato) un’analisi chiara: stato patrimoniale e conto economico riclassificati, indici, rendiconto finanziario, valore stimato dell’azienda e una diagnosi di che cosa pesa di più, in positivo e in negativo. Relazione in PDF o Word e foglio Excel.', start: (...a) => startAnalisi(...a) },
+              desc: 'Dal bilancio (XBRL o PDF, anche scansionato) un\u2019analisi chiara: stato patrimoniale e conto economico riclassificati, indici, rendiconto finanziario, valore stimato dell\u2019azienda e una diagnosi di che cosa pesa di più, in positivo e in negativo. Relazione in PDF o Word e foglio Excel.', start: (...a) => startAnalisi(...a) },
   confronta: { title: 'Confronta PDF', short: 'Confronta', icon: 'swap', hue: '#9333EA', accept: '.pdf,application/pdf,' + IMG_ACCEPT, multiple: true,
               desc: 'Due o più versioni dello stesso documento, anche scansioni: aggiunte, eliminazioni e modifiche parola per parola, importi e date cambiati in primo piano. PDF con le modifiche evidenziate, rapporto in PDF o Word ed elenco in Excel.', start: (...a) => startConfronta(...a) },
   oscura:   { title: 'Oscura PDF', short: 'Oscura', icon: 'redact', hue: '#475467', accept: '.pdf,application/pdf', multiple: true,
               desc: 'Elimina in modo definitivo i dati personali: nomi, codici fiscali, IBAN, telefoni, indirizzi, email. Li trova da solo, anche nelle scansioni.', start: (...a) => startRedact(...a) },
   // servizi per professione (src/pro.js)
   estrattoconto: { title: 'Estratto conto in Excel', short: 'Estratto conto', icon: 'bank', hue: '#0F766E', accept: '.pdf,application/pdf,' + IMG_ACCEPT, multiple: true,
-              dzText: 'Estratti conto in PDF (anche scansioni o foto) — uno o più insieme, anche di mesi diversi',
+              dzText: 'Estratti conto in PDF (anche scansioni o foto) \u2014 uno o più insieme, anche di mesi diversi',
               desc: 'I movimenti del conto corrente in un foglio Excel: data, valuta, descrizione, entrate, uscite e saldo, con il tipo di operazione. Controllo automatico: saldo iniziale + movimenti = saldo finale. Più estratti insieme.', start: (...a) => startDati(...a) },
   f24:      { title: 'F24 e dichiarazioni in Excel', short: 'F24 e dichiarazioni', icon: 'receipt', hue: '#B45309', accept: '.pdf,application/pdf,' + IMG_ACCEPT, multiple: true,
-              dzText: 'F24, CU, 730, Redditi, IRAP o IVA in PDF (anche scansioni) — tanti file insieme',
+              dzText: 'F24, CU, 730, Redditi, IRAP o IVA in PDF (anche scansioni) \u2014 tanti file insieme',
               desc: 'F24 (erario, INPS, regioni, IMU), CU, 730, Redditi, IRAP e IVA in Excel: codici tributo, righi, colonne e importi, con la verifica del saldo e il riepilogo per codice. Tanti file insieme.', start: (...a) => startDati(...a) },
   visure:   { title: 'Visure camerali e catastali in dati', short: 'Visure', icon: 'building', hue: '#4338CA', accept: '.pdf,application/pdf,' + IMG_ACCEPT, multiple: true,
-              dzText: 'Visure camerali o catastali in PDF (anche scansioni) — una o più insieme',
+              dzText: 'Visure camerali o catastali in PDF (anche scansioni) \u2014 una o più insieme',
               desc: 'Dalla visura camerale: denominazione, codice fiscale, REA, PEC, ATECO, capitale, amministratori. Dalla visura catastale: foglio, particella, categoria, rendita, intestati e valore ai fini IMU.', start: (...a) => startDati(...a) },
   laboratorio: { title: 'Esami di laboratorio in tabella', short: 'Esami', icon: 'flask', hue: '#BE123C', accept: '.pdf,application/pdf,' + IMG_ACCEPT, multiple: true,
-              dzText: 'Referti in PDF o foto — più referti insieme per il confronto nel tempo',
+              dzText: 'Referti in PDF o foto \u2014 più referti insieme per il confronto nel tempo',
               desc: 'I valori dei referti in una tabella: esame, risultato, unità e intervallo di riferimento, con i valori fuori intervallo evidenziati. Più referti insieme: confronto nel tempo.', start: (...a) => startDati(...a) },
-  rilevaai: { title: 'Testo scritto con l’AI?', short: 'Rileva AI', icon: 'aidetect', hue: '#6941C6', accept: '.docx,.docm,.dotx,.pptx,.pptm,.xlsx,.xlsm,.odt,.odp,.ods,.pdf,.txt,.md,.html,.htm,.rtf,.csv', multiple: true, anyFile: true, noFile: 'Incolla o scrivi un testo', noFileIcon: 'type',
-              dzText: 'Word, PowerPoint, Excel, PDF, OpenDocument o testo — anche tanti file insieme (per esempio i compiti di una classe)',
-              desc: 'Riconosce i testi scritti da Claude (Haiku, Sonnet, Opus) con un modello statistico dello stile, calcolato sul dispositivo, ed evidenzia i passaggi. Cerca anche le prove certe: impronte dei programmi con cui l’AI crea i file, nomi degli assistenti nei metadati, caratteri delle chat, residui della conversazione, testo nascosto. Confronta i testi tra loro: passaggi identici evidenziati.', start: (...a) => startRilevaAI(...a) },
+  rilevaai: { title: 'Testo scritto con l\u2019AI?', short: 'Rileva AI', icon: 'aidetect', hue: '#6941C6', accept: '.docx,.docm,.dotx,.pptx,.pptm,.xlsx,.xlsm,.odt,.odp,.ods,.pdf,.txt,.md,.html,.htm,.rtf,.csv', multiple: true, anyFile: true, noFile: 'Incolla o scrivi un testo', noFileIcon: 'type',
+              dzText: 'Word, PowerPoint, Excel, PDF, OpenDocument o testo \u2014 anche tanti file insieme (per esempio i compiti di una classe)',
+              desc: 'Riconosce i testi scritti da Claude (Haiku, Sonnet, Opus) con un modello statistico dello stile, calcolato sul dispositivo, ed evidenzia i passaggi. Cerca anche le prove certe: impronte dei programmi con cui l\u2019AI crea i file, nomi degli assistenti nei metadati, caratteri delle chat, residui della conversazione, testo nascosto. Confronta i testi tra loro: passaggi identici evidenziati.', start: (...a) => { Later.serve('startRilevaAI'); return startRilevaAI(...a); } },
   contratto: { title: 'Contratto di affitto e comodato', short: 'Contratto affitto', icon: 'lease', hue: '#B45309', accept: '.pdf,.json,application/pdf,application/json', multiple: false, anyFile: true, noFile: 'Compila un nuovo contratto', noFileIcon: 'lease', noFileFirst: true, pickLabel: 'Apri una visura o una bozza',
               dzTitle: 'Il contratto pronto in pochi minuti', dzText: 'Hai la visura catastale in PDF o una bozza salvata (.json)? Trascinala qui: immobile e proprietari si compilano da soli.',
-              desc: 'Contratto di locazione 4+4, 3+2 concordato, transitorio, per studenti, a uso negozio o ufficio, foresteria, box auto, affitto di terreni agricoli e comodato gratuito: compili i dati nella colonna, il contratto si scrive da solo con le clausole che scegli e ogni articolo si può modificare. PDF e Word, più il promemoria di registrazione e imposte.', start: (...a) => startContratto(...a) },
+              desc: 'Contratto di locazione 4+4, 3+2 concordato, transitorio, per studenti, a uso negozio o ufficio, foresteria, box auto, affitto di terreni agricoli e comodato gratuito: compili i dati nella colonna, il contratto si scrive da solo con le clausole che scegli e ogni articolo si può modificare. PDF e Word, più il promemoria di registrazione e imposte.', start: (...a) => { Later.serve('startContratto'); return startContratto(...a); } },
+  leggicontratto: { title: 'Analisi di un contratto ricevuto', short: 'Analizza contratto', icon: 'contractcheck', hue: '#7C3AED', accept: '.pdf,.docx,.odt,.txt,application/pdf,text/plain,image/*', multiple: false, anyFile: true, noFile: 'Incolla il testo', noFileIcon: 'textedit',
+              dzTitle: 'Trascina qui il contratto da firmare', dzText: 'PDF (anche scansionato), Word o foto delle pagine: le clausole a rischio con la norma e la modifica da chiedere. Il file resta sul tuo dispositivo.',
+              desc: 'Il contratto che ti hanno mandato da firmare: clausole nulle, contestabili o onerose (deposito, durata, foro, recesso, spese, rinnovo tacito, penali, modifiche unilaterali, doppia firma), con la frase esatta, la norma e la richiesta di modifica già scritta.', start: (...a) => { Later.serve('startLeggiContratto'); return startLeggiContratto(...a); } },
+  autentica: { title: 'Verifica di autenticità', short: 'Autenticità', icon: 'fingerprint', hue: '#BE123C', accept: '.pdf,application/pdf', multiple: true,
+              dzTitle: 'Trascina qui il PDF da verificare', dzText: 'Una fattura, un contratto, un certificato o un estratto conto ricevuti da altri: vedi se sono stati modificati dopo la creazione. Il file resta sul tuo dispositivo.',
+              desc: 'Il PDF è stato modificato? Versioni precedenti rimaste nel file e che cosa è cambiato, testo cambiato dopo la firma digitale, date e programmi incoerenti, cifre in un carattere diverso, testo nascosto, coperture bianche sulle scansioni. Rapporto in PDF.', start: (...a) => { Later.serve('startAutentica'); return startAutentica(...a); } },
+  incassi:  { title: 'Incassi e pagamenti veri', short: 'Incassi veri', icon: 'bank', hue: '#047857', accept: '.xml,.p7m,.zip,.pdf,.csv,.txt,application/zip,application/pdf,text/xml,text/csv,image/*', multiple: true, anyFile: true, folder: true,
+              dzTitle: 'Trascina qui estratto conto e fatture', dzText: 'L\u2019estratto conto (PDF, anche scansionato, o CSV dell\u2019home banking) e le fatture emesse e ricevute (XML, P7M, ZIP del cassetto fiscale o PDF). Restano sul tuo dispositivo.',
+              desc: 'L\u2019estratto conto abbinato alle fatture: quali sono state davvero incassate o pagate e con quanto ritardo, quali sono scadute, il sollecito già scritto, i movimenti senza fattura. Excel con tutto.', start: (...a) => { Later.serve('startIncassi'); return startIncassi(...a); } },
   vendite:  { title: 'Analisi di vendite e acquisti', short: 'Vendite e acquisti', icon: 'chart', hue: '#1D4ED8', accept: '.xml,.p7m,.zip,.pdf,application/zip,application/pdf,text/xml', multiple: true, anyFile: true, folder: true,
-              dzTitle: 'Trascina qui le fatture emesse e ricevute', dzText: 'XML, P7M, lo ZIP del cassetto fiscale o i PDF della fattura elettronica — anche tutta la cartella. Restano sul tuo dispositivo.',
-              desc: 'Dalle fatture emesse e ricevute: clienti e fornitori sulla mappa fino al civico, che cosa vendi e che cosa compri, prezzi a confronto tra fornitori, margini, metodi di pagamento, ritenute, cassa prevista e IVA stimata, clienti da ricontattare e stima dei prossimi mesi. Excel con tutto.', start: (...a) => { if (typeof startVendite === 'undefined') Later.lib('vendite'); return startVendite(...a); } },
+              dzTitle: 'Trascina qui le fatture emesse e ricevute', dzText: 'XML, P7M, lo ZIP del cassetto fiscale o i PDF della fattura elettronica \u2014 anche tutta la cartella. Restano sul tuo dispositivo.',
+              desc: 'Dalle fatture emesse e ricevute: clienti e fornitori sulla mappa fino al civico, che cosa vendi e che cosa compri, prezzi a confronto tra fornitori, margini, metodi di pagamento, ritenute, cassa prevista e IVA stimata, clienti da ricontattare e stima dei prossimi mesi. Excel con tutto.', start: (...a) => { Later.serve('startVendite'); return startVendite(...a); } },
   qrsepa:   { title: 'QR di pagamento SEPA', short: 'QR pagamento', icon: 'qr', hue: '#0E7490', accept: '.pdf,.xml,.p7m,.zip,application/pdf,text/xml', multiple: true, anyFile: true, noFile: 'Scrivi i dati a mano', noFileIcon: 'type', dzText: 'La fattura (XML, P7M, ZIP o PDF): IBAN, importo e causale si compilano da soli',
-              desc: 'Il codice QR per pagare con bonifico: inquadrato con l’app della banca compila IBAN, beneficiario, importo e causale. Dalla fattura (XML o PDF) o scrivendo i dati; in PNG, SVG o stampato sulla fattura.', start: (...a) => startQrSepa(...a) },
+              desc: 'Il codice QR per pagare con bonifico: inquadrato con l\u2019app della banca compila IBAN, beneficiario, importo e causale. Dalla fattura (XML o PDF) o scrivendo i dati; in PNG, SVG o stampato sulla fattura.', start: (...a) => startQrSepa(...a) },
   conforme: { title: 'Copia conforme', short: 'Copia conforme', icon: 'stamp', hue: '#7C3AED', accept: '.pdf,application/pdf', multiple: false,
-              dzText: 'Il PDF da dichiarare conforme all’originale',
-              desc: 'Aggiungi la dicitura di conformità all’originale (avvocati, notai, PA, professionisti): in calce, su ogni pagina o su un foglio a parte, con luogo, data, nome e impronta del file. Poi la firmi digitalmente.', start: (...a) => startConforme(...a) },
+              dzText: 'Il PDF da dichiarare conforme all\u2019originale',
+              desc: 'Aggiungi la dicitura di conformità all\u2019originale (avvocati, notai, PA, professionisti): in calce, su ogni pagina o su un foglio a parte, con luogo, data, nome e impronta del file. Poi la firmi digitalmente.', start: (...a) => startConforme(...a) },
   misure:   { title: 'Misure in scala sul PDF', short: 'Misure', icon: 'ruler', hue: '#0369A1', accept: '.pdf,application/pdf', multiple: false,
               dzText: 'La tavola o la planimetria in PDF (meglio se esportata dal CAD)',
-              desc: 'Misura distanze, percorsi, superfici e angoli sulle tavole: imposta la scala (1:100, 1:50…) o tarala su una quota nota. Le misure si salvano nel PDF e in Excel.', start: (...a) => startMisure(...a) },
-  conta:    { title: 'Conta parole e caratteri', short: 'Conta parole', icon: 'count', hue: '#6D28D9', accept: '.pdf,.docx,.txt,.md,.odt,application/pdf,text/plain,' + IMG_ACCEPT, multiple: true, anyFile: true, noFile: 'Incolla o scrivi un testo', noFileIcon: 'type', dzText: 'PDF, Word (.docx), testo (.txt, .md) o foto di pagine — anche più file insieme',
+              desc: 'Misura distanze, percorsi, superfici e angoli sulle tavole: imposta la scala (1:100, 1:50\u2026) o tarala su una quota nota. Le misure si salvano nel PDF e in Excel.', start: (...a) => startMisure(...a) },
+  conta:    { title: 'Conta parole e caratteri', short: 'Conta parole', icon: 'count', hue: '#6D28D9', accept: '.pdf,.docx,.txt,.md,.odt,application/pdf,text/plain,' + IMG_ACCEPT, multiple: true, anyFile: true, noFile: 'Incolla o scrivi un testo', noFileIcon: 'type', dzText: 'PDF, Word (.docx), testo (.txt, .md) o foto di pagine \u2014 anche più file insieme',
               desc: 'Parole, caratteri con e senza spazi, cartelle editoriali, frasi, paragrafi e tempo di lettura di PDF, Word e testi; pagina per pagina e parole più usate. Anche incollando un testo.', start: (...a) => startConta(...a) },
-  tesi:     { title: 'Tesi: modello e controllo', short: 'Tesi', icon: 'cap', hue: '#1D4ED8', accept: '.pdf,application/pdf', multiple: false, noFile: 'Crea il modello Word per scrivere la tesi', noFileIcon: 'cap', dzText: 'Il PDF della tesi da controllare — oppure, senza file, il modello Word per scriverla',
+  tesi:     { title: 'Tesi: modello e controllo', short: 'Tesi', icon: 'cap', hue: '#1D4ED8', accept: '.pdf,application/pdf', multiple: false, noFile: 'Crea il modello Word per scrivere la tesi', noFileIcon: 'cap', dzText: 'Il PDF della tesi da controllare \u2014 oppure, senza file, il modello Word per scriverla',
               desc: 'Il modello Word pronto per scrivere la tesi (frontespizio, indice, capitoli, margini, interlinea, numeri di pagina) e il controllo del PDF finale: margini, carattere, interlinea, pagine, parole e PDF/A.', start: (...a) => startTesi(...a) },
   vettoriale: { title: 'Immagine in SVG (timbri e loghi)', short: 'In SVG', icon: 'vector', hue: '#C2410C', accept: IMG_ACCEPT + ',.pdf,application/pdf', multiple: false,
-              dzText: 'Foto o scansione del timbro, del logo o della firma (JPG, PNG, HEIC…) o una pagina PDF',
+              dzText: 'Foto o scansione del timbro, del logo o della firma (JPG, PNG, HEIC\u2026) o una pagina PDF',
               desc: 'Una foto o una scansione di un timbro, di un logo o di una firma diventa un disegno vettoriale pulito: colori, spessore e macchie si correggono. Scarica in SVG o in PNG senza sfondo, o salvalo tra i tuoi timbri.', start: (...a) => startVettoriale(...a) },
   filigrana: { title: 'Filigrana', short: 'Filigrana', icon: 'type', hue: '#9F1239', accept: '.pdf,application/pdf', multiple: false,
-              desc: 'Aggiungi una scritta («COPIA», «BOZZA», «RISERVATO»…) o un logo su tutte le pagine o solo su alcune: in diagonale, al centro, in basso o ripetuta, con l’intensità che vuoi. Anteprima dal vivo.', start: (...a) => startFiligrana(...a) },
+              desc: 'Aggiungi una scritta («COPIA», «BOZZA», «RISERVATO»\u2026) o un logo su tutte le pagine o solo su alcune: in diagonale, al centro, in basso o ripetuta, con l\u2019intensità che vuoi. Anteprima dal vivo.', start: (...a) => startFiligrana(...a) },
   annota:   { title: 'Commenti e note', short: 'Commenti', icon: 'comment', hue: '#B54708', accept: '.pdf,application/pdf', multiple: false,
               desc: 'Evidenzia, sottolinea e barra il testo, aggiungi note e commenti sulla pagina: annotazioni vere, con autore e data, che si leggono e si rispondono in Acrobat, Anteprima e nei browser. Più il riepilogo dei commenti.', start: (...a) => startAnnota(...a) },
   pdftesto: { title: 'PDF in testo e HTML', short: 'Testo', icon: 'type', hue: '#475467', accept: '.pdf,application/pdf', multiple: false,
-              desc: 'Il testo del PDF nell’ordine di lettura, anche dalle scansioni (OCR): un file .txt da copiare ovunque e una pagina web .html con titoli e paragrafi, leggibile su ogni dispositivo.', start: (...a) => startPdfTesto(...a) },
+              desc: 'Il testo del PDF nell\u2019ordine di lettura, anche dalle scansioni (OCR): un file .txt da copiare ovunque e una pagina web .html con titoli e paragrafi, leggibile su ogni dispositivo.', start: (...a) => startPdfTesto(...a) },
   pdfppt:   { title: 'PDF in PowerPoint', short: 'PowerPoint', icon: 'layout', hue: '#C43E1C', accept: '.pdf,application/pdf', multiple: false,
-              desc: 'Ogni pagina diventa una diapositiva con il testo modificabile: caselle di testo vere, con carattere, dimensione, colore e allineamento dell’originale, sopra immagini e grafica identiche. Anche dalle scansioni, con l’OCR. Si apre con PowerPoint, Keynote, Google Presentazioni e LibreOffice.', start: (...a) => startPdfPpt(...a) },
+              desc: 'Ogni pagina diventa una diapositiva con il testo modificabile: caselle di testo vere, con carattere, dimensione, colore e allineamento dell\u2019originale, sopra immagini e grafica identiche. Anche dalle scansioni, con l\u2019OCR. Si apre con PowerPoint, Keynote, Google Presentazioni e LibreOffice.', start: (...a) => startPdfPpt(...a) },
   officepdf: { title: 'Word, Excel, PowerPoint in PDF', short: 'Office in PDF', icon: 'pdf', hue: '#B42318', accept: '.docx,.xlsx,.xlsm,.pptx,.ppt,.txt,.md,.markdown,.csv,.html,.htm,.doc,.xls,.odt,.ods,.rtf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/markdown,text/csv,text/html', multiple: true, anyFile: true, pdfIn: false, chain: false,
-              dzText: 'Word (.docx), Excel (.xlsx), PowerPoint (.pptx), testo, Markdown, CSV o pagine HTML — anche più file insieme',
+              dzText: 'Word (.docx), Excel (.xlsx), PowerPoint (.pptx), testo, Markdown, CSV o pagine HTML \u2014 anche più file insieme',
               desc: 'Documenti Word, fogli Excel, presentazioni PowerPoint, testi e pagine web diventano PDF sul tuo dispositivo: titoli, elenchi, tabelle, immagini, intestazioni e numeri di pagina al loro posto. I fogli si adattano alla larghezza della pagina.', start: (...a) => startOffice(...a) },
   // scorciatoie per mestiere: aprono uno strumento già impostato
   tavola:   { title: 'Stampa una tavola grande', short: 'Stampa tavola', icon: 'poster', hue: '#0E9F6E', accept: '.pdf,application/pdf', multiple: false, alias: 'impagina',
@@ -3862,7 +3929,7 @@ const TOOLS = {
 // descrizioni brevi per le schede compatte
 const SHORT_DESC = {
   estrattoconto: 'Movimenti del conto in Excel, con verifica dei saldi', f24: 'F24, CU, 730, Redditi, IRAP, IVA in Excel', visure: 'Visure camerali e catastali in dati', laboratorio: 'Referti in tabella, valori fuori intervallo evidenziati',
-  vendite: 'Mappa dei clienti e statistiche dalle fatture', contratto: 'Locazione e comodato guidati', rilevaai: 'Prove di testo AI e passaggi copiati', qrsepa: 'Il QR per pagare con bonifico', conforme: 'Dicitura di conformità, poi la firma', misure: 'Distanze e superfici in scala', conta: 'Parole, caratteri, cartelle', tesi: 'Modello Word e controllo del PDF', vettoriale: 'Timbri e loghi in SVG e PNG trasparente',
+  incassi: 'Quali fatture sono state davvero pagate', autentica: 'Il PDF è stato modificato?', leggicontratto: 'Clausole a rischio prima di firmare', vendite: 'Mappa dei clienti e statistiche dalle fatture', contratto: 'Locazione e comodato guidati', rilevaai: 'Prove di testo AI e passaggi copiati', qrsepa: 'Il QR per pagare con bonifico', conforme: 'Dicitura di conformità, poi la firma', misure: 'Distanze e superfici in scala', conta: 'Parole, caratteri, cartelle', tesi: 'Modello Word e controllo del PDF', vettoriale: 'Timbri e loghi in SVG e PNG trasparente',
   tavola: 'A0/A1 su fogli A4 o A3', officepdf: 'Word, Excel, PowerPoint e testi in PDF', filigrana: 'Scritta o logo su tutte le pagine', pdftesto: 'Testo e pagina web dal PDF', annota: 'Evidenzia, note e commenti', pdfppt: 'Una diapositiva per pagina',
   unisci: 'Più PDF e immagini in un solo documento', immagini: 'Foto e scansioni in un PDF ordinato', dividi: 'Separa pagine o intervalli in più file',
   comprimi: 'Riduci il peso mantenendo la qualità', modifica: 'Riscrivi il testo, aggiungi immagini e firme', ruota: 'Raddrizza pagine singole o tutte',
@@ -3885,8 +3952,8 @@ const GROUPS = [
   ['Modifica e proteggi', ['modifica', 'annota', 'moduli', 'oscura', 'numeri', 'filigrana', 'proteggi']],
   ['Pagine', ['ordina', 'ruota', 'unisci', 'dividi', 'impagina']],
   ['Converti e ottimizza', ['word', 'excel', 'officepdf', 'ocr', 'migliora', 'pdfa', 'verificapdfa', 'comprimi', 'immagini', 'immaginipdf', 'vettoriale']],
-  ['Analizza e confronta', ['analisi', 'estrai', 'confronta', 'rilevaai', 'misure', 'conta']],
-  [FISCAL_GROUP, ['fatture', 'vendite', 'firme', 'xbrl', 'contratto'], 'Fatture elettroniche, file firmati .p7m, bilanci XBRL e contratti di affitto'],
+  ['Analizza e confronta', ['analisi', 'estrai', 'confronta', 'autentica', 'rilevaai', 'misure', 'conta']],
+  [FISCAL_GROUP, ['fatture', 'vendite', 'incassi', 'firme', 'xbrl', 'contratto', 'leggicontratto'], 'Fatture elettroniche, incassi, file firmati .p7m, bilanci XBRL, contratti di affitto e controllo dei contratti'],
 ];
 /* ---------- famiglie: strumenti simili o complementari stanno in una scheda sola ----------
    In home compare solo il primo; gli altri sono a un clic sotto di lui e, dentro, nelle linguette in alto
@@ -4003,12 +4070,12 @@ function seoTool(id) {
 function siteFoot() {
   const mark = h('div', { class: 'foot-mark' }, h('span', { class: 'foot-logo', html: Brand.logoSvg(40, { live: true }) }), h('span', { class: 'wordmark' }, 'file', h('b', {}, '360')));
   if (!IS_SITE) return h('footer', { class: 'site-foot' }, mark);
-  const line = h('div', { class: 'foot' }, h('span', { class: 'foot-logo', html: Brand.logoSvg(18) }), IS_SITE ? 'file360 · i file vengono elaborati nel browser, senza caricarli su un server' : 'file360 · tutto avviene sul tuo dispositivo', IS_ARTIFACT ? null : ' · l’OCR scarica il modello della lingua una sola volta, al primo uso');
+  const line = h('div', { class: 'foot' }, h('span', { class: 'foot-logo', html: Brand.logoSvg(18) }), IS_SITE ? 'file360 · i file vengono elaborati nel browser, senza caricarli su un server' : 'file360 · tutto avviene sul tuo dispositivo', IS_ARTIFACT ? null : ' · l\u2019OCR scarica il modello della lingua una sola volta, al primo uso');
   const work = Object.keys(PAGES).length ? h('nav', { class: 'work-links', 'aria-label': 'Il tuo lavoro' }, Object.entries(PAGES).map(([id, P]) => h('a', { href: '#' + id, onclick: e => { e.preventDefault(); nav(id); } }, ic(P.icon, 14), P.title))) : null;
   if (!IS_SITE) return work ? h('footer', { class: 'site-foot' }, line, work) : line;
   const a = (href, t) => h('a', { href: new URL(href, SITE_BASE).pathname }, t);
   return h('footer', { class: 'site-foot' }, line, work,
-    h('nav', { class: 'site-links', 'aria-label': 'Informazioni' }, a('informazioni/', 'Informazioni'), a('privacy/', 'Privacy'), a('termini/', 'Condizioni d’uso'), a('informazioni/#contatti', 'Contatti e segnalazioni'),
+    h('nav', { class: 'site-links', 'aria-label': 'Informazioni' }, a('informazioni/', 'Informazioni'), a('privacy/', 'Privacy'), a('termini/', 'Condizioni d\u2019uso'), a('informazioni/#contatti', 'Contatti e segnalazioni'),
       window.OFFICINA_ADS && window.OFFICINA_ADS.mode !== 'off' ? a('informazioni/#pubblicita', 'Pubblicità e sponsor') : null,
       typeof Ads !== 'undefined' && Ads.consentLink ? Ads.consentLink() : null));
 }
@@ -4023,7 +4090,7 @@ function buildRail() {
   const rail = $('#rail');
   const btn = (id, t) => {
     const fav = typeof Favs !== 'undefined' && Favs.has(id);
-    const b = h('button', { class: 'rail-btn', dataset: { id }, title: t.title + (fav ? ' ★' : ''), style: { '--hue': t.hue }, onclick: () => Flow.go(id) }, ic(t.icon, 20), h('span', {}, t.short));
+    const b = h('button', { class: 'rail-btn', dataset: { id }, title: t.title + (fav ? ' \u2605' : ''), style: { '--hue': t.hue }, onclick: () => Flow.go(id) }, ic(t.icon, 20), h('span', {}, t.short));
     if (fav) b.append(h('i', { class: 'fav-dot', 'aria-hidden': 'true' }));
     return b;
   };
@@ -4057,7 +4124,7 @@ function buildTopWork() {
   el.replaceChildren(...Object.entries(PAGES).map(([id, P]) => h('button', { class: 'tw-btn', dataset: { id }, style: { '--hue': P.hue }, 'data-tip': P.title + ': ' + P.desc.split(/[.:]/)[0].toLowerCase(), 'aria-label': P.title, onclick: () => nav(id) }, ic(P.icon, 17), h('span', {}, P.title))));
   el.hidden = !el.children.length;
 }
-/* ---------- il menu a comparsa (pulsante ☰ in alto a sinistra) ----------
+/* ---------- il menu a comparsa (pulsante \u2630 in alto a sinistra) ----------
    Una colonna scura con il marchio grande e il motto, e quello che completa la home: dove andare, azioni rapide,
    i preferiti, un suggerimento alla volta (con il pulsante per provarlo) e cosa succede ai tuoi file.
    Si apre sopra la pagina, si chiude con Esc, con un clic fuori o scegliendo una voce. */
@@ -4082,7 +4149,7 @@ const Drawer = (() => {
   }
   const row = (icon, label, sub, fn, extra = {}) => h('button', { type: 'button', class: 'dr-row' + (extra.cls ? ' ' + extra.cls : ''), onclick: () => { close(); fn(); } },
     h('span', { class: 'dr-ic', 'aria-hidden': 'true' }, ic(icon, 18)), h('span', { class: 'dr-tx' }, h('b', {}, label), sub ? h('span', {}, sub) : null), extra.kbd ? h('kbd', {}, extra.kbd) : null);
-  const MOD = /Mac|iPhone|iPad/.test(navigator.userAgentData?.platform || navigator.platform || '') ? '⌘' : 'Ctrl';
+  const MOD = /Mac|iPhone|iPad/.test(navigator.userAgentData?.platform || navigator.platform || '') ? '\u2318' : 'Ctrl';
   function tipBox() {
     const box = h('div', { class: 'dr-tip', 'aria-live': 'polite' });
     const draw = () => {
@@ -4112,7 +4179,7 @@ const Drawer = (() => {
       if (counts.ricette && typeof Ricette !== 'undefined') counts.ricette.textContent = Ricette.list().length || '';
       if (counts.attivita && typeof Activity !== 'undefined') { const a = await Activity.list(); const d = new Date().toDateString(); const k = a.filter(e => new Date(e.at).toDateString() === d).length; counts.attivita.textContent = k ? k + ' oggi' : ''; }
     } catch { } })();
-    const space = h('span', {}, 'Spazio usato: …');
+    const space = h('span', {}, 'Spazio usato: \u2026');
     (async () => { try { const e = await navigator.storage?.estimate?.(); space.textContent = e ? `Spazio usato da progetti e versioni: ${fmtSize(e.usage || 0)}` : 'Progetti e versioni restano in questo browser'; } catch { space.textContent = 'Progetti e versioni restano in questo browser'; } })();
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const themeBtn = document.getElementById('theme-btn');
@@ -4272,7 +4339,7 @@ const INTENTS = [
 ];
 const CAT_STYLE = { 'Modifica e proteggi': ['#5A2BFF', 'Modifica e proteggi'], 'Pagine': ['#E8246A', 'Pagine'], 'Converti e ottimizza': ['#D98A00', 'Converti e ottimizza'],
   'Analizza e confronta': ['#00A08A', 'Analizza e confronta'], [FISCAL_GROUP]: ['#1F6FE0', 'Fisco e firme'] };
-const foldText = x => String(x || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const foldText = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 function homeIntents() {
   const favs = typeof Favs !== 'undefined' ? Favs : null;
   const item = id => {
@@ -4348,13 +4415,13 @@ function homeIntents() {
 function homeSearch() {
   const input = h('input', {
     class: 'home-search-input', type: 'search', name: 'q', autocomplete: 'off', spellcheck: 'false',
-    placeholder: 'Es. riduci il peso, oscura un IBAN…',
-    'aria-label': 'Cerca uno strumento o descrivi l’operazione che vuoi fare',
+    placeholder: 'Es. riduci il peso, oscura un IBAN\u2026',
+    'aria-label': 'Cerca uno strumento o descrivi l\u2019operazione che vuoi fare',
   });
   const form = h('form', { class: 'home-search', role: 'search', 'aria-label': 'Ricerca strumenti PDF',
     onsubmit: e => { e.preventDefault(); Cmd.show(input.value); } },
     ic('search', 20), input,
-    h('kbd', { class: 'home-search-shortcut' }, navigator.platform?.includes('Mac') ? '⌘ K' : 'Ctrl K'),
+    h('kbd', { class: 'home-search-shortcut' }, navigator.platform?.includes('Mac') ? '\u2318 K' : 'Ctrl K'),
     h('button', { class: 'home-search-submit', type: 'submit', 'aria-label': 'Cerca tra gli strumenti' }, h('span', {}, 'Cerca'), ic('arrow', 16)));
   const examples = ['Riduci il peso', 'Oscura dati personali', 'PDF in Excel'];
   return h('div', { class: 'home-search-wrap' },
@@ -4364,23 +4431,23 @@ function homeSearch() {
       h('span', {}, 'Prova:'), ...examples.map(q => h('button', { type: 'button', onclick: () => Cmd.show(q) }, q))));
 }
 
-/* ---------- professione e animazioni: chiesti solo al primo avvio, si cambiano dal menu ☰ ----------
+/* ---------- professione e animazioni: chiesti solo al primo avvio, si cambiano dal menu \u2630 ----------
    La professione mette in cima gli strumenti di quel lavoro e riordina le categorie; nessuno strumento sparisce. */
 const UNIVERSAL = ['comprimi', 'unisci', 'dividi', 'modifica', 'immagini', 'word', 'ocr', 'conta'];
 const PROFILES = [
-  ['pa', 'Pubblica amministrazione', 'building', ['firme', 'conforme', 'oscura', 'pdfa', 'numeri', 'unisci'], ['Per l’albo: «Oscura» toglie i dati personali, poi «PDF/A» prepara il file per la pubblicazione e la conservazione.', '«Copia conforme» aggiunge la dicitura con l’impronta del file; poi lo firmi con «Firma».']],
-  ['contabile', 'Contabilità', 'table', ['estrattoconto', 'fatture', 'vendite', 'qrsepa', 'excel', 'f24'], ['«Estratto conto» porta i movimenti in Excel e verifica che i saldi tornino.', 'Dalla fattura (XML o PDF) creo il codice QR per pagarla con bonifico dall’app della banca.']],
+  ['pa', 'Pubblica amministrazione', 'building', ['firme', 'conforme', 'oscura', 'pdfa', 'numeri', 'unisci'], ['Per l\u2019albo: «Oscura» toglie i dati personali, poi «PDF/A» prepara il file per la pubblicazione e la conservazione.', '«Copia conforme» aggiunge la dicitura con l\u2019impronta del file; poi lo firmi con «Firma».']],
+  ['contabile', 'Contabilità', 'table', ['estrattoconto', 'incassi', 'fatture', 'vendite', 'qrsepa', 'excel', 'f24'], ['«Estratto conto» porta i movimenti in Excel e verifica che i saldi tornino.', 'Dalla fattura (XML o PDF) creo il codice QR per pagarla con bonifico dall\u2019app della banca.']],
   ['commercialista', 'Commercialista', 'receipt', ['f24', 'fatture', 'vendite', 'estrattoconto', 'visure', 'analisi', 'firme', 'xbrl'], ['«F24 e dichiarazioni» legge tanti F24 insieme e fa il riepilogo per codice tributo.', 'Dalle visure catastali calcolo anche il valore ai fini IMU di ogni immobile.']],
-  ['lavoro', 'Consulente del lavoro', 'user', ['f24', 'proteggi', 'oscura', 'firme', 'moduli'], ['«Oscura» toglie IBAN, codici fiscali e altri dati personali prima di inoltrare un documento.', '«Proteggi» mette una password diversa a ogni cedolino prima dell’invio.']],
-  ['notaio', 'Notaio', 'seal', ['conforme', 'visure', 'firme', 'oscura', 'confronta', 'migliora'], ['«Copia conforme» con la formula notarile; «Firme» verifica i .p7m che ricevi ed estrae il PDF.', '«Confronta» trova ogni parola cambiata tra due bozze dell’atto.']],
-  ['avvocato', 'Avvocato', 'sign', ['conforme', 'firme', 'unisci', 'numeri', 'confronta', 'oscura', 'pdfa'], ['Attestazione di conformità per il deposito: «Copia conforme»; «Firme» verifica le firme dei .p7m ricevuti.', 'Allegati numerati con «Numeri di pagina», atti uniti con «Unisci».']],
+  ['lavoro', 'Consulente del lavoro', 'user', ['f24', 'proteggi', 'oscura', 'firme', 'moduli'], ['«Oscura» toglie IBAN, codici fiscali e altri dati personali prima di inoltrare un documento.', '«Proteggi» mette una password diversa a ogni cedolino prima dell\u2019invio.']],
+  ['notaio', 'Notaio', 'seal', ['conforme', 'visure', 'firme', 'oscura', 'confronta', 'migliora'], ['«Copia conforme» con la formula notarile; «Firme» verifica i .p7m che ricevi ed estrae il PDF.', '«Confronta» trova ogni parola cambiata tra due bozze dell\u2019atto.']],
+  ['avvocato', 'Avvocato', 'sign', ['conforme', 'leggicontratto', 'firme', 'autentica', 'unisci', 'numeri', 'confronta', 'oscura', 'pdfa'], ['Attestazione di conformità per il deposito: «Copia conforme»; «Firme» verifica le firme dei .p7m ricevuti.', 'Allegati numerati con «Numeri di pagina», atti uniti con «Unisci».']],
   ['architetto', 'Architetto', 'poster', ['misure', 'tavola', 'comprimi', 'confronta', 'firme', 'migliora'], ['«Misure in scala» si aggancia agli spigoli del disegno: misure esatte su piante e sezioni.', '«Stampa una tavola grande» divide un A1 su fogli A4 in scala reale.']],
   ['ingegnere', 'Ingegnere', 'ruler', ['misure', 'tavola', 'comprimi', 'confronta', 'firme', 'pdfa'], ['Tavole troppo pesanti per il portale? «Comprimi» le alleggerisce senza perdere le linee.', '«Confronta» mostra cosa è cambiato tra due revisioni.']],
   ['geometra', 'Geometra', 'home', ['visure', 'contratto', 'misure', 'tavola', 'migliora', 'comprimi', 'firme'], ['Dalle visure catastali: foglio, particella, rendita e valore IMU in Excel.', 'Le planimetrie vecchie scansionate: «Migliora» le raddrizza e le pulisce.']],
   ['sanitario', 'Medico o sanitario', 'flask', ['laboratorio', 'proteggi', 'oscura', 'moduli', 'unisci', 'migliora'], ['«Esami di laboratorio» mette i referti in tabella e confronta i valori nel tempo.', 'Prima di inviare un referto, «Proteggi» lo chiude con una password.']],
   ['insegnante', 'Insegnante', 'bulb', ['conta', 'immagini', 'migliora', 'impagina', 'word', 'oscura'], ['Le foto delle verifiche diventano un PDF pulito con «Immagini in PDF» e «Migliora».', '«Impagina» stampa 2 o 4 pagine per foglio, o un libretto.']],
   ['studente', 'Studente', 'cap', ['tesi', 'conta', 'migliora', 'comprimi', 'pdfa', 'impagina'], ['«Tesi» prepara il modello Word con frontespizio e indice, e controlla il PDF finale.', '«Conta parole» ti dice battute e cartelle, anche con un limite da rispettare.']],
-  ['personale', 'Uso personale', 'user', ['migliora', 'moduli', 'comprimi', 'unisci', 'firme', 'vettoriale'], ['Moduli da compilare? «Compila» trova da solo gli spazi, anche nelle scansioni.', 'Una foto della carta d’identità diventa un PDF pulito con «Migliora».']],
+  ['personale', 'Uso personale', 'user', ['migliora', 'moduli', 'comprimi', 'unisci', 'firme', 'vettoriale'], ['Moduli da compilare? «Compila» trova da solo gli spazi, anche nelle scansioni.', 'Una foto della carta d\u2019identità diventa un PDF pulito con «Migliora».']],
   ['altro', 'Altro', 'spark', [], []],
 ];
 const Prefs = (() => {
@@ -4392,7 +4459,10 @@ const Prefs = (() => {
     const a = p.anim === 'off' || p.anim === 'light' ? 'off' : 'full';
     document.documentElement.dataset.anim = a;
     try { if (typeof BgFlow !== 'undefined') BgFlow.apply(); } catch (e) { console.warn(e); }
-    document.querySelectorAll('svg.logo-live').forEach(s => { try { if (a === 'off') s.outerHTML = Brand.logoSvg(+s.getAttribute('width') || 32, { title: s.getAttribute('aria-label') || 'file360' }); } catch { } });
+    // i loghi animati (in alto e in fondo): con «No» diventano fermi, con «Sì» tornano a girare subito, senza ricaricare
+    const nuovo = html => { const t = document.createElement('template'); t.innerHTML = html; return t.content.firstElementChild; };
+    if (a === 'off') document.querySelectorAll('svg.logo-live').forEach(s => { try { s.replaceWith(nuovo(Brand.logoSvg(+s.getAttribute('width') || 32, { title: s.getAttribute('aria-label') || 'file360', live: true }))); } catch { } });
+    else document.querySelectorAll('svg[data-live-size]').forEach(s => { try { s.replaceWith(nuovo(Brand.logoSvg(+s.dataset.liveSize || 32, { title: s.getAttribute('aria-label') || 'file360', live: true }))); } catch { } });
   };
   return {
     get prof() { return p.prof || null; }, get anim() { return p.anim === 'off' || p.anim === 'light' ? 'off' : 'full'; }, get asked() { return !!p.asked; },
@@ -4402,7 +4472,7 @@ const Prefs = (() => {
   };
 })();
 const Onboard = (() => {
-  // la scelta del lavoro: facoltativa, solo dal menu ☰ (nessuna domanda all'avvio). Le animazioni si scelgono nel menu.
+  // la scelta del lavoro: facoltativa, solo dal menu \u2630 (nessuna domanda all'avvio). Le animazioni si scelgono nel menu.
   function show() {
     let m = null;
     const pick = id => { Prefs.set({ prof: id, asked: true }); m?.close(); if (!routeId()) showHome(); if (typeof Drawer !== 'undefined') Drawer.refresh?.(); };
@@ -4424,7 +4494,7 @@ function homeQuick() {
   const P = Prefs.profile();
   return h('div', { class: 'home-quick2' },
     P && P[3].length ? h('section', { class: 'pf-block pf-you', 'aria-label': 'Per il tuo lavoro' }, h('h3', {}, h('span', {}, 'Per il tuo lavoro'), h('b', {}, P[1])), h('div', { class: 'qk-l' }, P[3].map(tile)),
-      h('button', { class: 'linkish pf-allt', onclick: () => document.querySelector('.intents')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, 'Tutti gli strumenti, per categoria →')) : null,
+      h('button', { class: 'linkish pf-allt', onclick: () => document.querySelector('.intents')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, 'Tutti gli strumenti, per categoria \u2192')) : null,
     h('section', { class: 'pf-block pf-all', 'aria-label': 'Per tutti, ogni giorno' }, h('h3', {}, h('span', {}, 'Per tutti, ogni giorno')), h('div', { class: 'qk-l' }, UNIVERSAL.map(tile))));
 }
 
@@ -4487,7 +4557,7 @@ function workRow() {
   (async () => {
     try {
       if (pj && typeof Projects !== 'undefined') { const a = await Projects.list(); if (a.length) { pj.stat.textContent = a.length; pj.sub.textContent = `Ultimo: «${a[0].name}» · ${ago(a[0].updated)}`; } }
-      if (rc && typeof Ricette !== 'undefined') { const a = Ricette.list(); if (a.length) { rc.stat.textContent = a.length; rc.sub.textContent = a.slice(0, 2).map(r => r.name).join(' · ') + (a.length > 2 ? ` e altre ${a.length - 2}` : ''); } else rc.sub.textContent = 'Parti da un modello: «Pronto per PEC», «Archivio ricercabile»…'; }
+      if (rc && typeof Ricette !== 'undefined') { const a = Ricette.list(); if (a.length) { rc.stat.textContent = a.length; rc.sub.textContent = a.slice(0, 2).map(r => r.name).join(' · ') + (a.length > 2 ? ` e altre ${a.length - 2}` : ''); } else rc.sub.textContent = 'Parti da un modello: «Pronto per PEC», «Archivio ricercabile»\u2026'; }
       if (at && typeof Activity !== 'undefined') { const a = await Activity.list(); if (a.length) { const today = new Date().toDateString(), n = a.filter(e => new Date(e.at).toDateString() === today).length; at.stat.textContent = a.length; at.sub.textContent = `Ultima: ${a[0].toolName} · ${ago(a[0].at)}${n ? ` · ${n} oggi` : ''}`; } }
     } catch (e) { console.warn(e); }
   })();
@@ -4503,7 +4573,7 @@ const InstallTip = {
     if (!IS_TOUCH || IS_ARTIFACT || this.standalone() || !/^https:$/.test(location.protocol)) return null;
     try { if (localStorage.getItem(this.K)) return null; } catch { return null; }
     const ios = IS_IOS, box = h('div', { class: 'inst-tip' }, h('span', { class: 'inst-ic' }, ic('phone', 20)),
-      h('div', { class: 'inst-t' }, h('b', {}, 'Usala come un’app'), h('span', { class: 'muted small' }, ios ? 'Tocca Condividi (il quadrato con la freccia) e poi «Aggiungi alla schermata Home».' : 'Dal menu del browser scegli «Installa app» o «Aggiungi a schermata Home».')),
+      h('div', { class: 'inst-t' }, h('b', {}, 'Usala come un\u2019app'), h('span', { class: 'muted small' }, ios ? 'Tocca Condividi (il quadrato con la freccia) e poi «Aggiungi alla schermata Home».' : 'Dal menu del browser scegli «Installa app» o «Aggiungi a schermata Home».')),
       h('button', { class: 'icon-btn', title: 'Chiudi', 'aria-label': 'Chiudi', onclick: () => { try { localStorage.setItem(this.K, '1'); } catch { } box.remove(); } }, ic('x', 16)));
     return box;
   },
@@ -4565,12 +4635,12 @@ function openTool(id, preload, { fresh = false } = {}) {
       const had = Flow.active();
       await Flow.loaded(id, files);
       if (!had || !files._fromSession) fillBar();
-      // file del tipo sbagliato per questo strumento (un PDF in «Immagini in PDF», in «XBRL»…): lo si dice subito, con lo
+      // file del tipo sbagliato per questo strumento (un PDF in «Immagini in PDF», in «XBRL»\u2026): lo si dice subito, con lo
       // strumento adatto, invece di un errore generico a metà lavoro
       if (files.length && t.accept && !files.some(f => matchAccept(t.accept, f) || (/pdf/.test(t.accept) && isPdf(f)) || (/image/.test(t.accept) && isImage(f)) || (t.anyFile && !/\.(pdf|jpe?g|png|heic|heif|tiff?|webp|gif|bmp|avif)$/i.test(f.name || '')))) {
         const f = files[0], kind = typeof Flow !== 'undefined' ? Flow.kindOf(f) : 'other', ext = (f.name.match(/\.([^.]+)$/)?.[1] || '').toUpperCase();
         const sugg = ({ pdf: { immagini: ['immaginipdf', 'unisci'], xbrl: ['analisi'], vettoriale: ['immaginipdf'] }, img: { xbrl: ['immagini'], fatture: ['immagini'] } }[kind] || {})[id] || [];
-        const what = kind === 'pdf' ? 'un PDF' : kind === 'img' ? 'un’immagine' : ext ? `un file ${ext}` : 'un file di un altro tipo';
+        const what = kind === 'pdf' ? 'un PDF' : kind === 'img' ? 'un\u2019immagine' : ext ? `un file ${ext}` : 'un file di un altro tipo';
         const e = codedError(`«${f.name}» è ${what}: «${t.title}» lavora con ${acceptLabel(t.accept)}.${sugg.length ? ' Per questo file prova ' + sugg.filter(k => TOOLS[k]).map(k => '«' + TOOLS[k].title + '»').join(' o ') + '.' : ''}`, 'FORMAT');
         e.file = f;
         if (sugg.length && typeof toastActions === 'function') setTimeout(() => toastActions(`Apri «${f.name}» con:`, sugg.filter(k => TOOLS[k]).map(k => [TOOLS[k].short || TOOLS[k].title, () => handoff(k, f)]), 12000), 50);
@@ -4626,7 +4696,7 @@ function acceptFiles(t, list) {
   const files = [...list].filter(f => t.anyFile || isPdf(f) || okImg && isImage(f));
   const skipped = list.length - files.length;
   if (skipped) {
-    // file giusto, strumento sbagliato: si propone quello adatto (un .p7m in OCR → Firme, una fattura XML → Fatture…)
+    // file giusto, strumento sbagliato: si propone quello adatto (un .p7m in OCR \u2192 Firme, una fattura XML \u2192 Fatture\u2026)
     const other = [...list].filter(f => !files.includes(f));
     const kinds = other.map(f => typeof Flow !== 'undefined' ? Flow.kindOf(f) : 'other');
     const dest = { fattura: 'fatture', xbrl: 'xbrl', p7m: 'firme', img: 'immagini', pdf: null, zip: 'fatture', office: 'officepdf' }[kinds[0]];
@@ -4656,7 +4726,7 @@ function dropzone(t, onFiles) {
     h('div', { class: 'dz-ic' }, ic('upload', 34)),
     t.dzTitle ? h('h2', { class: 'dz-t' }, t.dzTitle) : h('h2', { class: 'dz-t' }, h('span', { class: 'dz-mouse' }, t.pdfIn === false ? 'Trascina qui le tue foto' : t.multiple ? 'Trascina qui i tuoi file' : 'Trascina qui il tuo file'),
       h('span', { class: 'dz-touch' }, t.pdfIn === false ? 'Scegli o scatta le foto' : t.multiple ? 'Scegli i file dal telefono' : 'Scegli il file dal telefono')),
-    h('p', {}, t.dzText ? t.dzText : t.anyFile ? 'File firmato (.p7m, .tsd, .m7m) o PDF con firma digitale' : t.pdfIn === false ? 'JPG, PNG, HEIC, TIFF, WebP, GIF, BMP' : /image/.test(t.accept) ? 'PDF o immagini (JPG, PNG, HEIC…)' : 'Documento PDF'),
+    h('p', {}, t.dzText ? t.dzText : t.anyFile ? 'File firmato (.p7m, .tsd, .m7m) o PDF con firma digitale' : t.pdfIn === false ? 'JPG, PNG, HEIC, TIFF, WebP, GIF, BMP' : /image/.test(t.accept) ? 'PDF o immagini (JPG, PNG, HEIC\u2026)' : 'Documento PDF'),
     t.folder && CAN_PICK_DIR ? h('div', { class: 'row dz-btns' }, h('button', { type: 'button', class: 'btn primary dz-pick' }, ic('file', 18), 'Scegli i file'),
       h('button', { class: 'btn', onclick: e => { e.stopPropagation(); dirInput.click(); } }, ic('layers', 18), 'Cartella'))
       // senza file è la strada principale (es. il contratto da compilare): quel pulsante viene prima ed è il principale
@@ -4694,13 +4764,13 @@ function route() {
 }
 
 /* =====================================================================
-   Preferiti e Command Palette — accesso rapido agli strumenti
+   Preferiti e Command Palette \u2014 accesso rapido agli strumenti
    ===================================================================== */
 
 /* =====================================================================
-   Preferiti, Recenti e Command Palette — il cuore dell’efficienza
+   Preferiti, Recenti e Command Palette \u2014 il cuore dell\u2019efficienza
    Pensati per chi apre lo stesso strumento 20 volte al giorno e per
-   chi cerca “oscurare” o “unire” senza ricordare il nome esatto.
+   chi cerca \u201coscurare\u201d o \u201cunire\u201d senza ricordare il nome esatto.
    ===================================================================== */
 const Favs = (() => {
   const KEY = 'officina-favs';
@@ -4738,9 +4808,12 @@ const Recents = (() => {
 
 /* sinonimi e parole che un utente italiano digita davvero */
 const CMD_SYNONYMS = {
-  rilevaai: ['rilevatore ai', 'rilevatore di intelligenza artificiale', 'testo scritto con l’ai', 'scritto con chatgpt', 'scritto con claude', 'testo generato dall’intelligenza artificiale', 'ai detector', 'gpt detector', 'compilatio', 'antiplagio', 'plagio', 'copiato', 'compito copiato', 'tesina copiata', 'verificare se un testo è stato scritto dall’ai', 'chatgpt', 'claude', 'gemini', 'intelligenza artificiale'],
+  rilevaai: ['rilevatore ai', 'rilevatore di intelligenza artificiale', 'testo scritto con l\u2019ai', 'scritto con chatgpt', 'scritto con claude', 'testo generato dall\u2019intelligenza artificiale', 'ai detector', 'gpt detector', 'compilatio', 'antiplagio', 'plagio', 'copiato', 'compito copiato', 'tesina copiata', 'verificare se un testo è stato scritto dall\u2019ai', 'chatgpt', 'claude', 'gemini', 'intelligenza artificiale'],
+  leggicontratto: ['clausole vessatorie', 'controllare contratto', 'analisi contratto', 'contratto di affitto da firmare', 'clausole nulle', 'deposito cauzionale massimo', 'foro competente', 'rinnovo tacito', 'penale contratto', 'recesso inquilino', 'contratto da firmare', 'revisione contratto', 'clausole illegittime', 'doppia firma 1341'],
+  autentica: ['pdf modificato', 'pdf falso', 'documento falso', 'fattura falsa', 'certificato falso', 'pdf contraffatto', 'pdf alterato', 'verificare autenticità', 'autenticità documento', 'controllare se un pdf è originale', 'versioni precedenti pdf', 'modificato dopo la firma', 'metadati pdf', 'data creazione pdf', 'chi ha modificato il pdf', 'manomissione', 'falsificazione'],
+  incassi: ['riconciliazione bancaria', 'riconciliazione banca fatture', 'fatture incassate', 'fatture non pagate', 'fatture scadute', 'clienti che non pagano', 'sollecito di pagamento', 'solleciti', 'scadenzario incassi', 'crediti scaduti', 'chi non mi ha pagato', 'estratto conto e fatture', 'abbinare bonifici alle fatture', 'insoluti'],
   vendite: ['analisi acquisti', 'analisi fornitori', 'fornitori', 'fatture passive', 'fatture di acquisto', 'spese per fornitore', 'rincari fornitori', 'cassa prevista', 'iva da versare', 'vendite e acquisti', 'analisi vendite', 'analisi delle vendite', 'statistiche vendite', 'statistiche fatture', 'fatturato', 'analisi fatturato', 'fatturato per cliente', 'mappa clienti', 'mappa dei clienti', 'dove sono i clienti', 'clienti migliori', 'clienti persi', 'clienti che non comprano più', 'clienti da ricontattare', 'clienti inattivi', 'prodotti più venduti', 'stagionalità vendite', 'andamento vendite', 'previsione vendite', 'business intelligence', 'cruscotto vendite', 'dashboard fatture', 'fatture attive', 'fatture emesse', 'curva abc clienti', 'pareto clienti'],
-  contratto: ['contratto di affitto', 'contratto di locazione', 'affitto', 'affittare', 'locazione', 'affittare casa', 'contratto 4+4', 'contratto 3+2', 'canone concordato', 'contratto transitorio', 'affitto studenti', 'contratto studenti', 'comodato', 'comodato d’uso', 'comodato gratuito', 'comodato a un figlio', 'affitto negozio', 'locazione commerciale', 'affitto ufficio', 'inquilino', 'cedolare secca', 'contratto casa'],
+  contratto: ['contratto di affitto', 'contratto di locazione', 'affitto', 'affittare', 'locazione', 'affittare casa', 'contratto 4+4', 'contratto 3+2', 'canone concordato', 'contratto transitorio', 'affitto studenti', 'contratto studenti', 'comodato', 'comodato d\u2019uso', 'comodato gratuito', 'comodato a un figlio', 'affitto negozio', 'locazione commerciale', 'affitto ufficio', 'inquilino', 'cedolare secca', 'contratto casa'],
   annota: ['commenti', 'commentare', 'annotare', 'annotazioni', 'note', 'evidenziare', 'evidenziatore', 'sottolineare', 'barrare', 'revisione', 'correzioni', 'osservazioni', 'post-it', 'nota adesiva'],
   pdftesto: ['pdf in testo', 'pdf in txt', 'pdf in html', 'estrarre il testo', 'copiare il testo', 'solo testo', 'testo semplice', 'pagina web', 'txt', 'html'],
   pdfppt: ['pdf in powerpoint', 'pdf in pptx', 'pdf in presentazione', 'pdf in diapositive', 'slide', 'presentazione dal pdf', 'pptx', 'proiettare'],
@@ -4791,7 +4864,7 @@ const Cmd = (() => {
   const STOP = new Set('a ad al alla alle allo ai agli all agli con da dal dalla dalle dei degli del della delle di e ed il lo la i gli le un uno una per tra fra in su sul sulla sulle negli nelle nei degli delle che come cosa nel nello se due tre piu ogni questo questa quello quella non ho posso puo dove quando fare fai voglio vorrei devo mi mio mia miei tue tuoi tuo file files documento documenti pdf strumento strumenti'.split(' '));
   const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('it-IT')
     .replace(/\bpdf\s*[\/-]\s*a\b|\bpdf\s*a(?=\s*(?:[123]\s*[abu]?\b|$))/g, 'pdfa').replace(/[^a-z0-9]+/g, ' ').trim();
-  // radice delle parole italiane (leggera): «eliminare», «elimina», «eliminazione» → «elimin»; «separare», «separa» → «separ»
+  // radice delle parole italiane (leggera): «eliminare», «elimina», «eliminazione» \u2192 «elimin»; «separare», «separa» \u2192 «separ»
   const stem = w => { if (w.length < 5) return w; const r = w.replace(/(azioni|azione|amento|imento|mente|ando|endo|ato|ata|ati|ate|ito|ita|iti|ite|uto|are|ere|ire|isci|isce|iamo|ione|ioni)$/, ''); const t = (r.length >= 4 ? r : w).replace(/[aeiou]$/, ''); return t.length >= 4 ? t : w; };
   const words = value => normalize(value).split(/\s+/).filter(x => x && !STOP.has(x));
   const oneEditAway = (a, b) => {
@@ -4885,7 +4958,7 @@ const Cmd = (() => {
     else if (phrase.length >= 3 && desc.includes(phrase)) phraseBoost = 10;
     if (!matched && !phraseBoost) return 0;
     total += phraseBoost;
-    // direzione della conversione: «pdf in jpg» cerca un «PDF in …», «jpg in pdf» un «… in PDF» (le parole sono le stesse)
+    // direzione della conversione: «pdf in jpg» cerca un «PDF in \u2026», «jpg in pdf» un «\u2026 in PDF» (le parole sono le stesse)
     const raw = normalize(query);
     const fromPdf = /\bpdf (?:in|a|to|come) [a-z]/.test(raw), toPdf = /[a-z] (?:in|a|to) pdf\b/.test(raw);
     if (fromPdf && !toPdf) total += /^pdf in /i.test(t.title) ? 18 : / in pdf$/i.test(t.title) ? -18 : 0;      // e la direzione contraria pesa contro
@@ -5042,10 +5115,10 @@ const Cmd = (() => {
     const isMac = /Mac|iPhone|iPad/.test(navigator.userAgentData?.platform || navigator.platform || '');
     const inp = h('input', {
       class: 'cmd-input', type: 'search', role: 'combobox',
-      'aria-label': 'Cerca uno strumento o un’operazione',
+      'aria-label': 'Cerca uno strumento o un\u2019operazione',
       'aria-autocomplete': 'list', 'aria-haspopup': 'listbox',
       'aria-controls': 'cmd-list', 'aria-expanded': 'true',
-      placeholder: 'Cerca per nome o descrivi cosa devi fare…',
+      placeholder: 'Cerca per nome o descrivi cosa devi fare\u2026',
       autocomplete: 'off', spellcheck: 'false', enterkeyhint: 'search', value: q
     });
     const clear = h('button', { class: 'cmd-clear', type: 'button', title: 'Svuota ricerca', 'aria-label': 'Svuota ricerca', hidden: !q,
@@ -5058,7 +5131,7 @@ const Cmd = (() => {
         h('div', { class: 'cmd-head' }, ic('search', 18), inp, clear, closeBtn),
         h('div', { class: 'cmd-list', id: 'cmd-list', role: 'listbox', 'aria-label': 'Strumenti disponibili' }),
         h('div', { class: 'cmd-footer' }, statusEl,
-          h('span', { class: 'cmd-help' }, h('kbd', {}, '↑'), ' ', h('kbd', {}, '↓'), ' sposta · ', h('kbd', {}, 'Invio'), ' apri · ', h('kbd', {}, isMac ? '⌘ K' : 'Ctrl K'), ' cerca'))));
+          h('span', { class: 'cmd-help' }, h('kbd', {}, '\u2191'), ' ', h('kbd', {}, '\u2193'), ' sposta · ', h('kbd', {}, 'Invio'), ' apri · ', h('kbd', {}, isMac ? '\u2318 K' : 'Ctrl K'), ' cerca'))));
     document.body.append(el);
     inp.addEventListener('input', () => { q = inp.value; idx = 0; render(); });
     el.addEventListener('mousedown', e => { if (e.target === el) close(); });
@@ -5408,10 +5481,10 @@ async function startImages(stage, files, tool) {
 
   async function addFiles(list) {
     let bad = 0;
-    Busy.show('Lettura delle immagini…');
+    Busy.show('Lettura delle immagini\u2026');
     try {
       for (const [i, f] of list.entries()) {
-        Busy.set(i / list.length, `${f.name}${/\.hei[cf]$/i.test(f.name) ? ' (conversione HEIC…)' : ''}`);
+        Busy.set(i / list.length, `${f.name}${/\.hei[cf]$/i.test(f.name) ? ' (conversione HEIC\u2026)' : ''}`);
         await tick();
         try {
           const frames = await decodeImageFile(f);
@@ -5458,7 +5531,7 @@ async function startImages(stage, files, tool) {
   function render() {
     grid.replaceChildren(...items.map(cardFor), addCard);
     items.forEach((it, i) => { const el = cardFor(it); el.querySelector('.badge').textContent = i + 1; preview(it, el); });
-    summary.textContent = items.length ? `${plural(items.length, 'immagine', 'immagini')} → ${st.output === 'one' ? `1 PDF di ${plural(items.length, 'pagina', 'pagine')}` : plural(items.length, 'PDF separato', 'PDF separati')}` : 'Nessuna immagine';
+    summary.textContent = items.length ? `${plural(items.length, 'immagine', 'immagini')} \u2192 ${st.output === 'one' ? `1 PDF di ${plural(items.length, 'pagina', 'pagine')}` : plural(items.length, 'PDF separato', 'PDF separati')}` : 'Nessuna immagine';
     runBtn.disabled = !items.length;
     orientSec.hidden = st.size === 'fit';
     nameSec.hidden = st.output !== 'one';
@@ -5471,7 +5544,7 @@ async function startImages(stage, files, tool) {
     ondragover: e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); },
     ondrop: e => { if (e.dataTransfer.files.length) { e.preventDefault(); const f = acceptFiles(tool, e.dataTransfer.files); if (f.length) addFiles(f); } } },
     h('div', { class: 'toolbar' }, h('div', { class: 'tb-title' }, IS_TOUCH ? 'Anteprima delle pagine · tieni premuta una foto per spostarla' : 'Anteprima delle pagine · trascina per riordinare'),
-      h('button', { class: 'btn sm', onclick: () => { items.sort((a, b) => a.name.localeCompare(b.name, 'it', { numeric: true })); render(); } }, ic('az', 16), 'Ordina A→Z'),
+      h('button', { class: 'btn sm', onclick: () => { items.sort((a, b) => a.name.localeCompare(b.name, 'it', { numeric: true })); render(); } }, ic('az', 16), 'Ordina A\u2192Z'),
       h('button', { class: 'btn sm', onclick: () => { items.reverse(); render(); } }, ic('swap', 16), 'Inverti')),
     grid, picker);
   workspace(stage, main, [
@@ -5491,7 +5564,7 @@ async function startImages(stage, files, tool) {
   async function run() {
     if (!items.length) return;
     const opts = { size: st.size, orient: st.orient, margin: st.margin, quality: st.quality };
-    await withBusy('Conversione in corso…', async () => {
+    await withBusy('Conversione in corso\u2026', async () => {
       const outs = [];
       let one = st.output === 'one' ? await PDFDocument.create() : null;
       for (const [i, it] of items.entries()) {
@@ -5506,7 +5579,7 @@ async function startImages(stage, files, tool) {
         }
         await tick();
       }
-      if (one) { Busy.set(1, 'Salvataggio…'); outs.push({ name: ensurePdf(nameIn.value), bytes: await saveDoc(one), info: plural(items.length, 'pagina', 'pagine') }); }
+      if (one) { Busy.set(1, 'Salvataggio\u2026'); outs.push({ name: ensurePdf(nameIn.value), bytes: await saveDoc(one), info: plural(items.length, 'pagina', 'pagine') }); }
       showResult(outs, { zipName: 'immagini-pdf.zip' });
     }, { cancellable: true });
   }
@@ -5538,7 +5611,7 @@ async function startMerge(stage, files, tool) {
     return { key: 'k' + (++seq), kind: 'pdf', file: f, name: f.name, size: f.size, pages: d.numPages, doc: d };
   }
   async function addFiles(list, first = false) {
-    Busy.show('Lettura dei file…'); const errs = [];
+    Busy.show('Lettura dei file\u2026'); const errs = [];
     try {
       for (const [i, f] of list.entries()) {
         Busy.set(i / list.length, f.name);
@@ -5586,8 +5659,8 @@ async function startMerge(stage, files, tool) {
   const main = h('div', { class: 'ws-main',
     ondragover: e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); },
     ondrop: e => { if (e.dataTransfer.files.length) { e.preventDefault(); const f = acceptFiles(tool, e.dataTransfer.files); if (f.length) addFiles(f); } } },
-    h('div', { class: 'toolbar' }, h('div', { class: 'tb-title' }, IS_TOUCH ? 'Tieni premuta una scheda per spostarla' : 'Trascina le schede per cambiare l’ordine'),
-      h('button', { class: 'btn sm', onclick: () => { items.sort((a, b) => a.name.localeCompare(b.name, 'it', { numeric: true })); render(); } }, ic('az', 16), 'Ordina A→Z'),
+    h('div', { class: 'toolbar' }, h('div', { class: 'tb-title' }, IS_TOUCH ? 'Tieni premuta una scheda per spostarla' : 'Trascina le schede per cambiare l\u2019ordine'),
+      h('button', { class: 'btn sm', onclick: () => { items.sort((a, b) => a.name.localeCompare(b.name, 'it', { numeric: true })); render(); } }, ic('az', 16), 'Ordina A\u2192Z'),
       h('button', { class: 'btn sm', onclick: () => { items.reverse(); render(); } }, ic('swap', 16), 'Inverti')),
     grid, picker);
   workspace(stage, main, [
@@ -5600,7 +5673,7 @@ async function startMerge(stage, files, tool) {
   async function run() {
     if (!items.length) return;
     if (items.length === 1 && items[0].kind === 'pdf') return toast('Aggiungi almeno un altro file da unire', 'error');
-    await withBusy('Unione in corso…', async () => {
+    await withBusy('Unione in corso\u2026', async () => {
       const out = await PDFDocument.create(), parts = [];
       for (const [i, it] of items.entries()) {
         Busy.set(i / items.length, it.name);
@@ -5618,7 +5691,7 @@ async function startMerge(stage, files, tool) {
         try { DocStruct.writeOutline(out, items2); } catch (e) { console.warn('segnalibri', e); }
         try { DocStruct.copyAttachments(out, parts.filter(p => p.src).map(p => ({ src: p.src, items: DocStruct.attachments(p.src) }))); } catch (e) { console.warn('allegati', e); }
         try { DocStruct.tags(out, parts.filter(p => p.src)); } catch (e) { console.warn('tag', e); out.catalog.delete(PDFLib.PDFName.of('StructTreeRoot')); } }
-      Busy.set(1, 'Salvataggio…');
+      Busy.set(1, 'Salvataggio\u2026');
       const bytes = await saveDoc(out);
       showResult([{ name: ensurePdf(nameIn.value), bytes, info: plural(out.getPageCount(), 'pagina', 'pagine') }]);
     }, { job: true });
@@ -5683,7 +5756,7 @@ const DocStruct = (() => {
       return root instanceof PDFDict ? walk(look(root.get(N('First'))), 0) : [];
     } catch (e) { console.warn('segnalibri', e); return []; }
   }
-  // riporta l'albero sulle pagine nuove (map: indice d'origine → indice nel file nuovo, o undefined se la pagina non c'è)
+  // riporta l'albero sulle pagine nuove (map: indice d'origine \u2192 indice nel file nuovo, o undefined se la pagina non c'è)
   function remap(items, map) {
     return items.flatMap(it => {
       const kids = remap(it.kids || [], map), p = it.page != null ? map(it.page) : undefined;
@@ -5835,7 +5908,7 @@ const DocStruct = (() => {
     if (lang && !out.catalog.has(N('Lang'))) out.catalog.set(N('Lang'), lang);
     return true;
   }
-  /* tutto insieme, per i casi comuni: parts = [{ src, map(indice d'origine) → indice nel nuovo, title? (un livello in più) }] */
+  /* tutto insieme, per i casi comuni: parts = [{ src, map(indice d'origine) \u2192 indice nel nuovo, title? (un livello in più) }] */
   function carry(out, parts) {
     const items = [];
     for (const p of parts) {
@@ -5874,7 +5947,7 @@ function lookBtn(card) {
     } }, ic('zoomin', 16));
 }
 /* ---------- anteprima grande di una pagina ----------
-   frecce ← → (o i pulsanti) per passare alle altre, + e − per ingrandire, Esc per chiudere; al telefono si scorre col dito quando è ingrandita */
+   frecce \u2190 \u2192 (o i pulsanti) per passare alle altre, + e \u2212 per ingrandire, Esc per chiudere; al telefono si scorre col dito quando è ingrandita */
 const PageLook = {
   open(list, start = 0) {
     if (!list.length) return;
@@ -5941,7 +6014,7 @@ const PageLook = {
 
 /* ----------------------------- DIVIDI ------------------------------ */
 async function startSplit(stage, files, tool, opt = {}) {
-  const doc = await withBusy('Apertura del documento…', () => openPdf(files[0]));
+  const doc = await withBusy('Apertura del documento\u2026', () => openPdf(files[0]));
   if (!doc) throw (withBusy.last || new Error('Impossibile aprire il file'));
   const N = doc.numPages;
   const st = { mode: opt.auto && N > 1 ? 'auto' : 'ranges', every: 1, ranges: N > 1 ? [[1, Math.ceil(N / 2)], [Math.ceil(N / 2) + 1, N]].map(([a, b]) => a === b ? String(a) : `${a}-${b}`).join(', ') : '1', sel: new Set(), selMode: 'one',
@@ -5984,7 +6057,7 @@ async function startSplit(stage, files, tool, opt = {}) {
   const opts = h('div', { class: 'sec' });
 
   function groups() {
-    if (st.mode === 'auto') { if (!auto.info) throw new Error(auto.busy ? (auto.prog || 'Lettura delle pagine…') : 'Lettura delle pagine…'); return autoGroups(); }
+    if (st.mode === 'auto') { if (!auto.info) throw new Error(auto.busy ? (auto.prog || 'Lettura delle pagine\u2026') : 'Lettura delle pagine\u2026'); return autoGroups(); }
     if (st.mode === 'each') return Array.from({ length: N }, (_, i) => [i + 1]);
     if (st.mode === 'every') { const n = Math.max(1, st.every | 0), g = []; for (let i = 1; i <= N; i += n) g.push(Array.from({ length: Math.min(n, N - i + 1) }, (_, k) => i + k)); return g; }
     if (st.mode === 'ranges') return parseRanges(st.ranges, N);
@@ -6004,20 +6077,20 @@ async function startSplit(stage, files, tool, opt = {}) {
     if (st.mode === 'auto') {
       const txt = h('input', { class: 'input', value: st.byText, placeholder: 'es. FATTURA, Spett.le, CEDOLINO', oninput: () => { st.byText = txt.value; auto.names = []; update(); drawNames(); } });
       kids.push(h('div', { class: 'muted small' }, 'Un PDF con tante fatture, cedolini o documenti diventa un file per ciascuno. Clicca tra due pagine (sulla miniatura) per aggiungere o togliere un taglio.'),
-        h('label', { class: 'field' }, 'Dove comincia ogni documento', seg([['auto', 'Da solo'], ['num', 'Cambia il numero'], ['cf', 'Cambia il codice fiscale'], ['blank', 'Dopo una pagina bianca'], ['text', 'Dove c’è un testo']], st.by, v => { st.by = v; auto.add.clear(); auto.del.clear(); auto.names = []; drawOpts(); update(); })),
+        h('label', { class: 'field' }, 'Dove comincia ogni documento', seg([['auto', 'Da solo'], ['num', 'Cambia il numero'], ['cf', 'Cambia il codice fiscale'], ['blank', 'Dopo una pagina bianca'], ['text', 'Dove c\u2019è un testo']], st.by, v => { st.by = v; auto.add.clear(); auto.del.clear(); auto.names = []; drawOpts(); update(); })),
         st.by === 'auto' ? h('div', { class: 'muted small' }, 'Uso «Pagina 1 di N», il numero del documento, il codice fiscale di chi lo riceve e le pagine bianche di separazione.') : null,
         st.by === 'text' ? h('label', { class: 'field' }, 'Testo in cima alla prima pagina di ogni documento', txt) : null,
         checkbox('Togli le pagine bianche di separazione', st.dropBlank, v => { st.dropBlank = v; auto.names = []; update(); drawNames(); }),
         namesBox);
     } else if (st.mode === 'ranges') {
       const inp = h('input', { class: 'input split-ranges', value: st.ranges, placeholder: 'es. 1-3, 4-8, 9', oninput: () => { st.ranges = inp.value; update(); } });
-      kids.push(h('label', { class: 'field' }, 'Un file per ogni intervallo', inp), h('div', { class: 'muted small' }, 'Separa con la virgola. “8-” significa dalla pagina 8 alla fine.'));
+      kids.push(h('label', { class: 'field' }, 'Un file per ogni intervallo', inp), h('div', { class: 'muted small' }, 'Separa con la virgola. \u201c8-\u201d significa dalla pagina 8 alla fine.'));
     } else if (st.mode === 'files') {
       const nIn = h('input', { class: 'input split-nfiles', type: 'number', min: 2, max: N, value: st.files, 'aria-label': 'Numero di file',
         oninput: () => { const v = clamp(+nIn.value || 2, 1, N); if (v === st.files) return; st.files = v; st.counts = evenCounts(v); drawRows(); update(); } });
       const step = d => { st.files = clamp(st.files + d, 1, N); nIn.value = st.files; st.counts = evenCounts(st.files); drawRows(); update(); };
       const rows = h('div', { class: 'split-files' }), tot = h('div', { class: 'muted small split-tot' });
-      const drawTot = () => { const t = st.counts.reduce((a, b) => a + b, 0); tot.textContent = t === N ? `Totale: ${N} pagine su ${N} ✓` : t < N ? `Totale: ${t} su ${N} — mancano ${plural(N - t, 'pagina', 'pagine')}` : `Totale: ${t} su ${N} — ${plural(t - N, 'pagina', 'pagine')} in più`; tot.classList.toggle('bad', t !== N); };
+      const drawTot = () => { const t = st.counts.reduce((a, b) => a + b, 0); tot.textContent = t === N ? `Totale: ${N} pagine su ${N} \u2713` : t < N ? `Totale: ${t} su ${N} \u2014 mancano ${plural(N - t, 'pagina', 'pagine')}` : `Totale: ${t} su ${N} \u2014 ${plural(t - N, 'pagina', 'pagine')} in più`; tot.classList.toggle('bad', t !== N); };
       const drawRows = () => {
         let at = 1;
         rows.replaceChildren(...st.counts.map((c, k) => {
@@ -6029,14 +6102,14 @@ async function startSplit(stage, files, tool, opt = {}) {
               if (k < st.counts.length - 1) { const rest = N - st.counts.slice(0, -1).reduce((a, b) => a + b, 0); if (rest >= 1) st.counts[st.counts.length - 1] = rest; }
               drawRows(); update();
             } });
-          return h('label', { class: 'split-file' }, h('span', { class: 'sn-tag', style: { background: COLORS[k % COLORS.length] } }), h('span', { class: 'sf-n' }, `File ${k + 1}`), inp, h('span', { class: 'muted small sf-r' }, c >= 1 && to <= N ? (c === 1 ? `p. ${from}` : `p. ${from}–${to}`) : '—'));
+          return h('label', { class: 'split-file' }, h('span', { class: 'sn-tag', style: { background: COLORS[k % COLORS.length] } }), h('span', { class: 'sf-n' }, `File ${k + 1}`), inp, h('span', { class: 'muted small sf-r' }, c >= 1 && to <= N ? (c === 1 ? `p. ${from}` : `p. ${from}\u2013${to}`) : '\u2014'));
         }));
         drawTot();
       };
       drawRows();
       kids.push(h('label', { class: 'field' }, 'Quanti file', h('div', { class: 'row', style: { gap: '6px', alignItems: 'center' } },
-          h('button', { class: 'btn sm', 'aria-label': 'Un file in meno', onclick: () => step(-1) }, '−'), nIn, h('button', { class: 'btn sm', 'aria-label': 'Un file in più', onclick: () => step(1) }, '+'))),
-        h('div', { class: 'muted small' }, 'Quante pagine in ciascun file, nell’ordine. Cambiando un file, l’ultimo prende le pagine che restano.'),
+          h('button', { class: 'btn sm', 'aria-label': 'Un file in meno', onclick: () => step(-1) }, '\u2212'), nIn, h('button', { class: 'btn sm', 'aria-label': 'Un file in più', onclick: () => step(1) }, '+'))),
+        h('div', { class: 'muted small' }, 'Quante pagine in ciascun file, nell\u2019ordine. Cambiando un file, l\u2019ultimo prende le pagine che restano.'),
         rows, tot,
         h('button', { class: 'btn sm ghost', onclick: () => { st.counts = evenCounts(st.files); drawRows(); update(); } }, 'Parti uguali'));
     } else if (st.mode === 'every') {
@@ -6059,9 +6132,9 @@ async function startSplit(stage, files, tool, opt = {}) {
     let g; try { g = groups(); } catch { return; }
     if (auto.names.length !== g.length) auto.names = g.map((grp, k) => SplitAuto.nameOf(auto.info, grp, doc.base, k));
     namesBox.replaceChildren(h('div', { class: 'sec-t' }, `Nomi dei file (${g.length})`),
-      ...g.slice(0, 60).map((grp, k) => h('label', { class: 'split-name' }, h('span', { class: 'sn-tag', style: { background: COLORS[k % COLORS.length] } }), h('span', { class: 'muted small sn-p' }, grp.length === 1 ? `p. ${grp[0]}` : `p. ${grp[0]}–${grp[grp.length - 1]}`),
+      ...g.slice(0, 60).map((grp, k) => h('label', { class: 'split-name' }, h('span', { class: 'sn-tag', style: { background: COLORS[k % COLORS.length] } }), h('span', { class: 'muted small sn-p' }, grp.length === 1 ? `p. ${grp[0]}` : `p. ${grp[0]}\u2013${grp[grp.length - 1]}`),
         h('input', { class: 'input', value: auto.names[k], 'aria-label': `Nome del file ${k + 1}`, oninput: e => { auto.names[k] = e.target.value; } }))),
-      g.length > 60 ? h('div', { class: 'muted small' }, `… e altri ${g.length - 60} file con il nome dal contenuto.`) : null);
+      g.length > 60 ? h('div', { class: 'muted small' }, `\u2026 e altri ${g.length - 60} file con il nome dal contenuto.`) : null);
   }
   function update() {
     let g = null;
@@ -6089,7 +6162,7 @@ async function startSplit(stage, files, tool, opt = {}) {
   async function run() {
     let g; try { g = groups(); } catch (e) { return toast(e.message, 'error'); }
     if (st.mode === 'auto') { const seen = new Map(); auto.names = auto.names.map(n => { const k = n.toLowerCase(); const c = seen.get(k) || 0; seen.set(k, c + 1); return c ? `${n} (${c + 1})` : n; }); }
-    await withBusy('Divisione in corso…', async () => {
+    await withBusy('Divisione in corso\u2026', async () => {
       const src = await loadLib(doc.bytes);
       const outs = [];
       for (const [i, grp] of g.entries()) {
@@ -6110,7 +6183,7 @@ async function startSplit(stage, files, tool, opt = {}) {
 /* ----------------------------- COMPRIMI ---------------------------- */
 async function startCompress(stage, files) {
   const docs = [];
-  await withBusy('Apertura dei file…', async () => {
+  await withBusy('Apertura dei file\u2026', async () => {
     for (const [i, f] of files.entries()) { Busy.set(i / files.length, f.name); try { docs.push(await openPdf(f)); } catch (e) { Errors.show(e, { file: f, skipped: files.length > 1 }); } }
   });
   if (!docs.length) throw new Error('Nessun PDF valido');
@@ -6125,7 +6198,7 @@ async function startCompress(stage, files) {
     h('div', { class: 'fr-thumb' }, lazyThumb(d.pdfjs, 1, h('canvas'), 40, 52)),
     h('div', { class: 'fr-info' }, h('div', { class: 'fr-name' }, d.name), h('div', { class: 'muted small' }, `${plural(d.numPages, 'pagina', 'pagine')} · ${fmtSize(d.size)}`)))));
   const levelsEl = h('div', { class: 'levels' });
-  const warn = h('div', { class: 'hint warn' }, 'Nei livelli Consigliata, Forte e Massima le pagine diventano immagini: il testo non sarà più selezionabile. Se ti serve, passa poi il file all’OCR.');
+  const warn = h('div', { class: 'hint warn' }, 'Nei livelli Consigliata, Forte e Massima le pagine diventano immagini: il testo non sarà più selezionabile. Se ti serve, passa poi il file all\u2019OCR.');
   const drawLevels = () => {
     levelsEl.replaceChildren(...LEVELS.map(l => h('button', { class: 'level' + (l.id === st.level ? ' on' : ''), dataset: { level: l.id }, onclick: () => { st.level = l.id; drawLevels(); qPrev(); } },
       h('span', { class: 'dot' }), h('div', {}, h('b', {}, l.name), h('span', {}, l.desc)))));
@@ -6162,7 +6235,7 @@ async function startCompress(stage, files) {
       const centre = ba.follow(qBox); qCentre = centre;
       requestAnimationFrame(() => { if (first) { if (qBox.classList.contains('zoom')) scrollToInk(qBox, qBefore, 1500); } else qBox.scrollTo(keep[0], keep[1]); centre(); });
       if (lv.id === 'lossless') qEst.textContent = 'Qualità identica: si alleggerisce solo la struttura del file.';
-      else { const est = jpgSize * totalPages * 1.03 + 2000; qEst.textContent = est < total ? `Peso stimato: circa ${fmtSize(est)} invece di ${fmtSize(total)} (−${Math.round((1 - est / total) * 100)}%).` : `Con questo livello il file non si alleggerirebbe (circa ${fmtSize(est)}): prova un livello più forte o «Senza perdita».`; }
+      else { const est = jpgSize * totalPages * 1.03 + 2000; qEst.textContent = est < total ? `Peso stimato: circa ${fmtSize(est)} invece di ${fmtSize(total)} (\u2212${Math.round((1 - est / total) * 100)}%).` : `Con questo livello il file non si alleggerirebbe (circa ${fmtSize(est)}): prova un livello più forte o «Senza perdita».`; }
     } catch (e) { console.warn('anteprima qualità', e); }
   }
   workspace(stage, h('div', { class: 'ws-main' }, h('div', { class: 'toolbar', style: { maxWidth: '820px', margin: '0 auto 16px' } }, h('div', { class: 'tb-title' }, `${plural(docs.length, 'file', 'file')} · ${fmtSize(total)} in totale`)), list, qCard),
@@ -6183,7 +6256,7 @@ async function startCompress(stage, files) {
     // costava minuti; si fa solo la compressione senza perdita (testo e grafica restano veri)
     if (!st.gray) {
       let img = false;
-      for (let p = 1; p <= d.numPages && !img; p++) { img = await pageHasImage(d.pdfjs, p).catch(() => true); if (p % 50 === 0) Busy.set(null, `${d.name} — analisi delle pagine (${p} di ${d.numPages})`); }
+      for (let p = 1; p <= d.numPages && !img; p++) { img = await pageHasImage(d.pdfjs, p).catch(() => true); if (p % 50 === 0) Busy.set(null, `${d.name} \u2014 analisi delle pagine (${p} di ${d.numPages})`); }
       if (!img) {
         // lo stesso documento, solo salvato in forma compatta: restano tutto (segnalibri, campi, allegati, tag per l'accessibilità)
         const src = await loadLib(d.bytes);
@@ -6198,7 +6271,7 @@ async function startCompress(stage, files) {
       const jpg = await canvasToBytes(r.canvas, 'image/jpeg', lv.q);
       const res = { jpg, w: r.w, h: r.h };
       r.canvas.width = r.canvas.height = 0;
-      done++; Busy.set((idx + done / d.numPages) / docs.length, `${d.name} — ${done} di ${plural(d.numPages, 'pagina', 'pagine')}`);
+      done++; Busy.set((idx + done / d.numPages) / docs.length, `${d.name} \u2014 ${done} di ${plural(d.numPages, 'pagina', 'pagine')}`);
       return res;
     });
     for (const pg of pages) {
@@ -6219,14 +6292,14 @@ async function startCompress(stage, files) {
   }
   async function run() {
     const lv = LEVELS.find(l => l.id === st.level);
-    await withBusy('Compressione in corso…', async () => {
+    await withBusy('Compressione in corso\u2026', async () => {
       const outs = []; let before = 0, after = 0;
       for (const [i, d] of docs.entries()) {
         Busy.set(i / docs.length, d.name);
         let bytes = await compressOne(d, lv, i);
         let info;
         if (bytes.length >= d.size) { bytes = d.bytes; info = 'già ottimizzato, lasciato invariato'; }
-        else info = `${fmtSize(d.size)} → ${fmtSize(bytes.length)} (−${Math.round((1 - bytes.length / d.size) * 100)}%)${bytes.keptText ? ' · testo conservato' : ''}`;
+        else info = `${fmtSize(d.size)} \u2192 ${fmtSize(bytes.length)} (\u2212${Math.round((1 - bytes.length / d.size) * 100)}%)${bytes.keptText ? ' · testo conservato' : ''}`;
         before += d.size; after += bytes.length;
         outs.push({ name: `${d.base}-compresso.pdf`, bytes, info, from: bytes === d.bytes ? null : d.bytes });
       }
@@ -6238,7 +6311,7 @@ async function startCompress(stage, files) {
 
 /* ----------------------------- RUOTA ------------------------------- */
 async function startRotate(stage, files) {
-  const doc = await withBusy('Apertura del documento…', () => openPdf(files[0]));
+  const doc = await withBusy('Apertura del documento\u2026', () => openPdf(files[0]));
   if (!doc) throw (withBusy.last || new Error('Impossibile aprire il file'));
   const N = doc.numPages;
   const rot = new Array(N).fill(0), sel = new Set();
@@ -6280,7 +6353,7 @@ async function startRotate(stage, files) {
   }
   /* verso automatico: pagine capovolte o di lato, trovate da sole e raddrizzate con un clic */
   const det = new Array(N).fill(null);
-  const autoMsg = h('div', {}, 'Controllo del verso di ogni pagina…');
+  const autoMsg = h('div', {}, 'Controllo del verso di ogni pagina\u2026');
   const autoBar = h('i'), autoProg = h('div', { class: 'bar', style: { marginTop: '8px', height: '6px' } }, autoBar);
   const fixBtn = h('button', { class: 'btn primary', hidden: true, style: { marginTop: '10px', width: '100%' }, onclick: () => fixAll() }, ic('rotate', 18), h('span', {}, ''));
   const autoBox = h('div', { class: 'hint auto-rot' }, autoMsg, autoProg, fixBtn);
@@ -6311,7 +6384,7 @@ async function startRotate(stage, files) {
         done++;
         if (!alive) return;
         autoBar.style.width = Math.round(done / N * 100) + '%';
-        autoMsg.textContent = `Controllo del verso di ogni pagina… ${done} di ${N}`;
+        autoMsg.textContent = `Controllo del verso di ogni pagina\u2026 ${done} di ${N}`;
         markCard(i);
       }
     };
@@ -6320,7 +6393,7 @@ async function startRotate(stage, files) {
     if (!alive) return;
     autoProg.remove();
     const f = found(), unsure = det.map((d, i) => d && !d.sure ? i + 1 : 0).filter(Boolean);
-    const list = (arr, max = 8) => arr.slice(0, max).join(', ') + (arr.length > max ? '…' : '');
+    const list = (arr, max = 8) => arr.slice(0, max).join(', ') + (arr.length > max ? '\u2026' : '');
     if (f.length) {
       const cap = f.filter(i => det[i].rot === 180), side = f.filter(i => det[i].rot !== 180);
       autoBox.classList.add('warn');
@@ -6355,7 +6428,7 @@ async function startRotate(stage, files) {
 
   async function run() {
     if (!rot.some(r => r % 360)) return toast('Non hai ancora ruotato nessuna pagina', 'error');
-    await withBusy('Rotazione in corso…', async () => {
+    await withBusy('Rotazione in corso\u2026', async () => {
       const pdf = await loadLib(doc.bytes);
       pdf.getPages().forEach((p, i) => { if (rot[i] % 360) p.setRotation(degrees((((p.getRotation().angle + rot[i]) % 360) + 360) % 360)); });
       showResult([{ name: `${doc.base}-ruotato.pdf`, bytes: await saveDoc(pdf) }]);
@@ -6365,7 +6438,7 @@ async function startRotate(stage, files) {
 
 /* ----------------------------- ORDINA ------------------------------ */
 async function startOrder(stage, files) {
-  const doc = await withBusy('Apertura del documento…', () => openPdf(files[0]));
+  const doc = await withBusy('Apertura del documento\u2026', () => openPdf(files[0]));
   if (!doc) throw (withBusy.last || new Error('Impossibile aprire il file'));
   const N = doc.numPages;
   let seq = 0;
@@ -6496,7 +6569,7 @@ async function startOrder(stage, files) {
       return saveDoc(out);
     };
     let res = null;
-    await withBusy(list.length === 1 ? 'Estrazione della pagina…' : 'Estrazione delle pagine…', async () => {
+    await withBusy(list.length === 1 ? 'Estrazione della pagina\u2026' : 'Estrazione delle pagine\u2026', async () => {
       const extracted = await build(ordered);
       let rest = null;
       if (xs.remove) { storia.prima(); const keep = entries.filter(e => !list.includes(e)); rest = await build(keep); entries = keep; for (const e of list) sel.delete(e.key); render(); }
@@ -6517,7 +6590,7 @@ async function startOrder(stage, files) {
   workspace(stage, h('div', { class: 'ws-main' }, h('div', { class: 'toolbar' }, h('div', { class: 'tb-title' }, IS_TOUCH ? 'Tieni premuta una pagina per spostarla, o usa le frecce' : 'Trascina le pagine nella posizione desiderata (anche più pagine selezionate insieme)')), selBar, grid), [
     sec('Documento', info),
     sec('Azioni rapide',
-      h('button', { class: 'btn', onclick: () => { entries.reverse(); render(); } }, ic('swap', 18), 'Inverti l’ordine'),
+      h('button', { class: 'btn', onclick: () => { entries.reverse(); render(); } }, ic('swap', 18), 'Inverti l\u2019ordine'),
       h('button', { class: 'btn', onclick: () => { storia.prima(); const last = entries[entries.length - 1]; entries.push({ key: 'p' + (++seq), src: 'blank', size: last && last.src !== 'blank' ? sizes[last.src] : (last?.size || [595.28, 841.89]) }); render(); grid.lastChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }, ic('blank', 18), 'Aggiungi pagina bianca'),
       h('button', { class: 'btn', onclick: () => storia.tutto() }, ic('reset', 18), 'Ripristina ordine originale'), ...storia.bottoni().slice(0, 2)),
     sec('Estrai pagine', selInfo,
@@ -6527,11 +6600,11 @@ async function startOrder(stage, files) {
       seg([['keep', 'Tienile anche nel documento'], ['remove', 'Toglile dal documento']], 'keep', v => { xs.remove = v === 'remove'; }),
       exBtn,
       h('div', { class: 'muted small' }, 'Le pagine estratte diventano un PDF in più da scaricare; il file di partenza non viene sostituito.')),
-    // Organizza → Impagina: le pagine così come sono adesso (ordine, bianche, duplicate) passano a Impagina senza scaricare nulla
+    // Organizza \u2192 Impagina: le pagine così come sono adesso (ordine, bianche, duplicate) passano a Impagina senza scaricare nulla
     TOOLS.impagina ? sec('Più pagine per foglio',
-      h('div', { class: 'muted small' }, 'Vuoi stamparle 2 o 4 per foglio, o a libretto? Passa a Impagina con le pagine in quest’ordine.'),
+      h('div', { class: 'muted small' }, 'Vuoi stamparle 2 o 4 per foglio, o a libretto? Passa a Impagina con le pagine in quest\u2019ordine.'),
       h('button', { class: 'btn', onclick: async () => {
-        const f = await withBusy('Preparazione delle pagine…', async () => {
+        const f = await withBusy('Preparazione delle pagine\u2026', async () => {
           const src = await loadLib(doc.bytes), out = await PDFDocument.create();
           const real = entries.filter(e => e.src !== 'blank').map(e => e.src), cp = await out.copyPages(src, real);
           let k = 0; for (const e of entries) { if (e.src === 'blank') out.addPage(e.size || [595.28, 841.89]); else out.addPage(cp[k++]); }
@@ -6540,7 +6613,7 @@ async function startOrder(stage, files) {
         });
         if (f) handoff('impagina', f);
       } }, ic(TOOLS.impagina.icon, 18), 'Impagina queste pagine')) : null,
-    h('div', { class: 'hint' }, 'Usa le frecce sotto ogni miniatura per spostamenti di precisione, l’icona copia per duplicare, quella di estrazione per salvare la pagina in un PDF a sé e il cestino per eliminare.'),
+    h('div', { class: 'hint' }, 'Usa le frecce sotto ogni miniatura per spostamenti di precisione, l\u2019icona copia per duplicare, quella di estrazione per salvare la pagina in un PDF a sé e il cestino per eliminare.'),
   ], [h('button', { class: 'btn primary big btn-run', onclick: run }, ic('check', 18), 'Applica le modifiche')]);
   render();
   Flow.trackTool(() => entries.map(e => e.src === 'blank' ? 'b' : e.src).join(','), {
@@ -6549,7 +6622,7 @@ async function startOrder(stage, files) {
 
   async function run() {
     if (!entries.length) return toast('Il documento non può restare senza pagine', 'error');
-    await withBusy('Riordino in corso…', async () => {
+    await withBusy('Riordino in corso\u2026', async () => {
       const src = await loadLib(doc.bytes);
       const out = await PDFDocument.create();
       const idx = entries.filter(e => e.src !== 'blank').map(e => e.src);
@@ -6567,7 +6640,7 @@ async function startOrder(stage, files) {
 
 /* ----------------------------- NUMERAZIONE ------------------------- */
 async function startNumbers(stage, files) {
-  const doc = await withBusy('Apertura del documento…', () => openPdf(files[0]));
+  const doc = await withBusy('Apertura del documento\u2026', () => openPdf(files[0]));
   if (!doc) throw (withBusy.last || new Error('Impossibile aprire il file'));
   const N = doc.numPages;
   const today = new Date().toLocaleDateString('it-IT');
@@ -6578,7 +6651,7 @@ async function startNumbers(stage, files) {
     font: 'helv', size: 10, color: '#333333', bold: false, margin: 12,
     range: 'all', rangeText: `1-${N}`, skipFirst: false,
   };
-  const FORMATS = [['{n}', '1'], ['Pagina {n}', 'Pagina 1'], ['Pagina {n} di {N}', 'Pagina 1 di 12'], ['{n} / {N}', '1 / 12'], ['- {n} -', '- 1 -'], ['Pag. {n}', 'Pag. 1'], ['custom', 'Personalizzato…']];
+  const FORMATS = [['{n}', '1'], ['Pagina {n}', 'Pagina 1'], ['Pagina {n} di {N}', 'Pagina 1 di 12'], ['{n} / {N}', '1 / 12'], ['- {n} -', '- 1 -'], ['Pag. {n}', 'Pag. 1'], ['custom', 'Personalizzato\u2026']];
   const err = h('div', { class: 'err-text' });
   const viewer = new Viewer(doc, { onOverlay: drawPreview });
 
@@ -6627,7 +6700,7 @@ async function startNumbers(stage, files) {
     return g;
   };
   const alignSeg = (key) => seg([['l', 'Sinistra'], ['c', 'Centro'], ['r', 'Destra']], st[key], v => { st[key] = v; upd(); });
-  const customIn = h('input', { class: 'input', value: st.custom, hidden: true, placeholder: 'es. {n} di {N} – {file}', oninput: () => { st.custom = customIn.value; upd(); } });
+  const customIn = h('input', { class: 'input', value: st.custom, hidden: true, placeholder: 'es. {n} di {N} \u2013 {file}', oninput: () => { st.custom = customIn.value; upd(); } });
   const fmtSel = h('select', { class: 'select', onchange: () => { st.format = fmtSel.value; customIn.hidden = st.format !== 'custom'; upd(); } }, FORMATS.map(([v, l]) => h('option', { value: v }, l)));
   fmtSel.value = st.format;
   const numBox = h('div', { class: 'sec' }, posGrid(), h('label', { class: 'field' }, 'Formato', fmtSel), customIn,
@@ -6640,7 +6713,7 @@ async function startNumbers(stage, files) {
 
   workspace(stage, h('div', { class: 'ws-main vw' }, viewer.el), [
     sec('Numeri di pagina', checkbox('Aggiungi la numerazione', st.num, v => { st.num = v; numBox.hidden = !v; upd(); }), numBox),
-    sec('Intestazione', checkbox('Aggiungi un’intestazione in alto', st.header, v => { st.header = v; hBox.hidden = !v; upd(); }), hBox),
+    sec('Intestazione', checkbox('Aggiungi un\u2019intestazione in alto', st.header, v => { st.header = v; hBox.hidden = !v; upd(); }), hBox),
     sec('Piè di pagina', checkbox('Aggiungi un testo in calce', st.footer, v => { st.footer = v; fBox.hidden = !v; upd(); }), fBox),
     h('div', { class: 'muted small' }, 'Segnaposto: ', h('span', { class: 'kbd' }, '{n}'), ' pagina, ', h('span', { class: 'kbd' }, '{N}'), ' totale, ', h('span', { class: 'kbd' }, '{data}'), ' oggi, ', h('span', { class: 'kbd' }, '{file}'), ' nome file.'),
     sec('Aspetto',
@@ -6661,7 +6734,7 @@ async function startNumbers(stage, files) {
   async function run() {
     let list; try { list = pagesSet(); } catch (e) { return toast(e.message, 'error'); }
     if (!st.num && !st.header && !st.footer) return toast('Attiva almeno numerazione, intestazione o piè di pagina', 'error');
-    await withBusy('Applicazione in corso…', async () => {
+    await withBusy('Applicazione in corso\u2026', async () => {
       const pdf = await loadLib(doc.bytes);
       const font = await fontCache(pdf)(st.font, st.bold, false);
       const color = hexToRgb(st.color), m = mm(st.margin), S = st.size;
@@ -6689,7 +6762,7 @@ async function startNumbers(stage, files) {
 function makeOCRPrep() {
   // nella pagina un <canvas>, in un worker un OffscreenCanvas (stessi pixel)
   const newCanvas = (w, hh) => { if (typeof document !== 'undefined') { const c = document.createElement('canvas'); c.width = w; c.height = hh; return c; } return new OffscreenCanvas(w, hh); };
-  /* affine 2D: [a b c d e f] → x' = a x + c y + e ; y' = b x + d y + f */
+  /* affine 2D: [a b c d e f] \u2192 x' = a x + c y + e ; y' = b x + d y + f */
   const mul = (m, n) => [m[0] * n[0] + m[1] * n[2], m[0] * n[1] + m[1] * n[3], m[2] * n[0] + m[3] * n[2], m[2] * n[1] + m[3] * n[3], m[4] * n[0] + m[5] * n[2] + n[4], m[4] * n[1] + m[5] * n[3] + n[5]];
   const inv = m => { const d = m[0] * m[3] - m[1] * m[2] || 1e-12; return [m[3] / d, -m[1] / d, -m[2] / d, m[0] / d, (m[2] * m[5] - m[3] * m[4]) / d, (m[1] * m[4] - m[0] * m[5]) / d]; };
   const apply = (m, x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
@@ -6866,7 +6939,7 @@ function makeOCRPrep() {
     for (let i = 0, j = 0; j < img.g.length; i += 4, j++) { const v = img.g[j]; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; }
     ctx.putImageData(id, 0, 0); return c;
   }
-  /* paper/background estimate (block percentiles → dilation → blur), then divide */
+  /* paper/background estimate (block percentiles \u2192 dilation \u2192 blur), then divide */
   function flattenBackground(img) {
     const { w, h, g } = img;
     const s = Math.max(8, Math.round(Math.min(w, h) / 150));
@@ -6963,7 +7036,7 @@ function makeOCRPrep() {
     const rows = profileScore(pts, 0, k * 1.5), cols = profileScore(pts, Math.PI / 2, k * 1.5);
     return cols > rows * 1.35;
   }
-  /* rotate a canvas by deg (clockwise) around its centre; 90/270 swap dimensions. Returns { canvas, M } with M mapping source → result */
+  /* rotate a canvas by deg (clockwise) around its centre; 90/270 swap dimensions. Returns { canvas, M } with M mapping source \u2192 result */
   function rotateCanvas(src, deg) {
     const rad = deg * Math.PI / 180;
     const quarter = Math.abs(((deg % 180) + 180) % 180 - 90) < 0.01;
@@ -7003,7 +7076,7 @@ function makeOCRPrep() {
     }
     return { w, h, g: out };
   }
-  /* full pipeline. Returns { canvas (to OCR), clean (grey image for optional page replacement), M (render px → processed px), angle } */
+  /* full pipeline. Returns { canvas (to OCR), clean (grey image for optional page replacement), M (render px \u2192 processed px), angle } */
   /* scale (pixel per punto): se indicato si tolgono le righe dello scanner (scanLines: tracciati nell'immagine finale) */
   function prepare(renderCanvas, { deskew = true, orient = 0, enhance = true, gray = null, scale = 0 } = {}) {
     let M = [1, 0, 0, 1, 0, 0], canvas = renderCanvas, angle = 0, scanLines = [];
@@ -7089,7 +7162,7 @@ function makeOCRPrep() {
     }
     if (S.length < 24) return null;
     if (o.stats) { const a = S.map(p => Math.abs(p[2])).sort((x, y) => x - y); o.stats.n = S.length; o.stats.med = Math.atan(a[a.length >> 1]) * 180 / Math.PI; o.stats.p90 = Math.atan(a[Math.floor(a.length * 0.9)]) * 180 / Math.PI; }
-    // superficie delle pendenze: in orizzontale polinomi di Čebyšëv fino al 6° grado (inclinazione, pancia, onde), in
+    // superficie delle pendenze: in orizzontale polinomi di \u010ceby\u0161ëv fino al 6° grado (inclinazione, pancia, onde), in
     // verticale fino al 2° (righe che divergono, curva che cresce verso il fondo); minimi quadrati ripesati (Tukey) con
     // un freno sui gradi alti, e solo i gradi che i dati reggono (poche righe: inclinazione e curva semplice)
     const U = x => 2 * x / w - 1, V = y => 2 * y / hh - 1;
@@ -7158,16 +7231,16 @@ const OCRPrep = makeOCRPrep();
    Una foto di un documento (il foglio sul tavolo, in prospettiva, con l'ombra del telefono) si legge male: lo sfondo
    diventa testo inventato, le righe in prospettiva si spezzano, l'ombra cancella le parole. «Migliora scansioni e foto»
    (ScanKit) ritaglia il foglio, lo raddrizza e toglie ombre e colore della carta.
-   Qui si decide, pagina per pagina e su una miniatura (≤ 900 px, poche decine di ms), se conviene passare prima di lì:
-   - «auto»: il guadagno è chiaro (foglio con i bordi trovati e sfondo diverso dalla carta attorno) → si migliora da sé;
-   - «advise»: è probabile ma non sicuro (foto senza bordi certi, luce molto irregolare in una foto) → solo un consiglio;
+   Qui si decide, pagina per pagina e su una miniatura (\u2264 900 px, poche decine di ms), se conviene passare prima di lì:
+   - «auto»: il guadagno è chiaro (foglio con i bordi trovati e sfondo diverso dalla carta attorno) \u2192 si migliora da sé;
+   - «advise»: è probabile ma non sicuro (foto senza bordi certi, luce molto irregolare in una foto) \u2192 solo un consiglio;
    - niente: scansioni (il bordo è carta o il piano bianco dello scanner) e pagine con testo vero (PDF digitali).
    Le pagine migliorate prendono il posto delle originali in una copia del PDF (A4 se il foglio è un A4): l'OCR, il PDF
    ricercabile e il Word lavorano su quella.
    ===================================================================== */
 const OcrCheck = (() => {
-  const THUMB = 640;          // lato lungo della miniatura analizzata (i bordi del foglio si cercano comunque a ≤ 640 px)
-  const MAXSIDE = 3300;       // lato lungo della pagina da migliorare (foto da telefono: 3000–4000 px)
+  const THUMB = 640;          // lato lungo della miniatura analizzata (i bordi del foglio si cercano comunque a \u2264 640 px)
+  const MAXSIDE = 3300;       // lato lungo della pagina da migliorare (foto da telefono: 3000\u20134000 px)
   const MAX_SCAN = 20;        // pagine-immagine controllate di fila senza nessun segnale: poi è una scansione, basta così
 
   /* una fotocamera scrive nell'EXIF tempo di esposizione, diaframma, focale (uno scanner no) */
@@ -7196,8 +7269,8 @@ const OcrCheck = (() => {
   /* scansione di un libro: bande nere ai bordi (il bordo del libro, il coperchio aperto), la striscia della pagina accanto
      oltre la piega (testo tagliato, da non leggere), righe incurvate verso la rilegatura.
      Per ogni lato si guarda il 12% esterno, linea per linea (colonne per i lati sinistro e destro, righe per gli altri):
-     - banda nera: una serie di linee molto scure (≥ 30% di pixel neri) che parte entro il 4% dal bordo;
-     - piega (a sinistra o a destra): una linea (o una fascia d'ombra) più scura della carta per ≥ 70% della sua altezza, entro il 10% dal bordo,
+     - banda nera: una serie di linee molto scure (\u2265 30% di pixel neri) che parte entro il 4% dal bordo;
+     - piega (a sinistra o a destra): una linea (o una fascia d'ombra) più scura della carta per \u2265 70% della sua altezza, entro il 10% dal bordo,
        con inchiostro tra il bordo e la piega (la pagina accanto) e il testo della pagina dopo. Una riga di scanner
        (sottile, nera, dritta) non è una piega.
      Restituisce i lati da sbiancare (frazioni della pagina) e cosa si è trovato. */
@@ -7286,7 +7359,7 @@ const OcrCheck = (() => {
     // 2) i bordi del foglio (gli stessi di «Migliora»), con la loro sicurezza. Solo se attorno non c'è carta: con la cornice
     //    di carta (scansione, foglio che riempie la foto) non c'è niente da ritagliare, e si risparmia il passo più lento
     const dbg = {}; let quad = null;
-    // …ma una foto fatta col telefono si guarda sempre: il foglio può riempire l'inquadratura su un tavolo chiaro quasi quanto la carta
+    // \u2026ma una foto fatta col telefono si guarda sempre: il foglio può riempire l'inquadratura su un tavolo chiaro quasi quanto la carta
     if (m.ringPaper < 0.7 || photoHint) { const tq = performance.now(); try { quad = ScanKit.findQuad(c, { d, w, h: hh }, dbg); } catch (e) { console.warn('bordi del foglio', e); } m.msQuad = Math.round(performance.now() - tq); }
     m.qScore = +(dbg.score || 0).toFixed(3); m.qText = !!dbg.ink && !dbg.fallback;
     const sx = (x, y) => inQuad(quad, x / w, y / hh);
@@ -7411,7 +7484,7 @@ const OcrCheck = (() => {
        carta tolti); il foglio quasi A4 diventa un A4 esatto;
      - scansioni di libri («trim»): bande nere e pagina accanto coperte di bianco, sul posto (la pagina resta identica,
        senza ricompressione, con le stesse misure: le posizioni non cambiano).
-     plan: Map pagina → { kind, quad, cut } (da planOf) */
+     plan: Map pagina \u2192 { kind, quad, cut } (da planOf) */
   async function improve(doc, list, { progress = () => {}, plan = null } = {}) {
     list = [...new Set(list)].filter(p => p >= 1 && p <= doc.numPages).sort((a, b) => a - b);
     if (!list.length) return doc;
@@ -7450,7 +7523,7 @@ const OcrCheck = (() => {
       }
       const r = res.get(p), long = Math.max(r.w, r.h), short = Math.min(r.w, r.h);
       // un foglio quasi A4 diventa un A4: le proporzioni stimate dalla prospettiva sbagliano di qualche punto (a volte ScanKit
-      // le porta a quelle di una Letter, rara qui); gli altri fogli (scontrini, A5 di lato…) restano come sono, con il lato lungo di un A4
+      // le porta a quelle di una Letter, rara qui); gli altri fogli (scontrini, A5 di lato\u2026) restano come sono, con il lato lungo di un A4
       const a4 = Math.abs(long / short / Math.SQRT2 - 1) <= 0.12, L = 841.89, S = a4 ? 595.28 : L * short / long;
       const [PW, PH] = r.quad ? (r.w >= r.h ? [L, S] : [S, L]) : r.size;
       const img = await pdf.embedJpg(r.bytes);
@@ -7472,7 +7545,7 @@ const OcrCheck = (() => {
     let a = null;
     try { a = await analyze(doc); } catch (e) { console.warn(e); }
     if (!a || !a.auto.length) return doc;
-    progress(null, a.pages.some(x => x.level === 'auto' && x.kind === 'photo') ? 'miglioramento della foto (ritaglio e luce)…' : 'pulizia dei bordi (bande nere, pagina accanto)…');
+    progress(null, a.pages.some(x => x.level === 'auto' && x.kind === 'photo') ? 'miglioramento della foto (ritaglio e luce)\u2026' : 'pulizia dei bordi (bande nere, pagina accanto)\u2026');
     try { return await improve(doc, a.auto, { progress: (f, l) => progress(null, l), plan: planOf(a) }); }
     catch (e) { console.warn('miglioramento delle pagine non riuscito', e); return doc; }
   }
@@ -7732,7 +7805,7 @@ function makeOCRLayout() {
     /* groups: da RegionKit.analyze; rules: maschera dei filetti (Uint8Array W*H) */
     function blocks(groups, W, H, s, rules = null) {
       const vs = groups.filter(g => g.vert && g.f.n >= 4 && g.f.base >= 0.5).map(g => ({ ...g.f.box, th: g.f.box.x1 - g.f.box.x0, n: g.f.n, size: g.f.sizePt }));
-      // catene vicine e parallele (stessa colonna di righe ruotate) → un blocco
+      // catene vicine e parallele (stessa colonna di righe ruotate) \u2192 un blocco
       const par = vs.map((_, i) => i), find = i => { while (par[i] !== i) i = par[i] = par[par[i]]; return i; };
       for (let i = 0; i < vs.length; i++) for (let j = i + 1; j < vs.length; j++) {
         const a = vs[i], b = vs[j], sz = Math.max(a.th, b.th);
@@ -7766,14 +7839,14 @@ function makeOCRLayout() {
       return out;
     }
     /* verso: punteggio di una lettura del ritaglio girato = 2 × lettere di parole del lessico o numeri + lettere lette con
-       sicurezza ≥ 75 (la lettura nel verso sbagliato dà spazzatura: lo scarto è enorme) */
+       sicurezza \u2265 75 (la lettura nel verso sbagliato dà spazzatura: lo scarto è enorme) */
     const score = (ws, isWord) => ws.reduce((t, w) => { const c = (w.text || '').replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ''); if (c.length < 2) return t; const d = /^\d+([./]\d+)*$/.test(c) || isWord(c.toLowerCase()); return t + (d ? 2 : 0) * c.length + ((w.conf ?? w.confidence ?? 0) >= 75 ? c.length : 0); }, 0);
     return { blocks, score };
   })();
   /* ---------- scrittura a mano: decisione per gruppo e parole da togliere ---------- */
   const Hand = (() => {
     const median = a => { if (!a.length) return 0; const t = [...a].sort((x, y) => x - y); return t[t.length >> 1]; };
-    /* groups: [{ f: {box,...}, cls: 'hand'|'print'|'other', p }]; words: [{ text, conf, bbox }] (px); isWord(minuscolo) → bool */
+    /* groups: [{ f: {box,...}, cls: 'hand'|'print'|'other', p }]; words: [{ text, conf, bbox }] (px); isWord(minuscolo) \u2192 bool */
     function split(groups, words, s, isWord, o = {}) {
       const hand = groups.filter(g => g.cls === 'hand' && g.p >= (o.minP ?? 0.5)).map(g => ({ ...g.f.box, size: g.f.sizePt * s, strong: !!g.strong }));
       // zone: gruppi a mano vicini uniti (una firma spezzata, una data scritta a pezzi)
@@ -7814,7 +7887,7 @@ function makeOCRLayout() {
       return { zones, drop, keep, hPrint };
     }
     /* decisione finale per un gruppo: modello geometrico (rkClassify) + regole.
-       - veto dell'OCR: testo letto bene (≥60% lettere in parole vere, confidenza ≥55) non è mai scrittura a mano
+       - veto dell'OCR: testo letto bene (\u226560% lettere in parole vere, confidenza \u226555) non è mai scrittura a mano
        - strisce scure attaccate al bordo pagina (ombra del coperchio/scanner) sono «altro», mai mano */
     function decide(f, classify, W, H, o = {}) {
       const c = classify(f); let cls = c.cls; const pHand = c.probs[1];
@@ -7873,7 +7946,7 @@ function makeOCRLayout() {
   /* ---------- curvatura delle righe ---------- */
   const Dewarp = (() => {
     const median = a => { if (!a.length) return 0; const t = Float64Array.from(a).sort(); return t[t.length >> 1]; };
-    /* pendenze locali: una per catena orizzontale lunga abbastanza (≥4 lettere, ≥3 corpi di lunghezza) */
+    /* pendenze locali: una per catena orizzontale lunga abbastanza (\u22654 lettere, \u22653 corpi di lunghezza) */
     function slopes(groups, s) {
       const out = [];
       // solo righe stampate regolari (linea di base netta, corpo vicino a quello della pagina): via scrittura a mano, timbri, firme
@@ -7948,7 +8021,7 @@ function makeOCRLayout() {
       for (let k = 0; k < K; k++) { let sc = 0, sum = 0; for (let y = 0; y < H; y += 2) { let n = 0; const o = y * W + k * sw; for (let x = 0; x < sw; x += 2) if (g[o + x] < 140) n++; sc += n * n; sum += n; } tot += sum ? sc / sum : 0; }
       return tot;
     }
-    /* tutto: decide da sé (curvatura ≥ minCurl punti e griglia abbastanza piena) */
+    /* tutto: decide da sé (curvatura \u2265 minCurl punti e griglia abbastanza piena) */
     function dewarp(img, groups, s, o = {}) {
       const sl = slopes(groups, s), F = field(sl, img.w, img.h, s, o);
       if (!F) return { img, applied: false, why: 'poche righe', n: sl.length };
@@ -7971,7 +8044,7 @@ function makeOCRLayout() {
   const median = a => { if (!a.length) return 0; const t = Float64Array.from(a).sort(); return t[t.length >> 1]; };
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   /* ---------- analisi della pagina prima della lettura principale (nel worker della preparazione, se c'è) ----------
-     componenti e catene → riquadri ruotati → curvatura (applicata solo se misurata e se le righe diventano più nette:
+     componenti e catene \u2192 riquadri ruotati \u2192 curvatura (applicata solo se misurata e se le righe diventano più nette:
      in quel caso si rifà l'analisi sull'immagine corretta). Restituisce i gruppi «leggeri» (solo caratteristiche e
      riquadro: la classificazione finale si fa dopo la lettura, con le parole), i riquadri ruotati, le zone a punti e
      la mappa della curvatura (warp), se applicata. */
@@ -8056,7 +8129,7 @@ function makeOCRLayout() {
       const xr = cw ? h0 - 1 - y : y, yr = cw ? x : w0 - 1 - x;
       g[(yr + border) * W + xr + border] = v;
     }
-    // dal ritaglio girato all'immagine: (xr, yr) → (x, y)
+    // dal ritaglio girato all'immagine: (xr, yr) \u2192 (x, y)
     const back = (xr, yr) => { xr -= border; yr -= border; return cw ? [x0 + yr, y0 + h0 - 1 - xr] : [x0 + w0 - 1 - yr, y0 + xr]; };
     return { img: { w: W, h: H, g }, back };
   }
@@ -8070,7 +8143,7 @@ function makeOCRLayout() {
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let t = 0; for (let i = -r; i <= r; i++) t += k[i + r] * tmp[clamp(y + i, 0, h - 1) * w + x]; g[y * w + x] = t / ks; }
     return { img: { w, h, g }, dx: x0, dy: y0 };
   }
-  /* ---------- dopo la lettura: classificazione dei gruppi con le parole lette → zone a mano ---------- */
+  /* ---------- dopo la lettura: classificazione dei gruppi con le parole lette \u2192 zone a mano ---------- */
   function handZones(groups, words, s, W, H, isWord, avoid = [], ink = null) {
     const ws = words.filter(w => w.bbox && (w.text || '').trim());
     const gs = groups.filter(g => !avoid.some(r => { const b = g.f.box, cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2; return cx > r.x0 && cx < r.x1 && cy > r.y0 && cy < r.y1; }));
@@ -8140,7 +8213,7 @@ const OCRRegions = (() => {
     return h > 3 * w;
   }
   const upOf = l => { const b = l.baseline; return b && b.y0 !== b.y1 ? b.y1 < b.y0 : null; };
-  // righe verticali vicine e con lo stesso verso → un riquadro
+  // righe verticali vicine e con lo stesso verso \u2192 un riquadro
   function clusters(lines) {
     const out = [];
     for (const l of [...lines].sort((a, b) => a.bbox.x0 - b.bbox.x0)) {
@@ -8151,7 +8224,7 @@ const OCRRegions = (() => {
     }
     return out;
   }
-  /* riquadri candidati: blocchi geometrici (catene verticali, con cornice) ∪ righe verticali di Tesseract; mai dentro le tabelle */
+  /* riquadri candidati: blocchi geometrici (catene verticali, con cornice) \u222a righe verticali di Tesseract; mai dentro le tabelle */
   let isWordG = () => false;
   function candidates(data, lay, s, tables) {
     const vl = (data.lines || []).filter(isVert);
@@ -8405,7 +8478,7 @@ function makeImgKit() {
   const pct = (a, p) => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.max(0, Math.round((s.length - 1) * p)))]; };
   /* straight thin runs of ink: horizontal (dir 0) or vertical (dir 1).
      slant > 0: also lines slightly tilted or bowed (scans of books, sheets not flat on the glass) up to that slope;
-     each segment then carries its centre line: pts = [[along, across]…] sampled every `st` px, fitted line across = m + k·(along − am),
+     each segment then carries its centre line: pts = [[along, across]\u2026] sampled every `st` px, fitted line across = m + k·(along \u2212 am),
      and its thickness t (ink area / length). */
   function segments(ink, W, H, minLen, maxT, vertical, slant = 0) {
     const A = vertical ? H : W, B = vertical ? W : H; // run along A, stack along B
@@ -8472,7 +8545,7 @@ function makeImgKit() {
      Ogni tabella: xs/ys (posizioni delle linee al centro della tabella), celle con r0..c1 (righe/colonne unite comprese),
      x0..y1 (rettangolo di riferimento), quad (i 4 angoli veri nell'immagine: [[x,y] alto-sx, alto-dx, basso-dx, basso-sx]),
      cut (celle unite: quanta linea c'è dove la griglia è interrotta, 0 = cella unita davvero), skew { v, h, cx, cy }
-     (per riportare un punto dell'immagine nel rettangolo di riferimento: x − v·(y − cy), y − h·(x − cx)), lines (pezzi delle linee). */
+     (per riportare un punto dell'immagine nel rettangolo di riferimento: x \u2212 v·(y \u2212 cy), y \u2212 h·(x \u2212 cx)), lines (pezzi delle linee). */
   function detectTablesRaw(gray, W, H, s, thr) {
     const ink = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) ink[i] = gray[i] < thr ? 1 : 0;
     const maxT = Math.max(3, Math.round(3 * s)), SL = 0.06; // pendenza massima ~3,4°
@@ -8526,7 +8599,7 @@ function makeImgKit() {
         return out;
       };
       const hP = pieces(h, false), vP = pieces(v, true);
-      // linee della griglia: pezzi con la stessa posizione (catena con scarti ≤ tol); valore = media pesata
+      // linee della griglia: pezzi con la stessa posizione (catena con scarti \u2264 tol); valore = media pesata
       const lines = pcs => {
         const sorted = [...pcs].sort((a, b) => a.pos - b.pos), out = [];
         for (const p of sorted) { const l = out[out.length - 1], w = p.hi - p.lo; if (l && p.pos - l.max <= tol) { l.max = p.pos; l.s += p.pos * w; l.w += w; l.pcs.push(p); } else out.push({ max: p.pos, s: p.pos * w, w, pcs: [p] }); }
@@ -8562,7 +8635,7 @@ function makeImgKit() {
       }
       const grp = new Map();
       for (let i = 0; i < R; i++) for (let j = 0; j < C; j++) { const k = f2(id(i, j)); if (!grp.has(k)) grp.set(k, []); grp.get(k).push([i, j]); }
-      // ogni linea nell'immagine: retta stimata dai suoi pezzi (verticali: x = a + b·(y − cy); orizzontali: y = a + b·(x − cx))
+      // ogni linea nell'immagine: retta stimata dai suoi pezzi (verticali: x = a + b·(y \u2212 cy); orizzontali: y = a + b·(x \u2212 cx))
       const fit = (L, vert) => {
         const ps = L.pcs, dflt = vert ? sV : sH, c0 = vert ? cy : cx;
         if (!ps.length) return { a: L.pos, b: dflt };
@@ -8608,7 +8681,7 @@ function makeImgKit() {
 
   /* segni a mano dentro una cella di tabella (crocette, spunte, sigle): inchiostro che non è testo stampato.
      cell: { quad } o { x0, y0, x1, y1 } in px; words: parole lette nella cella [{ x0, y0, x1, y1, t, conf }] (px, anche quelle scartate).
-     Una «parola» di 1–2 segni molto più alta del testo (o poco sicura e isolata) è un segno; lo è anche l'inchiostro grande che
+     Una «parola» di 1\u20132 segni molto più alta del testo (o poco sicura e isolata) è un segno; lo è anche l'inchiostro grande che
      nessuna parola copre. Restituisce { marks: [{ x0, y0, x1, y1 }], words: Set(indici delle parole che sono segni) }. */
   const SHORT_IT = new Set(['a', 'e', 'i', 'o', 'è', 'é', 'ed', 'di', 'da', 'in', 'il', 'lo', 'la', 'le', 'un', 'al', 'ai', 'se', 'si', 'sì', 'no', 'né', 'ne', 'ma', 'gli', 'mi', 'ci', 'vi', 'tu', 'su', 'n.', 'nr', 'es', 'ss', 'pp', 'cm', 'mm', 'kg', 'ml', 'km']);
   function cellMarks(gray, W, H, s, cell, words = [], thr = 150) {
@@ -8658,12 +8731,12 @@ function makeImgKit() {
     const isMark = w => {
       const t = w.t, n = alnum(t);
       if (!t || t.length > 3 || n > 2 || /^\d+[.,)°]?$/.test(t)) return false;
-      if (/^[✗✘×✓✔]$/.test(t)) return true;
+      if (/^[\u2717\u2718×\u2713\u2714]$/.test(t)) return true;
       const hh = inkH(w);
       if (SHORT_IT.has(t.toLowerCase()) && (hh < ref * 1.3 || (t === t.toLowerCase() && w.conf >= 80 && hh < ref * 1.6))) return false; // «e», «a», «di» stampati (anche se un segno li tocca)
       return hh >= ref * 1.3 || (w.conf < 55 && hh >= ref * 0.8 && prevGap(w) >= ref * 1.5);
     };
-    // testo stampato sicuro (le letture incerte di 1–3 segni possono essere proprio il segno a mano)
+    // testo stampato sicuro (le letture incerte di 1\u20133 segni possono essere proprio il segno a mano)
     const markW = ws.filter(isMark), textW = ws.filter(w => !markW.includes(w) && (w.conf >= 60 || (alnum(w.t) >= 4 && w.conf >= 40)));
     const inText = (x, y) => textW.some(w => x >= w.x0 - 1 && x <= w.x1 + 1 && y >= w.y0 - 1 && y <= w.y1 + 1);
     // quanta parte di ogni componente sta dentro le parole stampate (campionata)
@@ -8678,7 +8751,7 @@ function makeImgKit() {
       const w = c.X1 - c.X0, hh = c.Y1 - c.Y0;
       if (c.t > 0.3 || hh < ref * 0.9 || w < ref * 0.4 || w > ref * 6 || hh > ref * 5) continue;
       if (c.n / (w * hh) > 0.4) continue; // macchia piena (timbro, carattere in grassetto): non un tratto di penna
-      // casella stampata vuota (☐): tutto l'inchiostro sul contorno, angoli compresi (un cerchio a mano non ha gli angoli)
+      // casella stampata vuota (\u2610): tutto l'inchiostro sul contorno, angoli compresi (un cerchio a mano non ha gli angoli)
       if (w < hh * 1.6 && hh < w * 1.6) {
         const bd = Math.max(2, Math.round(Math.min(w, hh) * 0.18)), kd = Math.max(2, Math.round(Math.min(w, hh) * 0.08)); let e = 0, a = 0; const k4 = [0, 0, 0, 0];
         for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) if (lab[y * cw + x] >= 0 && comps[lab[y * cw + x]] === c) {
@@ -8750,9 +8823,9 @@ const ImgKit = makeImgKit();
 /* =====================================================================
    Correttore del testo riconosciuto (italiano)
    - lessico: frequenze d'uso (wordfreq) + dizionario Hunspell it_IT con le regole di flessione
-   - modello degli errori OCR: lettere che si confondono (rn/m, cl/d, l/i/1, e/c…), accenti, apostrofi,
+   - modello degli errori OCR: lettere che si confondono (rn/m, cl/d, l/i/1, e/c\u2026), accenti, apostrofi,
      lettere mancanti o in più, parole spezzate o attaccate (con la distanza reale tra le parole sulla pagina)
-   - regole di contesto: elisioni (dell’Ufficio), sì/si, è/é, accenti scritti con l'apostrofo, punteggiatura
+   - regole di contesto: elisioni (dell\u2019Ufficio), sì/si, è/é, accenti scritti con l'apostrofo, punteggiatura
    ===================================================================== */
 const OCRFix = (() => {
   let LX = null;
@@ -8764,10 +8837,10 @@ const OCRFix = (() => {
     ['rn', 'm'], ['cl', 'd'], ['li', 'h'], ['ii', 'u'], ['in', 'm'], ['ni', 'm'], ['iu', 'm'], ['vv', 'w'], ['fi', 'ti'], ['ri', 'n'], ['ln', 'h'], ['tl', 'd'], ['ll', 'il'], ['rr', 'n'], ['nn', 'm'], ['ci', 'a'], ['cl', 'a'], ['f', 'r']];
   const CONFMAP = new Map();
   for (const [a, b] of CONF) { for (const [x, y] of [[a, b], [b, a]]) { if (!CONFMAP.has(x)) CONFMAP.set(x, new Set()); CONFMAP.get(x).add(y); } }
-  const SPURIOUS = "'’`´.,-^~\"¨";
+  const SPURIOUS = "'\u2019`´.,-^~\"¨";
   const ELISION = new Set(['l', 'un', 'dell', 'dall', 'nell', 'sull', 'all', 'coll', 'pell', 'quest', 'quell', 'bell', 'sant', 'tutt', 'c', 'd', 'm', 's', 't', 'v', 'n', 'ch', 'cos', 'com', 'dov', 'nient', 'senz', 'anch', 'quand', 'buon', 'grand', 'mezz', 'nessun', 'qualcun', 'ciascun', 'alcun', 'ogn', 'quant', 'tant', 'cent', 'mill']);
   const KEEP_ACCENTED = new Set(['là', 'lì', 'né', 'sé', 'già', 'più', 'può', 'ciò', 'così', 'perché', 'poiché', 'giù', 'è', 'sì', 'dà', 'tè', 'blu', 'piè', 'ché']);
-  const APOS_OK = new Set(['po', 'di', 'fa', 'va', 'sta', 'da', 'mo', 'be', 'to']); // po', di' (imperativo)…
+  const APOS_OK = new Set(['po', 'di', 'fa', 'va', 'sta', 'da', 'mo', 'be', 'to']); // po', di' (imperativo)\u2026
   const ROMAN = /^[IVXLCDM]+$/;
 
   function init() {
@@ -8831,7 +8904,7 @@ const OCRFix = (() => {
   }
   const isWord = w => cb(w) != null;
 
-  /* varianti con il loro costo (≈ -log10 probabilità dell'errore) */
+  /* varianti con il loro costo (\u2248 -log10 probabilità dell'errore) */
   function edits(s, cheapOnly) {
     const out = new Map();
     const put = (w, c) => { if (w && (!out.has(w) || out.get(w) > c)) out.set(w, c); };
@@ -8882,11 +8955,11 @@ const OCRFix = (() => {
 
   /* corregge una parola isolata. Restituisce la nuova forma (stesso «involucro» di punteggiatura) o null */
   function fixWord(tok, conf, ctx) {
-    const m = /^([^\p{L}\p{N}]*)([\p{L}\p{N}’'´`.\-]*?[\p{L}\p{N}](?:[’'´`])?)([^\p{L}\p{N}]*)$/u.exec(tok);
+    const m = /^([^\p{L}\p{N}]*)([\p{L}\p{N}\u2019'´`.\-]*?[\p{L}\p{N}](?:[\u2019'´`])?)([^\p{L}\p{N}]*)$/u.exec(tok);
     if (!m) return null;
     let [, pre, core, post] = m;
     // «1'» / «|'» / «I'» al posto dell'articolo «l'»
-    const el1 = /^[1|I](['’])(\p{L}*)$/u.exec(core);
+    const el1 = /^[1|I](['\u2019])(\p{L}*)$/u.exec(core);
     if (el1 && (!el1[2] || /^[aeiouhàèéìòùAEIOUH]/u.test(el1[2]))) return pre + (ctx.start ? 'L' : 'l') + el1[1] + el1[2] + post;
     if (/\d/.test(core)) {
       const letters = (core.match(/\p{L}/gu) || []).length, digits = (core.match(/\d/g) || []).length;
@@ -8895,19 +8968,19 @@ const OCRFix = (() => {
     if (/[@/\\]|www\.|\.it$|\.com$/i.test(tok)) return null;                        // email, siti, percorsi
     if (core.length > 1 && ROMAN.test(core)) return null;                            // numeri romani
     if (/\p{L}\.\p{L}/u.test(core) || /\p{L}-\p{L}/u.test(core)) return null;           // sigle puntate (C.F.), parole composte (e-mail)
-    // elisione: dell'Ufficio → controlla solo la seconda parte
-    const el = /^([\p{L}]+)(['’])(\p{L}.*)$/u.exec(core);
+    // elisione: dell'Ufficio \u2192 controlla solo la seconda parte
+    const el = /^([\p{L}]+)(['\u2019])(\p{L}.*)$/u.exec(core);
     if (el && ELISION.has(el[1].toLowerCase())) {
       const r = fixWord(el[3], conf, { ...ctx, start: false, elided: true });
       return r == null ? null : pre + el[1] + el[2] + r + post;
     }
     const low = core.toLowerCase();
     const upper = core.length > 1 && core === core.toUpperCase();
-    // accento scritto con l'apostrofo: perche' → perché, citta' → città, E' → È
-    const ap = /^(.+?)(['’´`])$/u.exec(low);
+    // accento scritto con l'apostrofo: perche' \u2192 perché, citta' \u2192 città, E' \u2192 È
+    const ap = /^(.+?)(['\u2019´`])$/u.exec(low);
     if (ap) {
       const base = ap[1];
-      if (/[àèéìòù]$/.test(base)) return pre + caseLike(core, base) + post;           // ANNUALITÀ’ → ANNUALITÀ
+      if (/[àèéìòù]$/.test(base)) return pre + caseLike(core, base) + post;           // ANNUALITÀ\u2019 \u2192 ANNUALITÀ
       if (APOS_OK.has(base) || ELISION.has(base)) return null;
       const last = base.slice(-1);
       if (ACC[last]) {
@@ -8922,7 +8995,7 @@ const OCRFix = (() => {
     // «Immediata» in mezzo alla frase: la I maiuscola è una i (o una l) letta male
     if (!ctx.start && !ctx.elided && conf < 80 && /^I\p{Ll}{3,}$/u.test(core) && isWord(low) && cb(low) <= 520 && !LX.dic.has(core)) return pre + low + post;
     if (isWord(low)) {
-      // parola valida ma quasi certamente un errore OCR di una molto più comune (ll → il, dej → dei)
+      // parola valida ma quasi certamente un errore OCR di una molto più comune (ll \u2192 il, dej \u2192 dei)
       if (upper || KEEP_ACCENTED.has(low) || low.length > 5) return null;
       const f0 = cb(low);
       let best = null, bs = Infinity;
@@ -8937,7 +9010,7 @@ const OCRFix = (() => {
       return pre + out + post;
     }
     // non è una parola: cerca la correzione più probabile
-    if (upper && core.replace(/[^\p{L}]/gu, '').length <= 6) return null;             // sigle (CUP, QSFP, PNRR…)
+    if (upper && core.replace(/[^\p{L}]/gu, '').length <= 6) return null;             // sigle (CUP, QSFP, PNRR\u2026)
     const capital = /^\p{Lu}/u.test(core) && !upper && !ctx.start;                   // probabile nome proprio o sigla
     const allowed = conf >= 92 ? 1.0 : conf >= 80 ? 1.8 : conf >= 60 ? 2.6 : 3.6;
     const cands = candidates(low, conf);
@@ -8968,7 +9041,7 @@ const OCRFix = (() => {
       for (let i = 0; i < ws.length; i++) {
         let w = ws[i], t = w.text.trim();
         const next = ws[i + 1];
-        // 1. parola spezzata: «Delib era» → «Delibera»
+        // 1. parola spezzata: «Delib era» \u2192 «Delibera»
         if (next) {
           const a = t.replace(/[^\p{L}]+$/u, ''), b = next.text.trim();
           const bm = /^(\p{L}+)([^\p{L}]*)$/u.exec(b);
@@ -8990,22 +9063,22 @@ const OCRFix = (() => {
             }
           }
         }
-        // 2. elisione staccata: «l’ Amministrazione» → niente spazio dopo l’apostrofo (anche «1’» letto male)
-        if (/^[1|I]['’]$/.test(t) && ws[i + 1] && /^[aeiouhàèéìòù]/i.test(ws[i + 1].text)) { const to = (prevEnd ? 'L' : 'l') + t.slice(-1); log.push({ page, from: t, to }); w = { ...w, text: to }; t = to; }
-        if (/^\p{L}{1,7}['’]$/u.test(t) && ELISION.has(t.slice(0, -1).toLowerCase()) && ws[i + 1]) w = { ...w, glue: true };
+        // 2. elisione staccata: «l\u2019 Amministrazione» \u2192 niente spazio dopo l\u2019apostrofo (anche «1\u2019» letto male)
+        if (/^[1|I]['\u2019]$/.test(t) && ws[i + 1] && /^[aeiouhàèéìòù]/i.test(ws[i + 1].text)) { const to = (prevEnd ? 'L' : 'l') + t.slice(-1); log.push({ page, from: t, to }); w = { ...w, text: to }; t = to; }
+        if (/^\p{L}{1,7}['\u2019]$/u.test(t) && ELISION.has(t.slice(0, -1).toLowerCase()) && ws[i + 1]) w = { ...w, glue: true };
         // 3. punteggiatura staccata: niente spazio prima di , . ; : ) e dopo (
-        if (/^[,.;:!?)\]»”]+$/.test(t) && out.length) out[out.length - 1] = { ...out[out.length - 1], glue: true };
-        if (/^[(\[«“]+$/.test(t)) w = { ...w, glue: true };
+        if (/^[,.;:!?)\]»\u201d]+$/.test(t) && out.length) out[out.length - 1] = { ...out[out.length - 1], glue: true };
+        if (/^[(\[«\u201c]+$/.test(t)) w = { ...w, glue: true };
         // 4. la parola
         const fixed = fixWord(t, w.confidence ?? 90, { start: prevEnd });
         if (fixed != null && fixed !== t) { log.push({ page, from: t, to: fixed }); w = { ...w, text: fixed }; t = fixed; }
-        // 5. sì/si: «Sì evidenzia» → «Si evidenzia» (sì avverbio non regge un verbo)
+        // 5. sì/si: «Sì evidenzia» \u2192 «Si evidenzia» (sì avverbio non regge un verbo)
         const nx = ws[i + 1]?.text?.trim() || '';
         if (/^(s)ì$/i.test(t) && /^\p{Ll}/u.test(nx) && !/^(che|da|come|e|o|ma)$/.test(nx)) {
           const to = t[0] + 'i'; log.push({ page, from: t, to }); w = { ...w, text: to }; t = to;
         }
         out.push(w);
-        prevEnd = /[.!?:]["»”)]*$/.test(t);
+        prevEnd = /[.!?:]["»\u201d)]*$/.test(t);
       }
       line.words = out;
       line.text = out.map((w, k) => w.text + (k < out.length - 1 && !w.glue ? ' ' : '')).join('');
@@ -9200,7 +9273,7 @@ const TextStyle = (() => {
           const fb = at(ybs + 1); const bline = ybs + 1 - (half - fb) / Math.max(1e-6, at(ybs) - fb);
           const xh2 = bline - xline;
           if (xh2 > guess * 0.75 && xh2 < guess * 1.2) { l.xh = xh2; l.baseM = bline; }
-          // grazie: le lettere si allargano ai piedi (e in testa) → righe di inchiostro più dense vicino alla base
+          // grazie: le lettere si allargano ai piedi (e in testa) \u2192 righe di inchiostro più dense vicino alla base
           const band = (a, b) => { let t = 0, n = 0; for (let y = Math.round(bline - b * xh2); y <= Math.round(bline - a * xh2); y++) { t += at(y); n++; } return n ? t / n : 0; };
           const mid = band(0.4, 0.6);
           if (mid > 0) l.serif = band(0.06, 0.16) / mid;
@@ -9284,7 +9357,7 @@ const TextStyle = (() => {
       w.b = w.boldScore > 0 && w.t.replace(/[^\p{L}\p{N}]/gu, '').length >= 2 && w.boldScore > thr && w.boldScore > regular * TextStyle.BOLD_REL;
       delete w._line;
     }
-    // parole cortissime (e, a, IVA…): grassetto e corsivo come le parole vicine, se queste concordano
+    // parole cortissime (e, a, IVA\u2026): grassetto e corsivo come le parole vicine, se queste concordano
     for (const l of lines) l.words.forEach((w, k, a) => {
       const n = w.t.replace(/[^\p{L}\p{N}]/gu, '').length, p = a[k - 1], q = a[k + 1];
       if (n <= 1) w.b = !!(p && q && p.b && q.b);
@@ -9448,13 +9521,13 @@ const TESS_PATHS = IS_SITE ? (() => {
   corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1',
 };
 const OCR_STATUS = {
-  'loading tesseract core': 'Caricamento del motore OCR…',
-  'initializing tesseract': 'Avvio del motore OCR…',
+  'loading tesseract core': 'Caricamento del motore OCR\u2026',
+  'initializing tesseract': 'Avvio del motore OCR\u2026',
   'initialized tesseract': 'Motore pronto',
-  'loading language traineddata': 'Download del modello di lingua (solo la prima volta)…',
-  'loading language traineddata (from cache)': 'Caricamento del modello di lingua…',
+  'loading language traineddata': 'Download del modello di lingua (solo la prima volta)\u2026',
+  'loading language traineddata (from cache)': 'Caricamento del modello di lingua\u2026',
   'loaded language traineddata': 'Modello di lingua pronto',
-  'initializing api': 'Inizializzazione…',
+  'initializing api': 'Inizializzazione\u2026',
   'initialized api': 'Pronto',
 };
 // la pagina contiene immagini? (una pagina senza testo e senza immagini è bianca: niente OCR)
@@ -9482,7 +9555,7 @@ function pgmBytes(w, hh, g) {
   out.set(head, 0); out.set(g.subarray(0, w * hh), head.length);
   return out;
 }
-// immagine in grigi {w,h,g} (eventualmente solo un rettangolo) → PGM
+// immagine in grigi {w,h,g} (eventualmente solo un rettangolo) \u2192 PGM
 function grayToTess(img, rect = null) {
   if (!rect) return pgmBytes(img.w, img.h, img.g);
   const x0 = Math.max(0, Math.round(rect.left)), y0 = Math.max(0, Math.round(rect.top));
@@ -9699,7 +9772,7 @@ const PageOrient = (() => {
 /* ---------- motore di lettura condiviso ----------
    La lettura OCR di una pagina (preparazione, lettura, riletture, testo ruotato, correzione: 5-15 s) si fa una volta
    sola per documento e impostazioni, e la usano tutti gli strumenti: Modifica, Oscura, OCR, Word, Excel, Compila, gli
-   estrattori di dati… Due strumenti che chiedono insieme la stessa pagina fanno una lettura sola. Chi ha bisogno
+   estrattori di dati\u2026 Due strumenti che chiedono insieme la stessa pagina fanno una lettura sola. Chi ha bisogno
    dell'immagine preparata la riottiene identica (stesso verso, raddrizzamento e curvatura) senza rileggere.
    Solo in memoria, nella scheda aperta: niente si salva e niente esce dal dispositivo (il centro privacy la svuota). */
 const SharedRead = (() => {
@@ -9980,7 +10053,7 @@ async function ocrRecognizeCore(worker, pdfjs, p, { dpi = 300, twoPass = false, 
   // correzione del testo (lessico italiano, errori tipici dell'OCR, contesto)
   if (fix && langs.has('ita')) {
     try {
-      Busy.set(null, `Pagina ${p} — correzione del testo`);
+      Busy.set(null, `Pagina ${p} \u2014 correzione del testo`);
       OCRFix.correctLines(data.lines || [], { log: fixLog, page: p });
       data.text = OCRFix.pageText(data.lines || []);
     } catch (e) { console.warn(e); }
@@ -10013,7 +10086,7 @@ async function ocrTableCells(worker, prep, scale, { langs = new Set(['ita']), fi
   const up = th < 34 ? 2 : 1;
   const total = tables.reduce((n, t) => n + t.cells.length, 0); let done = 0;
   // segni che non sono testo: pezzi delle linee della griglia, sbavature, timbri letti come lettere
-  const JUNK = /^[|!¦\\/_—–=~‘’'"`«»:;,.\-()\[\]{}°*•·]+$/;
+  const JUNK = /^[|!¦\\/_\u2014\u2013=~\u2018\u2019'"`«»:;,.\-()\[\]{}°*\u2022·]+$/;
   const junk = w => { const t = (w.text || '').trim(); const c = w.confidence ?? 0; return !t || JUNK.test(t) || (c < 45 && t.length <= 2 && !/^\d+$/.test(t)) || (c < 20 && t.length <= 3) || (c < 10 && !/[\p{L}\p{N}]{3,}/u.test(t)); };
   await Busy.until(worker.setParameters({ tessedit_pageseg_mode: '6' }));
   try {
@@ -10082,7 +10155,7 @@ async function ocrTableCells(worker, prep, scale, { langs = new Set(['ita']), fi
         const { data } = await Busy.until(worker.recognize(canvasToTess(cv), {}, TESS_OUT));
         cv.width = cv.height = 0;
         const back = b => ({ x0: x0 + cx0 + (b.x0 - pad) / upC, y0: y0 + cy0 + (b.y0 - pad) / upC, x1: x0 + cx0 + (b.x1 - pad) / upC, y1: y0 + cy0 + (b.y1 - pad) / upC });
-        // segni a mano (crocette, spunte): mai letti come testo; restano come segno ✗ al loro posto e in c.marks (px) per chi li disegna
+        // segni a mano (crocette, spunte): mai letti come testo; restano come segno \u2717 al loro posto e in c.marks (px) per chi li disegna
         const raw = (data.lines || []).flatMap(ln => (ln.words || []).filter(w => (w.text || '').trim() && w.bbox));
         const mk = ImgKit.cellMarks(g, W, H, scale, c, raw.map(w => ({ ...back(w.bbox), t: w.text, conf: w.confidence ?? 0 })));
         const markOf = new Set([...mk.words].map(i => raw[i]));
@@ -10091,12 +10164,12 @@ async function ocrTableCells(worker, prep, scale, { langs = new Set(['ita']), fi
         for (const ln of data.lines || []) {
           let ws = (ln.words || []).filter(w => (w.text || '').trim() && !markOf.has(w));
           // via i segni isolati (pezzi di linee, sbavature) e le parole quasi illeggibili
-          // ma «/» «–» stampati fra due parole («MODESTO / ELEVATO») restano
-          const sep = (w, k) => /^[\/\-–—]$/.test((w.text || '').trim()) && (w.confidence ?? 0) >= 85 && k > 0 && k < ws.length - 1 && /[\p{L}\p{N}]/u.test(ws[k - 1].text || '') && /[\p{L}\p{N}]/u.test(ws[k + 1].text || '');
+          // ma «/» «\u2013» stampati fra due parole («MODESTO / ELEVATO») restano
+          const sep = (w, k) => /^[\/\-\u2013\u2014]$/.test((w.text || '').trim()) && (w.confidence ?? 0) >= 85 && k > 0 && k < ws.length - 1 && /[\p{L}\p{N}]/u.test(ws[k - 1].text || '') && /[\p{L}\p{N}]/u.test(ws[k + 1].text || '');
           ws = ws.filter((w, k) => !junk(w) || sep(w, k));
           if (!ws.length) continue;
-          // simboli attaccati alla parola: «|8.623,73» «‘08/04/2024» «DYLAN|»
-          for (const w of ws) w.text = w.text.trim().replace(/^[|¦‘’`_=~]+/, '').replace(/[|¦‘’`_=~]+$/, '');
+          // simboli attaccati alla parola: «|8.623,73» «\u201808/04/2024» «DYLAN|»
+          for (const w of ws) w.text = w.text.trim().replace(/^[|¦\u2018\u2019`_=~]+/, '').replace(/[|¦\u2018\u2019`_=~]+$/, '');
           ws = ws.filter(w => w.text);
           if (!ws.length) continue;
           lines.push({ ...ln, bbox: back(ln.bbox), text: ws.map(w => w.text).join(' '), words: ws.map(w => ({ ...w, bbox: back(w.bbox) })) });
@@ -10104,7 +10177,7 @@ async function ocrTableCells(worker, prep, scale, { langs = new Set(['ita']), fi
         if (fix && langs.has('ita')) { try { OCRFix.correctLines(lines, { log: [], page: 0 }); } catch (e) { console.warn(e); } }
         c.lines = lines.map(l => ({ text: (l.words || []).map(w => (w.text || '').trim()).filter(Boolean).join(' '), bbox: l.bbox, words: l.words.map(w => ({ t: (w.text || '').trim(), conf: w.confidence ?? 0, ...w.bbox })) })).filter(l => l.text);
         // la stessa cella letta nella pagina intera: se quella lettura è nettamente più sicura (la rilettura della cella
-        // a volte sbaglia cifre: «7.322,73» → «1.322,13»), vince la lettura della pagina
+        // a volte sbaglia cifre: «7.322,73» \u2192 «1.322,13»), vince la lettura della pagina
         if (!mk.marks.length && pageWords.length) {
           const inC = w => { const cx = (w.bbox.x0 + w.bbox.x1) / 2, cy = (w.bbox.y0 + w.bbox.y1) / 2; return cx > x0 && cx < x1 && cy > y0 && cy < y1; };
           const pw = pageWords.filter(w => w.bbox && /[\p{L}\p{N}]/u.test(w.text || '') && inC(w)).sort((a, b) => a.bbox.x0 - b.bbox.x0);
@@ -10120,10 +10193,10 @@ async function ocrTableCells(worker, prep, scale, { langs = new Set(['ita']), fi
           c.marks = mk.marks; c.mark = mk.marks.reduce((a, b) => ({ x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) }));
           // il segno nella riga di testo che attraversa (o una riga sua), nel punto in cui sta
           for (const m of mk.marks) {
-            const word = { t: '✗', conf: 100, mark: true, ...m }, my = (m.y0 + m.y1) / 2;
+            const word = { t: '\u2717', conf: 100, mark: true, ...m }, my = (m.y0 + m.y1) / 2;
             const l = c.lines.find(l => my >= l.bbox.y0 - 2 && my <= l.bbox.y1 + 2) || c.lines.find(l => Math.min(l.bbox.y1, m.y1) - Math.max(l.bbox.y0, m.y0) > (l.bbox.y1 - l.bbox.y0) * 0.5);
             if (l) { const k = l.words.findIndex(w => w.x0 > m.x0); l.words.splice(k < 0 ? l.words.length : k, 0, word); l.text = l.words.map(w => w.t).join(' '); l.bbox = { x0: Math.min(l.bbox.x0, m.x0), y0: l.bbox.y0, x1: Math.max(l.bbox.x1, m.x1), y1: l.bbox.y1 }; }
-            else { c.lines.push({ text: '✗', bbox: { ...m }, words: [word], mark: true }); c.lines.sort((a, b) => a.bbox.y0 - b.bbox.y0); }
+            else { c.lines.push({ text: '\u2717', bbox: { ...m }, words: [word], mark: true }); c.lines.sort((a, b) => a.bbox.y0 - b.bbox.y0); }
           }
         }
       }
@@ -10136,7 +10209,7 @@ async function ocrTableCells(worker, prep, scale, { langs = new Set(['ita']), fi
 /* motore OCR di un documento: strato di testo invisibile nel PDF, testo semplice e (se chiesto) documento Word.
    Lo usano sia il singolo file sia l'elaborazione di più file insieme (ognuno con il suo motore, in parallelo). */
 const OCR_QUALITY = { fast: { dpi: 200, label: 'Veloce' }, acc: { dpi: 300, label: 'Accurata' }, max: { dpi: 300, label: 'Massima', twoPass: true } };
-const OCR_START_ERR = () => new Error(IS_ARTIFACT ? 'Impossibile avviare l’OCR: controlla la connessione e riprova.' : 'Impossibile avviare l’OCR: al primo utilizzo serve internet per scaricare il motore e la lingua, e il file va aperto direttamente in Chrome, Edge o Firefox (non in un’anteprima).');
+const OCR_START_ERR = () => new Error(IS_ARTIFACT ? 'Impossibile avviare l\u2019OCR: controlla la connessione e riprova.' : 'Impossibile avviare l\u2019OCR: al primo utilizzo serve internet per scaricare il motore e la lingua, e il file va aperto direttamente in Chrome, Edge o Firefox (non in un\u2019anteprima).');
 // chiudere un motore due volte (annullamento + pulizia) o chiedergli qualcosa dopo la chiusura non deve dare errori
 function safeWorker(w) {
   if (!w || w.__safe) return w;
@@ -10200,7 +10273,7 @@ const ocrRecKey = st => { const Q = OCR_QUALITY[st.quality]; return JSON.stringi
 function createOcrCache(doc) {
   const mem = navigator.deviceMemory || 4;
   const BUDGET = (mem >= 8 ? 320 : mem >= 4 ? 160 : 60) * 1048576;   // byte di immagini preparate da tenere
-  const done = new Map(), flying = new Map();   // pagina|chiave → risultato / promessa
+  const done = new Map(), flying = new Map();   // pagina|chiave \u2192 risultato / promessa
   let used = 0;
   const id = (p, key) => p + '|' + key;
   const store = (p, key, rec) => {
@@ -10390,12 +10463,12 @@ async function openOcrReview({ doc, st, cache, items, onApply }) {
   const upd = () => {
     const ch = state.filter(x => !x.removed && x.value.trim() && x.value !== x.text).length, rm = state.filter(x => x.removed).length, seen = state.filter(x => x.seen || x.removed).length;
     prog.textContent = `${seen} di ${state.length} controllate · ${plural(ch, 'correzione', 'correzioni')}${rm ? ' · ' + plural(rm, 'eliminata', 'eliminate') : ''}`;
-    applyBtn.textContent = ch || rm ? 'Applica' + (ch ? ' ' + plural(ch, 'correzione', 'correzioni') : '') + (ch && rm ? ' e' : '') + (rm ? ` ${rm === 1 ? 'l’eliminazione' : rm + ' eliminazioni'}` : '') : 'Fatto, nessuna correzione';
+    applyBtn.textContent = ch || rm ? 'Applica' + (ch ? ' ' + plural(ch, 'correzione', 'correzioni') : '') + (ch && rm ? ' e' : '') + (rm ? ` ${rm === 1 ? 'l\u2019eliminazione' : rm + ' eliminazioni'}` : '') : 'Fatto, nessuna correzione';
   };
   // una parola incerta si può togliere del tutto dal testo estratto (di nuovo: la si rimette)
   const setRemoved = (it, card, on) => { it.removed = on; card.classList.toggle('removed', on); const inp = card.querySelector('.rv-in'), b = card.querySelector('.rv-del'); inp.disabled = on; b.replaceChildren(ic(on ? 'undo' : 'trash', 15), on ? 'Rimetti' : 'Elimina'); b.title = on ? 'Rimetti la parola nel testo' : 'Togli questa parola dal testo estratto (non sarà né cercata né copiata)'; upd(); };
   const cards = state.map((it, i) => {
-    const holder = h('div', { class: 'rv-img' }, h('span', { class: 'muted small' }, '…'));
+    const holder = h('div', { class: 'rv-img' }, h('span', { class: 'muted small' }, '\u2026'));
     crop(it).then(c => holder.replaceChildren(c)).catch(() => holder.replaceChildren(h('span', { class: 'muted small' }, it.lineText)));
     const inp = h('input', { class: 'input rv-in', value: it.text, spellcheck: true, lang: 'it',
       oninput: () => { it.value = inp.value; card.classList.toggle('changed', it.value !== it.text); upd(); },
@@ -10403,7 +10476,7 @@ async function openOcrReview({ doc, st, cache, items, onApply }) {
       onkeydown: e => {
         if (e.key === 'Enter') { e.preventDefault(); (e.shiftKey ? cards[i - 1] : cards[i + 1])?.querySelector('input').focus(); if (!e.shiftKey && i === cards.length - 1) applyBtn.focus(); }
         if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); inp.value = it.text; it.value = it.text; card.classList.remove('changed'); upd(); }
-        // Ctrl/⌘+Canc: elimina la parola e passa alla successiva
+        // Ctrl/\u2318+Canc: elimina la parola e passa alla successiva
         if (e.key === 'Delete' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); setRemoved(it, card, true); cards[i + 1]?.querySelector('input').focus(); }
       } });
     const del = h('button', { class: 'btn sm ghost rv-del', type: 'button', onclick: () => setRemoved(it, card, !it.removed) });
@@ -10476,7 +10549,7 @@ async function ocrDocumentOn(doc, st, { wordMode = false, word = false, pages = 
     // più pagine insieme: lettura del PDF (nel motore in background) e impaginazione si sovrappongono
     let done = 0;
     await inParallel(pages, parallelSlots(pages.length), async p => { wordPages.set(p, await DocxOut.fromPdfPage(doc.pdfjs, p, { images: st.wordImages })); done++; progress(done / pages.length, `${done} di ${pages.length} pagine convertite in Word`); });
-    progress(1, 'creazione del documento Word…');
+    progress(1, 'creazione del documento Word\u2026');
     const docx = await DocxOut.build(pages.map(p => wordPages.get(p)), { font: st.wordFont, title: doc.base, overlap: st.overlap });
     return { todo, docx, onlyWord: true, fixLog, words: 0, fixed: 0, text: '', improved: doc.improved || [] };
   }
@@ -10506,10 +10579,10 @@ async function ocrDocumentOn(doc, st, { wordMode = false, word = false, pages = 
         // il motore si avvia mentre la prima pagina viene disegnata
         if (!workers[k]) { workers[k] = getWorker(k); workers[k].catch(() => {}); }
         worker = workers[k].then(w => { w._box.log = m => {
-          if (m.status === 'recognizing text') { frac[i] = Math.max(frac[i], phase[i] === 'main' ? 0.15 + 0.8 * (m.progress || 0) : 0.1 * (m.progress || 0)); report(`pagina ${p} — ${phase[i] === 'main' ? Math.round((m.progress || 0) * 100) + '%' : 'analisi orientamento'}  (${where()})`); }
+          if (m.status === 'recognizing text') { frac[i] = Math.max(frac[i], phase[i] === 'main' ? 0.15 + 0.8 * (m.progress || 0) : 0.1 * (m.progress || 0)); report(`pagina ${p} \u2014 ${phase[i] === 'main' ? Math.round((m.progress || 0) * 100) + '%' : 'analisi orientamento'}  (${where()})`); }
           else if (OCR_STATUS[m.status]) progress(null, OCR_STATUS[m.status]);
         }; return w; });
-        report(`pagina ${p} (${where()}) — preparazione immagine`);
+        report(`pagina ${p} (${where()}) \u2014 preparazione immagine`);
         await tick();
         const log = [];
         const got = await ocrRecognizePage(worker, doc.pdfjs, p, { dpi: Q.dpi, twoPass: Q.twoPass, auto: st.auto, fix: st.fix, langs: st.langs, fixLog: log, onPhase: ph => { phase[i] = ph; } });
@@ -10525,7 +10598,7 @@ async function ocrDocumentOn(doc, st, { wordMode = false, word = false, pages = 
       if ((word || st.clean) && (!prep.img || !r.canvas || !r.canvas.width)) ({ prep, r } = await ocrRedoImages(doc, p, Q.dpi, st.auto, rec));
       if (straightened) fixed++;
       if (word) {
-        progress(null, `pagina ${p} — impaginazione per Word`);
+        progress(null, `pagina ${p} \u2014 impaginazione per Word`);
         // la pagina a colori con la stessa rotazione/raddrizzamento dell'OCR (colori del testo, sfondi, immagini)
         const cc = h('canvas', { width: prep.img.w, height: prep.img.h });
         const cx = cc.getContext('2d', { willReadFrequently: true }); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cc.width, cc.height);
@@ -10538,7 +10611,7 @@ async function ocrDocumentOn(doc, st, { wordMode = false, word = false, pages = 
         try {
           if (DocxOut.detectTables(prep.img.g, prep.img.w, prep.img.h, r.scale, 150).length) {
             if (!workers[k]) { workers[k] = getWorker(k); workers[k].catch(() => {}); }
-            progress(null, `pagina ${p} — lettura delle celle delle tabelle`);
+            progress(null, `pagina ${p} \u2014 lettura delle celle delle tabelle`);
             cellText = await ocrTableCells(await workers[k], prep, r.scale, { langs: st.langs, fix: st.fix, pageWords: data.words || [], only: c => DocxOut.cellNeedsReread(c, data.words || []) });
           }
         } catch (e) { if (e?.cancel) throw e; console.warn('rilettura delle celle', e); }
@@ -10650,11 +10723,11 @@ async function ocrDocumentOn(doc, st, { wordMode = false, word = false, pages = 
   let docx = null;
   if (word) {
     const rest = pages.filter(p => !wordPages.has(p));
-    await inParallel(rest, parallelSlots(rest.length), async p => { progress(null, `pagina ${p} — conversione in Word`); wordPages.set(p, await DocxOut.fromPdfPage(doc.pdfjs, p, { images: st.wordImages })); });
-    progress(1, 'creazione del documento Word…');
+    await inParallel(rest, parallelSlots(rest.length), async p => { progress(null, `pagina ${p} \u2014 conversione in Word`); wordPages.set(p, await DocxOut.fromPdfPage(doc.pdfjs, p, { images: st.wordImages })); });
+    progress(1, 'creazione del documento Word\u2026');
     docx = await DocxOut.build(pages.map(p => wordPages.get(p)), { font: st.wordFont, title: doc.base, overlap: st.overlap });
   }
-  progress(1, 'salvataggio…');
+  progress(1, 'salvataggio\u2026');
   const bytes = await saveDoc(pdf);
   return { todo, bytes, docx, text: fullText.trim(), words, fixed, fixLog, improved: doc.improved || [] };
 }
@@ -10664,9 +10737,9 @@ const OCR_LANGS = [['ita', 'Italiano'], ['eng', 'Inglese'], ['fra', 'Francese'],
 async function startOcr(stage, files, { wordMode = false } = {}) {
   if (files.length > 1) return startOcrMany(stage, files, { wordMode });
   let file = files[0];
-  if (isImage(file)) file = await withBusy('Preparazione dell’immagine…', () => imagesToPdfFile([file], stripExt(file.name) + '.pdf'));
+  if (isImage(file)) file = await withBusy('Preparazione dell\u2019immagine\u2026', () => imagesToPdfFile([file], stripExt(file.name) + '.pdf'));
   if (!file) throw new Error('Immagine non leggibile');
-  const doc = await withBusy('Apertura del documento…', () => openPdf(file));
+  const doc = await withBusy('Apertura del documento\u2026', () => openPdf(file));
   if (!doc) throw (withBusy.last || new Error('Impossibile aprire il file'));
   const N = doc.numPages, LANGS = OCR_LANGS;
   const st = { langs: new Set(['ita']), quality: 'acc', range: 'all', rangeText: `1-${N}`, skipText: true, auto: true, clean: false, word: true, wordImages: true, wordFont: 'auto', fix: true, overlap: 'behind', improve: true };
@@ -10675,7 +10748,7 @@ async function startOcr(stage, files, { wordMode = false } = {}) {
   const cards = [];
   const grid = h('div', { class: 'cards' });
   for (let p = 1; p <= N; p++) { const c = pageCard(doc, p); c.lbl = c.el.querySelector('.page-label'); cards.push(c); grid.append(c.el); }
-  const textInfo = h('div', { class: 'hint' }, 'Analisi delle pagine in corso…'), mixed = [];
+  const textInfo = h('div', { class: 'hint' }, 'Analisi delle pagine in corso\u2026'), mixed = [];
   (async () => {
     const gen = GEN;
     for (let p = 1; p <= N; p++) {
@@ -10684,8 +10757,8 @@ async function startOcr(stage, files, { wordMode = false } = {}) {
       if (hasText[p - 1] && await pageMixed(doc, p).catch(() => false)) mixed.push(p);
       cards[p - 1].lbl.replaceChildren(`Pagina ${p}`, h('div', { class: 'muted small', style: { fontWeight: 600 } }, mixed.includes(p) ? 'scansione + testo aggiunto' : hasText[p - 1] ? 'contiene già testo' : 'immagine / scansione'));
     }
-    const t = hasText.filter(Boolean).length - mixed.length, mx = mixed.length ? ` ${plural(mixed.length, 'pagina è una scansione', 'pagine sono scansioni')} con del testo aggiunto dopo: ${mixed.length === 1 ? 'si legge' : 'si leggono'} comunque, senza ripetere il testo che c’è già.` : '';
-    textInfo.textContent = (t === 0 && !mixed.length ? 'Nessuna pagina contiene testo: è una scansione, l’OCR la renderà ricercabile.' : t === N ? 'Tutte le pagine contengono già testo selezionabile. Puoi comunque forzare l’OCR togliendo la spunta qui sotto.' : t ? `${plural(t, 'pagina contiene', 'pagine contengono')} già testo e ${t === 1 ? 'verrà saltata' : 'verranno saltate'} (se lasci la spunta).` : '') + mx;
+    const t = hasText.filter(Boolean).length - mixed.length, mx = mixed.length ? ` ${plural(mixed.length, 'pagina è una scansione', 'pagine sono scansioni')} con del testo aggiunto dopo: ${mixed.length === 1 ? 'si legge' : 'si leggono'} comunque, senza ripetere il testo che c\u2019è già.` : '';
+    textInfo.textContent = (t === 0 && !mixed.length ? 'Nessuna pagina contiene testo: è una scansione, l\u2019OCR la renderà ricercabile.' : t === N ? 'Tutte le pagine contengono già testo selezionabile. Puoi comunque forzare l\u2019OCR togliendo la spunta qui sotto.' : t ? `${plural(t, 'pagina contiene', 'pagine contengono')} già testo e ${t === 1 ? 'verrà saltata' : 'verranno saltate'} (se lasci la spunta).` : '') + mx;
   })();
   /* pre-trattamento: le foto di documenti (sfondo, prospettiva, ombre) passano prima da «Migliora scansioni e foto», le
      scansioni di libri perdono bande nere e pagina accanto. Se il guadagno è chiaro si fa da sé (si può togliere), se è
@@ -10713,7 +10786,7 @@ async function startOcr(stage, files, { wordMode = false } = {}) {
   async function ensureSource() {
     await imp.check;
     try { setSource(await improvedDoc()); }
-    catch (e) { console.warn('miglioramento non riuscito', e); toast('Miglioramento delle pagine non riuscito: l’OCR legge le pagine originali.', 'error'); imp.pages.clear(); setSource(doc); }
+    catch (e) { console.warn('miglioramento non riuscito', e); toast('Miglioramento delle pagine non riuscito: l\u2019OCR legge le pagine originali.', 'error'); imp.pages.clear(); setSource(doc); }
     return src;
   }
   // lettura anticipata: le pagine si leggono mentre si scelgono le opzioni
@@ -10744,10 +10817,10 @@ async function startOcr(stage, files, { wordMode = false } = {}) {
   drawChips();
   const rangeIn = h('input', { class: 'input', value: st.rangeText, hidden: true, oninput: () => st.rangeText = rangeIn.value });
   const qHint = h('div', { class: 'muted small' });
-  const drawQ = () => qHint.textContent = { fast: 'Per documenti stampati e puliti.', acc: 'Consigliata: corregge ombre, contrasto e pagine storte.', max: 'Per scansioni difficili e foto: se la lettura è incerta prova più versioni dell’immagine e tiene la migliore. Più lenta.' }[st.quality];
+  const drawQ = () => qHint.textContent = { fast: 'Per documenti stampati e puliti.', acc: 'Consigliata: corregge ombre, contrasto e pagine storte.', max: 'Per scansioni difficili e foto: se la lettura è incerta prova più versioni dell\u2019immagine e tiene la migliore. Più lenta.' }[st.quality];
   drawQ();
-  const fontSel = h('select', { class: 'input', onchange: () => st.wordFont = fontSel.value }, [['auto', 'Come nell’originale (rilevato)'], ...['Times New Roman', 'Arial', 'Calibri', 'Garamond', 'Verdana', 'Courier New'].map(f => [f, f])].map(([v, l]) => h('option', { value: v, selected: v === st.wordFont }, l)));
-  const ovSel = h('select', { class: 'input', onchange: () => st.overlap = ovSel.value }, [['behind', 'Dietro al testo (consigliato)'], ['front', 'Davanti al testo'], ['inline', 'Tra un paragrafo e l’altro (mai sovrapposte)']].map(([v, l]) => h('option', { value: v, selected: v === st.overlap }, l)));
+  const fontSel = h('select', { class: 'input', onchange: () => st.wordFont = fontSel.value }, [['auto', 'Come nell\u2019originale (rilevato)'], ...['Times New Roman', 'Arial', 'Calibri', 'Garamond', 'Verdana', 'Courier New'].map(f => [f, f])].map(([v, l]) => h('option', { value: v, selected: v === st.wordFont }, l)));
+  const ovSel = h('select', { class: 'input', onchange: () => st.overlap = ovSel.value }, [['behind', 'Dietro al testo (consigliato)'], ['front', 'Davanti al testo'], ['inline', 'Tra un paragrafo e l\u2019altro (mai sovrapposte)']].map(([v, l]) => h('option', { value: v, selected: v === st.overlap }, l)));
   const wordOpts = h('div', { class: 'stack' },
     h('label', { class: 'field' }, 'Carattere', fontSel),
     checkbox('Includi immagini, loghi, firme e timbri', st.wordImages, v => { st.wordImages = v; ovField.hidden = !v; }),
@@ -10759,17 +10832,17 @@ async function startOcr(stage, files, { wordMode = false } = {}) {
     sec('Precisione', seg(Object.entries(QUALITY).map(([k, v]) => [k, v.label]), st.quality, v => { st.quality = v; drawQ(); specUpdate(); }), qHint),
     advanced(wordMode ? 'word' : 'ocr', () => [st.fix ? 'testo corretto' : 'senza correzioni', st.auto ? 'pagine raddrizzate' : null, st.range === 'range' ? 'solo un intervallo' : 'tutte le pagine', !wordMode && st.word ? 'anche Word' : null].filter(Boolean).join(' · '),
     sec('Correzioni automatiche',
-      checkbox('Correggi il testo letto (italiano)', st.fix, v => { st.fix = v; specUpdate(); }, 'Parole spezzate o attaccate, lettere scambiate o mancanti, accenti e apostrofi sbagliati: con dizionario completo e regole della lingua. Trovi l’elenco delle correzioni alla fine.'),
+      checkbox('Correggi il testo letto (italiano)', st.fix, v => { st.fix = v; specUpdate(); }, 'Parole spezzate o attaccate, lettere scambiate o mancanti, accenti e apostrofi sbagliati: con dizionario completo e regole della lingua. Trovi l\u2019elenco delle correzioni alla fine.'),
       checkbox('Raddrizza le pagine storte, ruotate o capovolte', st.auto, v => { st.auto = v; specUpdate(); }),
       checkbox('Salva nel PDF le pagine pulite e raddrizzate', st.clean, v => st.clean = v, 'Utile per foto e scansioni storte: le pagine diventano dritte, con sfondo bianco uniforme.')),
     sec('Pagine', seg([['all', 'Tutte'], ['range', 'Intervallo']], st.range, v => { st.range = v; rangeIn.hidden = v !== 'range'; }), rangeIn,
       checkbox('Salta le pagine che contengono già testo', st.skipText, v => { st.skipText = v; specUpdate({ force: true, delay: 600 }); }, 'Nel documento Word vengono comunque incluse, con il loro testo.')),
     sec('Documento Word',
-      wordMode ? null : checkbox('Crea anche il file Word (.docx) modificabile', st.word, v => { st.word = v; wordOpts.hidden = !v; }, 'Paragrafi, titoli centrati, grassetto, sottolineato e rientri ricostruiti come nell’originale.'),
+      wordMode ? null : checkbox('Crea anche il file Word (.docx) modificabile', st.word, v => { st.word = v; wordOpts.hidden = !v; }, 'Paragrafi, titoli centrati, grassetto, sottolineato e rientri ricostruiti come nell\u2019originale.'),
       wordOpts)),
     textInfo,
     h('div', { class: 'hint' }, wordMode
-      ? 'Le pagine con testo vengono convertite direttamente; quelle scansionate vengono prima riconosciute con l’OCR. Intestazioni, loghi, firme e timbri diventano immagini separate che puoi spostare, ridimensionare o eliminare in Word.'
+      ? 'Le pagine con testo vengono convertite direttamente; quelle scansionate vengono prima riconosciute con l\u2019OCR. Intestazioni, loghi, firme e timbri diventano immagini separate che puoi spostare, ridimensionare o eliminare in Word.'
       : 'Al PDF viene aggiunto uno strato di testo invisibile perfettamente allineato: potrai cercare, selezionare e copiare. Ottieni anche il testo (.txt) e, se vuoi, il documento Word (.docx) da modificare.'),
   ], [specEl, h('button', { class: 'btn primary big btn-run', onclick: () => run() }, ic(wordMode ? 'textedit' : 'ocr', 18), wordMode ? 'Converti in Word' : 'Avvia OCR')]);
   specUpdate({ delay: 700 });
@@ -10783,7 +10856,7 @@ async function startOcr(stage, files, { wordMode = false } = {}) {
     a.auto.forEach(p => { imp.pages.add(p); imp.held.add(p); });
     const status = h('div', { class: 'muted small' });
     const go = () => {
-      status.textContent = st.improve && imp.pages.size ? 'Preparazione delle pagine migliorate…' : '';
+      status.textContent = st.improve && imp.pages.size ? 'Preparazione delle pagine migliorate\u2026' : '';
       ensureSource().then(() => { status.textContent = st.improve && src.improved?.length ? `Pronto: ${pp(src.improved)} ${src.improved.length > 1 ? 'migliorate' : 'migliorata'}.` : ''; drawCmp(); });
     };
     const cmpBtn = h('button', { class: 'btn sm', hidden: true, onclick: () => compareModal(doc.bytes, src.bytes, { title: 'Prima e dopo il miglioramento', labels: ['Originale', 'Migliorata'] }) }, ic('eye', 15), 'Prima e dopo');
@@ -10791,13 +10864,13 @@ async function startOcr(stage, files, { wordMode = false } = {}) {
     const toMigliora = () => handoff('migliora', [files[0]]);
     const kids = [];
     if (a.auto.length) {
-      const label = autoPhoto.length ? 'Migliora la foto prima dell’OCR (ritaglio e luce) — consigliato' : 'Ripulisci i bordi prima dell’OCR (bande nere, pagina accanto) — consigliato';
+      const label = autoPhoto.length ? 'Migliora la foto prima dell\u2019OCR (ritaglio e luce) \u2014 consigliato' : 'Ripulisci i bordi prima dell\u2019OCR (bande nere, pagina accanto) \u2014 consigliato';
       const sub = [autoPhoto.length ? `${pp(autoPhoto)[0].toUpperCase() + pp(autoPhoto).slice(1)}: ${whyOf(autoPhoto)}. Si ritaglia il foglio, si raddrizza la prospettiva e si tolgono ombre e colore della carta.` : '',
         autoTrim.length ? `${pp(autoTrim)[0].toUpperCase() + pp(autoTrim).slice(1)}: ${whyOf(autoTrim)}. Si coprono di bianco i bordi scuri e il pezzo di pagina accanto, così il testo tagliato non viene letto.` : ''].filter(Boolean).join(' ');
       kids.push(checkbox(label, st.improve, v => { st.improve = v; go(); }, sub));
     }
     if (a.advise.length) {
-      const adv = h('div', { class: 'hint' }, `${pp(a.advise)[0].toUpperCase() + pp(a.advise).slice(1)}: ${whyOf(a.advise)}. Sembra una foto: migliorare la foto prima (ritaglio e luce) può aiutare l’OCR.`,
+      const adv = h('div', { class: 'hint' }, `${pp(a.advise)[0].toUpperCase() + pp(a.advise).slice(1)}: ${whyOf(a.advise)}. Sembra una foto: migliorare la foto prima (ritaglio e luce) può aiutare l\u2019OCR.`,
         h('div', { class: 'row', style: { marginTop: '8px', gap: '6px', flexWrap: 'wrap' } },
           h('button', { class: 'btn sm', onclick: e => { e.currentTarget.disabled = true; st.improve = true; a.advise.forEach(p => imp.pages.add(p)); go(); } }, ic('wand', 15), 'Migliora qui'),
           h('button', { class: 'btn sm ghost', onclick: toMigliora }, 'Apri in «Migliora scansioni e foto»')));
@@ -10806,7 +10879,7 @@ async function startOcr(stage, files, { wordMode = false } = {}) {
     if (a.pages.some(x => x.m?.curve >= 1.2 && x.m?.book?.any)) kids.push(h('div', { class: 'muted small' }, 'Righe incurvate verso la rilegatura: durante la lettura si prova a raddrizzarle.'));
     if (!kids.length) return;
     kids.push(h('div', { class: 'row', style: { gap: '6px', flexWrap: 'wrap' } }, cmpBtn, a.auto.length ? h('button', { class: 'btn sm ghost', onclick: toMigliora }, 'Regola in «Migliora»') : null), status);
-    improveEl.replaceChildren(sec('Prima dell’OCR', ...kids)); improveEl.hidden = false;
+    improveEl.replaceChildren(sec('Prima dell\u2019OCR', ...kids)); improveEl.hidden = false;
     if (a.auto.length) go();
   });
 
@@ -10819,13 +10892,13 @@ async function startOcr(stage, files, { wordMode = false } = {}) {
     catch (e) { return Errors.show(e); }
     const workers = [];
     const stopAll = async () => { const ws = workers.splice(0); for (const w of ws) { try { await w.terminate(); } catch { } } };
-    await withBusy('Riconoscimento del testo…', async () => {
-      if (imp.pages.size && st.improve && !src.improved) Busy.set(null, 'Miglioramento delle pagine prima dell’OCR…');
+    await withBusy('Riconoscimento del testo\u2026', async () => {
+      if (imp.pages.size && st.improve && !src.improved) Busy.set(null, 'Miglioramento delle pagine prima dell\u2019OCR\u2026');
       const source = await ensureSource();
       const res = await ocrDocument(source, st, { wordMode, word: st.word, pages, hasText, parallel: batchSlots(pages.length), cache, fixes: allFixes.size ? allFixes : null, checked: true,
-        getWorker: async () => { Busy.set(null, 'Caricamento del motore OCR…'); const w = await makeOcrWorker(st.langs, OCR_QUALITY[st.quality].dpi); workers.push(w); return w; },
+        getWorker: async () => { Busy.set(null, 'Caricamento del motore OCR\u2026'); const w = await makeOcrWorker(st.langs, OCR_QUALITY[st.quality].dpi); workers.push(w); return w; },
         progress: (f, label) => Busy.set(f, label ? label.charAt(0).toUpperCase() + label.slice(1) : null) });
-      if (res.nothing) throw new Error('Tutte le pagine scelte contengono già testo: togli la spunta “Salta le pagine…” per forzare l’OCR.');
+      if (res.nothing) throw new Error('Tutte le pagine scelte contengono già testo: togli la spunta \u201cSalta le pagine\u2026\u201d per forzare l\u2019OCR.');
       if (res.onlyWord) {
         showResult([{ name: `${doc.base}.docx`, bytes: res.docx, type: DOCX_TYPE, info: `Documento Word modificabile · ${plural(pages.length, 'pagina', 'pagine')}` }],
           { title: 'Conversione in Word completata', primary: 0, note: 'Il PDF conteneva già il testo: è stato convertito direttamente in Word, senza OCR.' });
@@ -10879,7 +10952,7 @@ function batchRow(name, sub, thumb) {
     h('div', { class: 'fr-info' }, h('div', { class: 'fr-name' }, name), subEl, h('div', { class: 'fr-prog' }, bar)), stEl);
   const r = { name, el, stEl, subEl, bar, f: 0,
     reset() { r.f = 0; bar.style.width = '0%'; stEl.textContent = 'In attesa'; el.classList.remove('done', 'err', 'busy'); },
-    start(label = 'In corso…') { r.f = 0; bar.style.width = '0%'; el.classList.remove('done', 'err'); el.classList.add('busy'); stEl.textContent = label; },
+    start(label = 'In corso\u2026') { r.f = 0; bar.style.width = '0%'; el.classList.remove('done', 'err'); el.classList.add('busy'); stEl.textContent = label; },
     prog(f, label) { if (f != null) { r.f = Math.min(0.99, Math.max(r.f, f)); bar.style.width = Math.round(r.f * 100) + '%'; } if (label) stEl.textContent = label.charAt(0).toUpperCase() + label.slice(1); },
     done(label = 'Fatto') { r.f = 1; bar.style.width = '100%'; el.classList.remove('busy'); el.classList.add('done'); stEl.textContent = label; },
     fail(label = 'Errore') { r.f = 1; el.classList.remove('busy'); el.classList.add('err'); stEl.textContent = label; },
@@ -10928,7 +11001,7 @@ function batchMain(rows, title) {
 // apre i PDF (e le foto, ognuna come PDF a sé); i file illeggibili vengono segnalati e saltati
 async function batchOpenPdfs(files) {
   const docs = [];
-  await withBusy('Apertura dei file…', async () => {
+  await withBusy('Apertura dei file\u2026', async () => {
     for (const [i, f0] of files.entries()) {
       Busy.set(i / files.length, f0.name);
       try {
@@ -10960,7 +11033,7 @@ async function startOcrMany(stage, files, { wordMode = false } = {}) {
     sec('Correzioni automatiche',
       checkbox('Correggi il testo letto (italiano)', st.fix, v => st.fix = v),
       checkbox('Raddrizza le pagine storte, ruotate o capovolte', st.auto, v => st.auto = v),
-      checkbox('Migliora foto e scansioni prima dell’OCR, se serve', st.improve, v => st.improve = v, 'Foto ritagliate e schiarite, bande nere e pagina accanto coperte di bianco: nei file ottenuti ci sono le pagine migliorate.'),
+      checkbox('Migliora foto e scansioni prima dell\u2019OCR, se serve', st.improve, v => st.improve = v, 'Foto ritagliate e schiarite, bande nere e pagina accanto coperte di bianco: nei file ottenuti ci sono le pagine migliorate.'),
       checkbox('Salva nel PDF le pagine pulite e raddrizzate', st.clean, v => st.clean = v)),
     sec('Pagine', checkbox('Salta le pagine che contengono già testo', st.skipText, v => st.skipText = v)),
     wordMode ? null : sec('Documento Word', checkbox('Crea anche un file Word (.docx) per ogni documento', st.word, v => st.word = v))),
@@ -10969,7 +11042,7 @@ async function startOcrMany(stage, files, { wordMode = false } = {}) {
   async function run() {
     const workers = [];
     rows.forEach(r => r.reset());
-    await withBusy('Riconoscimento del testo…', async () => {
+    await withBusy('Riconoscimento del testo\u2026', async () => {
       // ogni gruppo parallelo ha il suo motore OCR
       // i processori si dividono tra i file aperti insieme; dentro ogni file più pagine alla volta
       const S = parallelSlots(), K = batchSlots(docs.length), perDoc = Math.max(1, Math.floor(S / K));
@@ -10978,7 +11051,7 @@ async function startOcrMany(stage, files, { wordMode = false } = {}) {
           getWorker: k => {
             ctx.w ||= [];
             if (!ctx.w[k]) {
-              prog(null, 'Avvio del motore OCR…');
+              prog(null, 'Avvio del motore OCR\u2026');
               ctx.w[k] = makeOcrWorker(st.langs, OCR_QUALITY[st.quality].dpi).then(w => { workers.push(w); return w; });
               ctx.cleanup = async () => { for (const wp of ctx.w) { try { (await wp).terminate(); } catch { } } };
             }
@@ -11028,18 +11101,18 @@ function itemCharBox(it, k0, k1, vp) {
 }
 
 /* =====================================================================
-   PiiKit — riconosce i dati personali in un testo (italiano): codici fiscali
+   PiiKit \u2014 riconosce i dati personali in un testo (italiano): codici fiscali
    (con il carattere di controllo), partite IVA, IBAN (mod 97), email, telefoni,
    indirizzi, date e luoghi di nascita, documenti d'identità, nomi e cognomi.
    I nomi si trovano in tre modi: dal codice fiscale presente nel documento (le
    consonanti di nome e cognome), dal contesto (Sig., Dott., «il sottoscritto»,
-   «Cognome:»…) e da un elenco di nomi propri italiani accanto a un cognome.
-   Funzioni pure: detect(text, ctx) → [{ cat, start, end, text, sure }].
+   «Cognome:»\u2026) e da un elenco di nomi propri italiani accanto a un cognome.
+   Funzioni pure: detect(text, ctx) \u2192 [{ cat, start, end, text, sure }].
    ===================================================================== */
 const PiiKit = (() => {
   const CATS = {
     nome: 'Nomi e cognomi', cf: 'Codici fiscali', piva: 'Partite IVA', iban: 'IBAN', email: 'Email', tel: 'Telefoni',
-    indirizzo: 'Indirizzi', nascita: 'Nascita (data e luogo)', doc: 'Documenti d’identità', targa: 'Targhe',
+    indirizzo: 'Indirizzi', nascita: 'Nascita (data e luogo)', doc: 'Documenti d\u2019identità', targa: 'Targhe',
     carta: 'Carte di pagamento e conti', sanita: 'Dati sanitari', giudiziari: 'Dati giudiziari', particolari: 'Dati particolari (religione, politica, sindacato, origine, vita sessuale)',
     web: 'Indirizzi IP e siti personali', utenza: 'Utenze e codici cliente', importo: 'Importi in denaro', data: 'Altre date', segno: 'Firme, timbri e codici QR',
     ente: 'Ditte e società', luogo: 'Comuni, province e CAP', catasto: 'Dati catastali',
@@ -11048,7 +11121,7 @@ const PiiKit = (() => {
   // potenzialmente sensibili: si mostrano, ma da scegliere (non oscurati in automatico)
   const SOFT = new Set(['importo', 'data']);
 
-  /* —— codice fiscale —— */
+  /* \u2014\u2014 codice fiscale \u2014\u2014 */
   const ODD = { 0: 1, 1: 0, 2: 5, 3: 7, 4: 9, 5: 13, 6: 15, 7: 17, 8: 19, 9: 21, A: 1, B: 0, C: 5, D: 7, E: 9, F: 13, G: 15, H: 17, I: 19, J: 21, K: 2, L: 4, M: 18, N: 20, O: 11, P: 3, Q: 6, R: 8, S: 12, T: 14, U: 16, V: 10, W: 22, X: 25, Y: 24, Z: 23 };
   const EVEN = c => /\d/.test(c) ? +c : c.charCodeAt(0) - 65;
   function cfValid(cf) {
@@ -11064,14 +11137,14 @@ const PiiKit = (() => {
   function codeSurname(s) { s = plain(s); return (CONS(s) + VOW(s) + 'XXX').slice(0, 3); }
   function codeName(s) { s = plain(s); const c = CONS(s); if (c.length >= 4) return c[0] + c[2] + c[3]; return (c + VOW(s) + 'XXX').slice(0, 3); }
 
-  /* —— partita IVA (cifra di controllo) —— */
+  /* \u2014\u2014 partita IVA (cifra di controllo) \u2014\u2014 */
   function pivaValid(p) {
     p = p.replace(/\D/g, ''); if (p.length !== 11 || /^0{11}$/.test(p)) return false;
     let s = 0;
     for (let i = 0; i < 11; i++) { let d = +p[i]; if (i % 2 === 1) { d *= 2; if (d > 9) d -= 9; } s += d; }
     return s % 10 === 0;
   }
-  /* —— IBAN (mod 97, lunghezza per paese) —— */
+  /* \u2014\u2014 IBAN (mod 97, lunghezza per paese) \u2014\u2014 */
   const IBAN_LEN = { IT: 27, SM: 27, VA: 22, DE: 22, FR: 27, ES: 24, GB: 22, CH: 21, AT: 20, BE: 16, NL: 18, PT: 25, LU: 20, IE: 22, MT: 31, GR: 27, PL: 28, RO: 24, HR: 21, SI: 19, MC: 27, LI: 21 };
   function ibanValid(s) {
     s = s.replace(/\s/g, '').toUpperCase();
@@ -11083,25 +11156,25 @@ const PiiKit = (() => {
     return m === 1;
   }
 
-  /* —— comuni italiani (src/comuni-it.js, elenco ISTAT): insieme dei nomi in minuscolo, sigle, nomi ambigui —— */
+  /* \u2014\u2014 comuni italiani (src/comuni-it.js, elenco ISTAT): insieme dei nomi in minuscolo, sigle, nomi ambigui \u2014\u2014 */
   let GAZ = null;
   function gaz() {
     if (GAZ) return GAZ;
-    const nomi = COMUNI_IT.nomi.split('|').map(x => x.toLowerCase().replace(/[’]/g, "'").replace(/\s+/g, ' '));
+    const nomi = COMUNI_IT.nomi.split('|').map(x => x.toLowerCase().replace(/[\u2019]/g, "'").replace(/\s+/g, ' '));
     GAZ = { set: new Set(nomi), sig: new Set(COMUNI_IT.sigle.split(' ')), amb: new Set(COMUNI_IT.ambigui.split(' ')), max: Math.max(...nomi.map(x => x.split(/[\s'-]+/).length)) };
     return GAZ;
   }
-  /* —— nomi propri italiani più comuni (per riconoscere «Mario Rossi», «ROSSI MARIO») —— */
+  /* \u2014\u2014 nomi propri italiani più comuni (per riconoscere «Mario Rossi», «ROSSI MARIO») \u2014\u2014 */
   const NAMES = new Set(('abele achille ada adele adelaide adriana adriano agata agnese agostino alba alberto alda aldo alessandra alessandro alessia alessio alfonso alfredo alice alida allegra amalia amedeo amelia anastasia andrea angela angelica angelo anita anna annalisa annamaria antonella antonietta antonino antonio arianna armando arturo assunta aurelio aurora barbara bartolomeo beatrice benedetta benedetto beniamino bernardo bianca bruna bruno calogero camilla carla carlo carlotta carmela carmelo carmen carolina caterina cecilia celeste cesare chiara cinzia clara claudia claudio clelia concetta corrado cosimo costanza cristian cristiana cristina cristiano damiano daniela daniele dante dario davide debora denis denise diana diego dino domenico donatella donato dora edoardo elena eleonora elia elisa elisabetta elvira emanuela emanuele emilia emiliano emilio emma enrico enza enzo ermanno ernesto erika ester ettore eugenio eva evelina fabiana fabio fabrizio federica federico felice fernanda fernando filippo fiorella flavia flavio francesca francesco franco gabriele gabriella gaetano gaia gerardo giacomo giada gianfranco giancarlo gianluca gianluigi gianna gianni gilberto gina gino giorgia giorgio giovanna giovanni gisella giulia giuliana giuliano giulio giuseppa giuseppe giuseppina gloria grazia graziella gregorio guglielmo guido ida ignazio ilaria ines ingrid irene iris isabella italo ivan ivana ivano jacopo laura lazzaro lea leonardo letizia lia liliana lino lisa livia lorella lorena lorenzo loredana luana luca lucia luciana luciano lucio luigi luigia luisa maddalena manuel manuela mara marcella marcello marco margherita maria mariagrazia mariangela marianna mariano marika marilena marina marino mario marisa marta martina massimiliano massimo matilde matteo mattia maurizio mauro melissa michela michele milena mirco mirella miriam monica nadia natale natalia nazzareno nicola nicoletta nicolò nicolo nino noemi norma olga oliviero orazio ornella osvaldo ottavio paola paolo pasquale patrizia patrizio pierluigi piero pietro pina pino raffaela raffaele raffaella rebecca renata renato riccardo rita roberta roberto rocco romano rosa rosalba rosalia rosanna rosaria rosario rossana rossella ruggero sabrina salvatore samuele sandra sandro santa santo sara saverio sebastiano serena sergio silvana silvano silvia silvio simona simone sofia sonia stefania stefano susanna tania teresa tiziana tiziano tommaso tullio ugo umberto valentina valentino valeria valerio vanessa vanna veronica vincenza vincenzo viola virginia vito vittoria vittorio walter zaira').split(' '));
   // parole che sembrano nomi ma sono etichette, titoli o parole comuni dei documenti
   const STOP = new Set(('ministero ministeri tribunale corte procura prefettura questura regione regioni agenzia ufficio uffici direzione dipartimento servizio servizi settore ente enti azienda aziende società repubblica stato consiglio giunta presidente presidenza segretario segreteria dirigente responsabile assessorato distretto ambito istituto università scuola camera senato governo decreto legge articolo art allegato contratto cognome nome nomi data luogo nascita codice fiscale partita iva via viale piazza corso residente residenza nato nata comune provincia indirizzo telefono email sesso firma il la lo le gli i di da del della dei delle a al alla e ed o in con per su tra fra se che non anno anni mese giorno spett spettabile oggetto totale importo euro pagina allegato sede sig sig.ra dott avv ing geom rag prof gentile egregio egr cliente fornitore studio società srl spa snc sas srls s.r.l s.p.a ditta ufficio comunicazione richiesta dichiarazione modulo domanda servizio stato repubblica italiana italia regione città tel fax cell pec iban cap n. nr num numero cf c.f p.iva ai sensi art articolo legge decreto dpr dlgs gdpr privacy consenso dati trattamento informativa saldo acconto fattura ricevuta documento carta identità patente passaporto rilasciato scadenza valido esente imposta imu tari tasi irpef inps inail agenzia entrate banca conto corrente intestatario beneficiario causale bonifico versamento rata scadenze dicembre gennaio febbraio marzo aprile maggio giugno luglio agosto settembre ottobre novembre lunedì martedì mercoledì giovedì venerdì sabato domenica').split(' '));
-  const isCap = w => !/\d/.test(w) && /^[A-ZÀ-ÖØ-Ý][a-zà-öø-ÿ'’]+$/.test(w) || /^[A-ZÀ-ÖØ-Ý]{2,}$/.test(w) || /^[A-ZÀ-ÖØ-Ý]['’][A-ZÀ-ÖØ-Ýa-zà-öø-ÿ]+$/.test(w);
-  const bare = w => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}'’]+$/gu, '');
-  const PARTICLE = /^(de|di|del|della|dello|dei|degli|da|dal|la|lo|le|van|von|mac|mc|d['’]|De|Di|Del|Della|Dello|Dei|Da|Dal|La|Lo|Le|D['’])$/;
+  const isCap = w => !/\d/.test(w) && /^[A-ZÀ-ÖØ-Ý][a-zà-öø-ÿ'\u2019]+$/.test(w) || /^[A-ZÀ-ÖØ-Ý]{2,}$/.test(w) || /^[A-ZÀ-ÖØ-Ý]['\u2019][A-ZÀ-ÖØ-Ýa-zà-öø-ÿ]+$/.test(w);
+  const bare = w => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}'\u2019]+$/gu, '');
+  const PARTICLE = /^(de|di|del|della|dello|dei|degli|da|dal|la|lo|le|van|von|mac|mc|d['\u2019]|De|Di|Del|Della|Dello|Dei|Da|Dal|La|Lo|Le|D['\u2019])$/;
 
   /* parole della riga con le loro posizioni (non attraversa gli a capo) */
   function tokens(text) {
-    const out = [], re = /[\p{L}\p{N}'’.]+/gu; let m;
+    const out = [], re = /[\p{L}\p{N}'\u2019.]+/gu; let m;
     while ((m = re.exec(text))) { const raw = m[0]; const b = bare(raw); if (!b) continue; const off = raw.indexOf(b[0]); out.push({ t: b, s: m.index + off, e: m.index + off + b.length }); }
     // un token e il successivo sono «vicini» se fra loro c'è solo spazio orizzontale
     for (let i = 0; i < out.length - 1; i++) out[i].near = /^[ \t\u00A0]{1,3}$/.test(text.slice(out[i].e, out[i + 1].s));
@@ -11117,7 +11190,7 @@ const PiiKit = (() => {
     each(/[\p{L}\p{N}._%+-]+@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.?/gu, m => add('email', m.index, m.index + m[0].length, /\.[\p{L}]{2,}$/u.test(m[0])));   // anche se l'OCR ha perso la parte finale
     // IBAN (anche a gruppi separati da spazi); si prova la lunghezza giusta per il paese
     each(/(?:\b|(?<=[0-9|]))(?:[A-Z]{2}|[1lI|]T)\d{2}(?:[ ]?[A-Z0-9]){10,30}/g, m => {   // (anche con un segno spurio attaccato davanti, come lo legge l'OCR)
-      const raw = m[0].replace(/^[1l|]T/, 'IT');   // «1T…»: la I letta come 1 dall'OCR
+      const raw = m[0].replace(/^[1l|]T/, 'IT');   // «1T\u2026»: la I letta come 1 dall'OCR
       for (let L = raw.length; L >= 14; L--) {
         const cand = raw.slice(0, L); if (/\s$/.test(cand)) continue;
         if (ibanValid(cand)) { add('iban', m.index, m.index + L); return; }
@@ -11137,7 +11210,7 @@ const PiiKit = (() => {
     const CFS = '[A-Z]{6}[0-9LMNPQRSTUV]{2}[ABCDEHLMPRST][0-9LMNPQRSTUV]{2}[A-Z][0-9LMNPQRSTUV]{3}[A-Z]';
     each(/(?<![A-Z0-9])[A-Z]{6}[0-9LMNPQRSTUV]{2}[ABCDEHLMPRST][0-9LMNPQRSTUV]{2}[A-Z][0-9LMNPQRSTUV]{3}[A-Z](?![A-Z0-9])/gi, m => add('cf', m.index, m.index + m[0].length, cfValid(m[0])));
     each(/(?<![A-Z0-9])(?:[A-Z][ ]){5}[A-Z](?:[ ][0-9LMNPQRSTUV]){2}[ ][ABCDEHLMPRST](?:[ ][0-9LMNPQRSTUV]){2}[ ][A-Z](?:[ ][0-9LMNPQRSTUV]){3}[ ][A-Z](?![A-Z0-9])/gi, m => { if (new RegExp('^' + CFS + '$', 'i').test(m[0].replace(/ /g, ''))) add('cf', m.index, m.index + m[0].length, cfValid(m[0])); });
-    // codice fiscale a gruppi irregolari (caselle dei moduli: «CCCGN N 7 3E 2…»): valido solo se torna la cifra di controllo
+    // codice fiscale a gruppi irregolari (caselle dei moduli: «CCCGN N 7 3E 2\u2026»): valido solo se torna la cifra di controllo
     each(CF_LOOSE, m => { const c = m[0].replace(/[^A-Z0-9]/gi, ''); if (/[^A-Z0-9]/i.test(m[0]) && cfValid(c)) add('cf', m.index, m.index + m[0].length, true); });
     // partita IVA: con la cifra di controllo, oppure dopo «P.IVA», «partita IVA», «VAT», «C.F.»
     each(/(?<![\d.,])(?:IT[ ]?)?\d{11}(?!\d|[.,]\d)/g, m => {
@@ -11150,7 +11223,7 @@ const PiiKit = (() => {
       const s = m[0], digits = s.replace(/\D/g, '').replace(/^(00)?39(?=[03]\d{5,})/, '');
       if (/^\d{1,2}[./-]\d{1,2}[./-]\d{2,4}$/.test(s.trim())) return;
       const ctx0 = text.slice(Math.max(0, m.index - 24), m.index).toLowerCase();
-      const kw = /(tel|cell|telefono|fax|mobile|cellulare|recapito|contatto|whatsapp|☎|📞)/.test(ctx0);
+      const kw = /(tel|cell|telefono|fax|mobile|cellulare|recapito|contatto|whatsapp|\u260e|\ud83d\udcde)/.test(ctx0);
       const mobile = /^3\d{8,9}$/.test(digits), land = /^0\d{5,10}$/.test(digits), intl = /^\+/.test(s.trim());
       if (/^\d{11}$/.test(digits) && pivaValid(digits) && !kw) return;      // è una partita IVA
       if (!kw && /(n\.|nr\.?|n°|num\.?|numero|prot\.?|protocollo|fattura|pratica|rif\.?|riferimento|codice|cod\.|matricola|ordine|cig|cup|pos\.?)\s*:?\s*$/.test(ctx0)) return;   // un numero di documento
@@ -11159,37 +11232,37 @@ const PiiKit = (() => {
     // documenti d'identità (carta d'identità elettronica e cartacea, passaporto, patente) solo vicino alle parole chiave
     each(/\b(?:[A-Z]{2}[ ]?\d{5}[ ]?[A-Z]{1,2}|[A-Z]{2}\d{7}|[A-Z]{1,2}\d{6,8}[A-Z]?)\b/g, m => {
       const ctx0 = text.slice(Math.max(0, m.index - 60), m.index).toLowerCase();
-      if (/(carta\s+d['’]?identit|c\.?\s?i\.?\b|documento|passaporto|patente|n\.\s*doc)/.test(ctx0)) add('doc', m.index, m.index + m[0].length);
+      if (/(carta\s+d['\u2019]?identit|c\.?\s?i\.?\b|documento|passaporto|patente|n\.\s*doc)/.test(ctx0)) add('doc', m.index, m.index + m[0].length);
     });
     // targhe dei veicoli, vicino a «targa»/«targato»
     // (o da sola sulla sua riga in una pagina con pochissimo testo: la targa fotografata di un'auto, un cartello)
     const fewText = text.replace(/\s/g, '').length < 300;
     each(/\b[A-Z]{2}[ ]?\d{3}[ ]?[A-Z]{2}\b/g, m => { const ls = text.lastIndexOf('\n', m.index) + 1, le = (text.indexOf('\n', m.index) + 1 || text.length + 1) - 1, alone = text.slice(ls, le).trim() === m[0];
       if (/targ/.test(text.slice(Math.max(0, m.index - 30), m.index).toLowerCase()) || (alone && fewText)) add('targa', m.index, m.index + m[0].length); });
-    // nascita: «nato/a a Città (PR) il 01/02/1980», «data di nascita: …», «luogo di nascita: …»
-    const DATE = '\\d{1,2}[/.-]\\d{1,2}[/.-](?:\\d{2,4}|[\'’]\\d{2})|\\d{1,2}°?\\s+(?:gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)\\s+\\d{4}';
-    const CITY = "[A-ZÀ-Ü][\\p{L}'’]+(?:[ -](?:[A-ZÀ-Ü][\\p{L}'’]+|di|de|del|della|sul|sull['’]|in|al))*(?:\\s*\\(\\s*[A-Z]{2}\\s*\\))?";
+    // nascita: «nato/a a Città (PR) il 01/02/1980», «data di nascita: \u2026», «luogo di nascita: \u2026»
+    const DATE = '\\d{1,2}[/.-]\\d{1,2}[/.-](?:\\d{2,4}|[\'\u2019]\\d{2})|\\d{1,2}°?\\s+(?:gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)\\s+\\d{4}';
+    const CITY = "[A-ZÀ-Ü][\\p{L}'\u2019]+(?:[ -](?:[A-ZÀ-Ü][\\p{L}'\u2019]+|di|de|del|della|sul|sull['\u2019]|in|al))*(?:\\s*\\(\\s*[A-Z]{2}\\s*\\))?";
     each(new RegExp(`\\bnat[oaie](?:\\/[oaie])?\\s+(?:(?:a|ad|in)[\\s_.:]+(${CITY}))?(?:[\\s,]+(?:il\\s+)?(${DATE}))?`, 'giu'), m => {
       let p = m.index;
       for (let g = 1; g <= 2; g++) if (m[g] && !(g === 1 && /^[a-zà-ÿ]/.test(m[g]))) { const v = g === 1 ? m[g].replace(/[\s,]+(?:il|in|al|prov|provincia)$/i, '') : m[g], s = text.indexOf(v, p); add('nascita', s, s + v.length); p = s + v.length; }
     });
-    // «nato/a a … prov. XX il 01/02/1980»: la data sulla stessa riga, anche con altro in mezzo
+    // «nato/a a \u2026 prov. XX il 01/02/1980»: la data sulla stessa riga, anche con altro in mezzo
     each(new RegExp(`\\bnat[oaie](?:\\/[oaie])?\\b[^\\n]{0,90}?\\bil[\\s_.:]+(${DATE})`, 'giu'), m => { const s = m.index + m[0].lastIndexOf(m[1]); add('nascita', s, s + m[1].length); });
     each(new RegExp(`(?:data\\s+(?:di\\s+)?nascita|nato\\s+il|nata\\s+il)\\s*[:.]?\\s*(${DATE})`, 'giu'), m => { const s = m.index + m[0].lastIndexOf(m[1]); add('nascita', s, s + m[1].length); });
     each(new RegExp(`(?:luogo\\s+di\\s+nascita|comune\\s+di\\s+nascita)\\s*[:.]?\\s*(${CITY})`, 'gu'), m => { const s = m.index + m[0].lastIndexOf(m[1]); add('nascita', s, s + m[1].length); });
     // indirizzi: tipo di strada + nome + numero civico, con CAP e città se seguono
     const STREET = '(?:via|viale|v\\.le|piazza|p\\.zza|p\\.za|piazzale|corso|c\\.so|largo|vicolo|vico|contrada|c\\.da|strada|località|loc\\.|borgo|salita|traversa|lungomare|lungotevere|circonvallazione|rotonda|calle|frazione|fraz\\.)';
-    each(new RegExp(`\\b${STREET}[ \\t]+(?:[A-ZÀ-Ü0-9][\\p{L}0-9'’.]*|d[ei]l?l?[aoei]?|de|di|del|della|dei|degli|dello|san|santa|s\\.)(?:[ \\t]+(?:[A-ZÀ-Ü0-9][\\p{L}0-9'’.]*|d[ei]l?l?[aoei]?|de|di|del|della|dei|degli|dello|delle|san|santa|s\\.|e)){0,6}(?:,?[ \\t]*(?:n\\.?|nr\\.?|n°)?[ \\t]*\\d{1,4}(?!\\d)[ \\t]?[A-Za-z]?(?:\\/[A-Za-z0-9]{1,3})?)?(?:[ \\t]*[,–-]?[ \\t]*(?:\\d{5}[ \\t]+)?${CITY.replace(/\\s\*/g, '[ \\t]*')})?`, 'giu'), m => {
+    each(new RegExp(`\\b${STREET}[ \\t]+(?:[A-ZÀ-Ü0-9][\\p{L}0-9'\u2019.]*|d[ei]l?l?[aoei]?|de|di|del|della|dei|degli|dello|san|santa|s\\.)(?:[ \\t]+(?:[A-ZÀ-Ü0-9][\\p{L}0-9'\u2019.]*|d[ei]l?l?[aoei]?|de|di|del|della|dei|degli|dello|delle|san|santa|s\\.|e)){0,6}(?:,?[ \\t]*(?:n\\.?|nr\\.?|n°)?[ \\t]*\\d{1,4}(?!\\d)[ \\t]?[A-Za-z]?(?:\\/[A-Za-z0-9]{1,3})?)?(?:[ \\t]*[,\u2013-]?[ \\t]*(?:\\d{5}[ \\t]+)?${CITY.replace(/\\s\*/g, '[ \\t]*')})?`, 'giu'), m => {
       let s = m[0];
       // il nome della via deve cominciare con una maiuscola o un numero (non «via e-mail»)
       if (!/^\S+[ \t]+(?:[A-ZÀ-Ü0-9]|d[ei]|de|san|santa|s\.)/u.test(s) || /^\S+[ \t]+(?:e-?mail|pec|posta|internet|telefono|web|fax)/i.test(s)) return;
-      s = s.replace(/[ \t,–-]+$/, '');
+      s = s.replace(/[ \t,\u2013-]+$/, '');
       const tail = /^\/[A-Za-z0-9]{1,3}\b/.exec(text.slice(m.index + s.length)); if (tail) s += tail[0];   // 12/B
-      // non oltre l'eventuale etichetta seguente («Tel», «Email», «CF»…)
-      const cut = s.search(/[ \t,](?:tel|cell|fax|email|e-mail|pec|c\.?f\.?|p\.?\s?iva|cap|codice|cod\.|partita|nato|nata|residente|di\s+seguito)\b/i); if (cut > 6) s = s.slice(0, cut).replace(/[ \t,–-]+$/, '');
+      // non oltre l'eventuale etichetta seguente («Tel», «Email», «CF»\u2026)
+      const cut = s.search(/[ \t,](?:tel|cell|fax|email|e-mail|pec|c\.?f\.?|p\.?\s?iva|cap|codice|cod\.|partita|nato|nata|residente|di\s+seguito)\b/i); if (cut > 6) s = s.slice(0, cut).replace(/[ \t,\u2013-]+$/, '');
       add('indirizzo', m.index, m.index + s.length, /\d/.test(s));
     });
-    each(/\b\d{5}[ \t]+(?=[A-ZÀ-Ü])[\p{L}'’]+(?:[ -][A-ZÀ-Ü][\p{L}'’]+)*(?:[ \t]*\([ \t]*[A-Z]{2}[ \t]*\))/gu, m => add('indirizzo', m.index, m.index + m[0].length, false));
+    each(/\b\d{5}[ \t]+(?=[A-ZÀ-Ü])[\p{L}'\u2019]+(?:[ -][A-ZÀ-Ü][\p{L}'\u2019]+)*(?:[ \t]*\([ \t]*[A-Z]{2}[ \t]*\))/gu, m => add('indirizzo', m.index, m.index + m[0].length, false));
 
     // carte di pagamento (13-19 cifre con il controllo di Luhn, anche a gruppi), BIC/SWIFT e numeri di conto vicino alle parole chiave
     const luhn = d => { let s2 = 0, alt = false; for (let i = d.length - 1; i >= 0; i--) { let n = +d[i]; if (alt) { n *= 2; if (n > 9) n -= 9; } s2 += n; alt = !alt; } return s2 % 10 === 0; };
@@ -11214,10 +11287,10 @@ const PiiKit = (() => {
     clause('giudiziari', /\b(?:condann[ae]t?[oaie]?|reat[oi]|procedimento\s+penale|procedimenti\s+penali|r\.?\s?g\.?\s?n\.?\s?r\.?|casellario\s+giudiziale|carichi\s+pendenti|misure?\s+cautelar\w*|arresti\s+domiciliari|imputat[oaie]|indagat[oaie]|sentenza\s+penale)\b/giu);
     clause('particolari', /\b(?:religion[ei]|confessione\s+religiosa|fede\s+religiosa|orientamento\s+sessuale|vita\s+sessuale|origine\s+(?:etnica|razziale)|etnia|opinioni\s+politiche|iscrizione\s+(?:al\s+)?(?:partito|sindacato)|iscritt[oa]\s+al(?:la)?\s+(?:partito|sindacato|cgil|cisl|uil)|tessera\s+sindacale|trattenuta\s+sindacale|dati\s+biometrici|dati\s+genetici)\b/giu);
     // potenzialmente sensibili (da scegliere): importi e date
-    each(/(?:€|eur(?:o)?\.?)\s?-?\d{1,3}(?:[.\s]\d{3})*(?:,\d{1,2})?|\d{1,3}(?:[.\s]\d{3})*(?:,\d{1,2})?\s?(?:€|euro\b)/gi, m => add('importo', m.index, m.index + m[0].length, false));
+    each(/(?:\u20ac|eur(?:o)?\.?)\s?-?\d{1,3}(?:[.\s]\d{3})*(?:,\d{1,2})?|\d{1,3}(?:[.\s]\d{3})*(?:,\d{1,2})?\s?(?:\u20ac|euro\b)/gi, m => add('importo', m.index, m.index + m[0].length, false));
     each(new RegExp(`(?<![\\d/.-])(?:${DATE})(?![\\d/.-]\\d)`, 'giu'), m => add('data', m.index, m.index + m[0].length, false));
 
-    // —— codice fiscale letto male dall'OCR (un carattere in più o scambiato: «M11» letto «MI11») ——
+    // \u2014\u2014 codice fiscale letto male dall'OCR (un carattere in più o scambiato: «M11» letto «MI11») \u2014\u2014
     // dopo «C.F.», «cod. fisc.», «codice fiscale» si prende la parola che segue se ha la forma di un codice (lettere e cifre);
     // senza parola chiave, una parola di 16-17 caratteri vale solo se, corretta, torna la cifra di controllo
     each(/(?:\bc\.?\s?f\.?|\b[ct]od(?:ice)?[.,]?\s*f[i1l]s[a-z](?:ale)?[.,]?)[ \t]*[:.n°]*[ \t]*([A-Z0-9][A-Z0-9 ]{12,22}[A-Z0-9])/giu, m => {
@@ -11233,40 +11306,40 @@ const PiiKit = (() => {
       const tries = w.length === 17 ? [...Array(17).keys()].map(i => w.slice(0, i) + w.slice(i + 1)) : [w];
       for (const t of tries) { const f = ocrFix(t, [6, 7, 9, 10, 12, 13, 14]); if (cfValid(f)) { add('cf', m.index, m.index + w.length, true); return; } }
     });
-    // —— ditte e società: le parole con la maiuscola prima della forma giuridica (S.r.l., S.p.A., snc, sas, soc. coop.) ——
-    each(/((?:(?:[A-ZÀ-Ü0-9][\p{L}0-9'’&.-]*|&|e|di|de|del|della|dei|delle)[ \t]+){0,6}[A-ZÀ-Ü0-9][\p{L}0-9'’&.-]*)[ \t,]+(S\.?[ \t]?R\.?[ \t]?L\.?(?:[ \t]?S\.?)?|S\.?[ \t]?P\.?[ \t]?A\.?|S\.?[ \t]?N\.?[ \t]?C\.?|S\.?[ \t]?A\.?[ \t]?S\.?|S\.?[ \t]?C\.?[ \t]?(?:A\.?[ \t]?)?R\.?[ \t]?L\.?|SOC\.?[ \t]?COOP\.?(?:[ \t]?A\.?R\.?L\.?)?|SOCIET[AÀ'][ \t]+COOPERATIVA)(?![\p{L}])/giu, m => {
+    // \u2014\u2014 ditte e società: le parole con la maiuscola prima della forma giuridica (S.r.l., S.p.A., snc, sas, soc. coop.) \u2014\u2014
+    each(/((?:(?:[A-ZÀ-Ü0-9][\p{L}0-9'\u2019&.-]*|&|e|di|de|del|della|dei|delle)[ \t]+){0,6}[A-ZÀ-Ü0-9][\p{L}0-9'\u2019&.-]*)[ \t,]+(S\.?[ \t]?R\.?[ \t]?L\.?(?:[ \t]?S\.?)?|S\.?[ \t]?P\.?[ \t]?A\.?|S\.?[ \t]?N\.?[ \t]?C\.?|S\.?[ \t]?A\.?[ \t]?S\.?|S\.?[ \t]?C\.?[ \t]?(?:A\.?[ \t]?)?R\.?[ \t]?L\.?|SOC\.?[ \t]?COOP\.?(?:[ \t]?A\.?R\.?L\.?)?|SOCIET[AÀ'][ \t]+COOPERATIVA)(?![\p{L}])/giu, m => {
       let pre = m[1].split(/[ \t]+/); const ok = w => /^[A-ZÀ-Ü0-9&]/u.test(w) || /^(e|di|de|del|della|dei|delle)$/i.test(w);
       { let k = pre.length; while (k > 0 && ok(pre[k - 1])) k--; pre = pre.slice(k); }   // solo le parole con la maiuscola subito prima della forma giuridica
-      while (pre.length && (!ok(pre[0]) || STOP.has(pre[0].toLowerCase().replace(/\.$/, '')) || (/^(la|il|lo|le|l['’])$/i.test(pre[0]) && !(/^[A-ZÀ-Ü]+$/u.test(pre[0]) && pre[1] && /^[A-ZÀ-Ü]{2,}$/u.test(pre[1]))))) pre.shift();
+      while (pre.length && (!ok(pre[0]) || STOP.has(pre[0].toLowerCase().replace(/\.$/, '')) || (/^(la|il|lo|le|l['\u2019])$/i.test(pre[0]) && !(/^[A-ZÀ-Ü]+$/u.test(pre[0]) && pre[1] && /^[A-ZÀ-Ü]{2,}$/u.test(pre[1]))))) pre.shift();
       if (!pre.length) return;
       const s0 = m.index + m[0].indexOf(pre[0], m[0].length - m[1].length - m[2].length - 4 < 0 ? 0 : m[0].length - m[1].length - m[2].length - 4);
       add('ente', s0 >= m.index ? s0 : m.index, m.index + m[0].length, true);
     });
-    // —— dati catastali: foglio, particella/mappale, subalterno (identificano l'immobile e quindi il proprietario) ——
+    // \u2014\u2014 dati catastali: foglio, particella/mappale, subalterno (identificano l'immobile e quindi il proprietario) \u2014\u2014
     each(/\b(?:fogli?o?|fg\.?|f\.)\s*(?:n\.?|nr\.?|n°)?\s*\d{1,4}\b|\b(?:particell[ae]|p\.?[ \t]?lla|mappal[ei]|mapp\.?|numeratore)(?:\s+numeratore)?\s*(?:n\.?|nr\.?|n°)?\s*\d{1,5}(?:[\/-]\d{1,4})?\b|\b(?:subaltern[oi]|sub\.?)\s*(?:n\.?|nr\.?|n°)?\s*\d{1,4}\b/giu, m => {
       if (/^f\.$/i.test(m[0].split(/\s/)[0]) && !/(catast|ncte?u|n\.c\.e\.u|n\.c\.t|mappal|particell)/i.test(text.slice(Math.max(0, m.index - 60), m.index + 60))) return;
       add('catasto', m.index, m.index + m[0].length, true);
     });
-    // —— interno, scala, piano dell'indirizzo ——
+    // \u2014\u2014 interno, scala, piano dell'indirizzo \u2014\u2014
     each(/\b(?:int\.|interno|scala)\s*(?:n\.?\s*)?(?:\d{1,3}[A-Z]?|[A-Z])\b|\bpiano\s+\d{1,2}°?|\b\d{1,2}°\s+piano\b/gu, m => add('indirizzo', m.index, m.index + m[0].length, false));
     // CAP con la parola chiave
     each(/\bc\.?a\.?p\.?[ \t]*[:.]?[ \t]*\d{5}\b/giu, m => add('luogo', m.index, m.index + m[0].length, true));
-    // —— comuni e province (elenco ISTAT): i nomi che sono anche parole comuni solo nel contesto ——
+    // \u2014\u2014 comuni e province (elenco ISTAT): i nomi che sono anche parole comuni solo nel contesto \u2014\u2014
     if (typeof COMUNI_IT !== 'undefined') {
       const G = gaz(), sig = G.sig;
-      const tw = []; { const re = /[\p{L}'’]+/gu; let q; while ((q = re.exec(text))) tw.push({ t: q[0], s: q.index, e: q.index + q[0].length }); }
+      const tw = []; { const re = /[\p{L}'\u2019]+/gu; let q; while ((q = re.exec(text))) tw.push({ t: q[0], s: q.index, e: q.index + q[0].length }); }
       for (let i = 0; i < tw.length; i++) {
         const w0 = tw[i].t; if (!/^[A-ZÀ-Ü]/u.test(w0)) continue;
         let hit = 0;
         for (let n = Math.min(G.max, tw.length - i); n >= 1; n--) {
           const span = text.slice(tw[i].s, tw[i + n - 1].e);
           if (n > 1 && /\n/.test(span)) continue;
-          const key = span.toLowerCase().replace(/[’]/g, "'").replace(/\s+/g, ' ');
+          const key = span.toLowerCase().replace(/[\u2019]/g, "'").replace(/\s+/g, ' ');
           if (!G.set.has(key)) continue;
           const words = span.split(/[\s'-]+/), allCap = words.every(x => /^[A-ZÀ-Ü]/u.test(x) || /^(di|de|del|della|dei|delle|sul|sulla|in|al|alla|d|l)$/i.test(x));
           if (!allCap) continue;
           const after = text.slice(tw[i + n - 1].e, tw[i + n - 1].e + 12), before = text.slice(Math.max(0, tw[i].s - 22), tw[i].s);
-          const sigAfter = /^[ \t]*(?:\([ \t]*([A-Z]{2})[ \t]*\)|[–—-][ \t]*([A-Z]{2})\b|,[ \t]*([A-Z]{2})\b)/.exec(after);
+          const sigAfter = /^[ \t]*(?:\([ \t]*([A-Z]{2})[ \t]*\)|[\u2013\u2014-][ \t]*([A-Z]{2})\b|,[ \t]*([A-Z]{2})\b)/.exec(after);
           const ctx = /(?:\b(?:a|ad|in|di|da|presso|comune|provincia|citt[àa]|residente|nat[oaie]|sede|sit[oaie]|situat[oaie]|domiciliat[oaie]|ubicat[oaie]|localit[àa])[ \t]*[:.]?[ \t]*|\d{5}[ \t]+)$/i.test(before) || (sigAfter && sig.has(sigAfter[1] || sigAfter[2] || sigAfter[3]));
           if (n === 1 && G.amb.has(key) && !ctx) continue;
           if (n === 1 && !ctx && w0.length < 4) continue;
@@ -11280,7 +11353,7 @@ const PiiKit = (() => {
       // «(PA)», «prov. PA», «provincia di Palermo»: la sigla della provincia da sola
       each(/\(\s*([A-Z]{2})\s*\)|\bprov(?:incia)?\.?[ \t]+(?:di[ \t]+)?([A-Z]{2})\b/g, m => { if (sig.has(m[1] || m[2])) add('luogo', m.index, m.index + m[0].length, true); });
     }
-    // —— nomi e cognomi ——
+    // \u2014\u2014 nomi e cognomi \u2014\u2014
     const tk = tokens(text);
     const nameRun = (i, max = 4) => { // sequenza di parole con la maiuscola (con particelle), sulla stessa riga
       let j = i, n = 0;
@@ -11300,7 +11373,7 @@ const PiiKit = (() => {
       if (TITLE.test(tk[i].t) && /^\.?[ \t\u00A0]{1,3}$/.test(text.slice(tk[i].e, tk[i + 1].s))) { const j = nameRun(i + 1, 4); if (j > i + 1) addRun(i + 1, j, true); }
     }
     // titolo attaccato al nome («Sig.Rossi», «Dott.ssa.Bianchi»)
-    each(/\b(?:[Ss]ig|[Ss]ig\.ra|[Ss]igra|[Dd]ott|[Dd]ott\.ssa|[Aa]vv|[Ii]ng|[Gg]eom|[Rr]ag|[Pp]rof|[Aa]rch)\.(?=[A-ZÀ-Ü])([A-ZÀ-Ü][\p{L}'’]+(?:[ \t]+(?:de|di|del|della|da|la|lo)?[ \t]*[A-ZÀ-Ü][\p{L}'’]+){0,3})(?![\p{L}])/gu, m => { const s0 = m.index + m[0].length - m[1].length; add('nome', s0, s0 + m[1].length, true); });
+    each(/\b(?:[Ss]ig|[Ss]ig\.ra|[Ss]igra|[Dd]ott|[Dd]ott\.ssa|[Aa]vv|[Ii]ng|[Gg]eom|[Rr]ag|[Pp]rof|[Aa]rch)\.(?=[A-ZÀ-Ü])([A-ZÀ-Ü][\p{L}'\u2019]+(?:[ \t]+(?:de|di|del|della|da|la|lo)?[ \t]*[A-ZÀ-Ü][\p{L}'\u2019]+){0,3})(?![\p{L}])/gu, m => { const s0 = m.index + m[0].length - m[1].length; add('nome', s0, s0 + m[1].length, true); });
     each(/(?:sottoscritt[oaie]|nominativo|cognome\s+e\s+nome|nome\s+e\s+cognome|intestat[oaie]\s+a|a\s+favore\s+di|beneficiario|titolare|richiedente|dichiarante|ordinante|conferente|delegato|delegante|erede|de\s+cuius|paziente|assistito|cliente\s*:|signor[ae]?)[ \t]*[:.]?[ \t]*/giu, m => {
       const at = m.index + m[0].length, i = tk.findIndex(t => t.s >= at && t.s - at < 3); if (i >= 0 && /\n/.test(text.slice(at, tk[i].s))) return;
       if (i >= 0) { const j = nameRun(i, 4); if (j > i) addRun(i, j, true); }
@@ -11311,7 +11384,7 @@ const PiiKit = (() => {
     });
     // 1b) due-quattro parole con la maiuscola subito prima di «, codice fiscale», «, C.F.», «, nato/a», «, residente»:
     // nei contratti e negli atti è la presentazione di una persona (anche con un nome che non è nell'elenco, anche letto male dall'OCR)
-    each(/((?:[A-ZÀ-Ü][\p{L}'’]+|de|di|del|della|dei|da|la|lo|d['’])(?:[ \t]+(?:[A-ZÀ-Ü][\p{L}'’]+|de|di|del|della|dei|da|la|lo|d['’])){1,4})[ \t]*[,.]?\s*(?:[ct]od(?:ice)?[.,]?\s*f[i1l]s[a-z]|c\.[ \t]?f\.|nat[oaie]\b|residente\b|domiciliat[oaie]\b)/gu, m => {
+    each(/((?:[A-ZÀ-Ü][\p{L}'\u2019]+|de|di|del|della|dei|da|la|lo|d['\u2019])(?:[ \t]+(?:[A-ZÀ-Ü][\p{L}'\u2019]+|de|di|del|della|dei|da|la|lo|d['\u2019])){1,4})[ \t]*[,.]?\s*(?:[ct]od(?:ice)?[.,]?\s*f[i1l]s[a-z]|c\.[ \t]?f\.|nat[oaie]\b|residente\b|domiciliat[oaie]\b)/gu, m => {
       const ws = m[1].split(/[ \t]+/); let k = 0; while (k < ws.length && (STOP.has(ws[k].toLowerCase()) || PARTICLE.test(ws[k]))) k++;
       const keep = ws.slice(k); if (keep.filter(w => isCap(w) && !STOP.has(w.toLowerCase())).length < 2 || keep.some(w => STOP.has(w.toLowerCase()))) return;
       const s0 = m.index + m[1].length - keep.join(' ').length; add('nome', s0, m.index + m[1].length, true);
@@ -11462,7 +11535,7 @@ const DocKind = (() => {
     for (const re of [...pats, /\bprot(?:ocollo)?\.?\s*(?:n\.?|nr\.?|gen\.?)?\s*[:°]?\s*(\d[\w\/\-.]{2,20})/i]) { const m = text.match(re); if (m && /\d/.test(m[1])) return m[1].replace(/[.\-\/]+$/, ''); }
     return null;
   }
-  const COMPANY = /\b([A-ZÀ-Ý][\wÀ-ÿ&'’.\- ]{1,60}?\s(?:S\.?\s?R\.?\s?L\.?(?:\s?S\.?)?|S\.?\s?P\.?\s?A\.?|S\.?\s?N\.?\s?C\.?|S\.?\s?A\.?\s?S\.?|S\.?\s?C\.?\s?A\.?\s?R\.?\s?L\.?|S\.?\s?C\.?\s?(?:P\.?\s?A\.?)?|ONLUS|A\.?P\.?S\.?|SOCIET[ÀA]\s+(?:COOPERATIVA|AGRICOLA|SEMPLICE)))(?![A-Za-z])/;
+  const COMPANY = /\b([A-ZÀ-Ý][\wÀ-ÿ&'\u2019.\- ]{1,60}?\s(?:S\.?\s?R\.?\s?L\.?(?:\s?S\.?)?|S\.?\s?P\.?\s?A\.?|S\.?\s?N\.?\s?C\.?|S\.?\s?A\.?\s?S\.?|S\.?\s?C\.?\s?A\.?\s?R\.?\s?L\.?|S\.?\s?C\.?\s?(?:P\.?\s?A\.?)?|ONLUS|A\.?P\.?S\.?|SOCIET[ÀA]\s+(?:COOPERATIVA|AGRICOLA|SEMPLICE)))(?![A-Za-z])/;
   function party(text, type) {
     const tidy = s => s.replace(/\s+/g, ' ').replace(/^(?:spett\.?le|spettabile|ditta|societ[àa]|soc\.)\s+/i, '').trim().slice(0, 60);
     if (type === 'fattura' || type === 'notacredito' || type === 'preventivo' || type === 'ricevuta') {
@@ -11474,16 +11547,16 @@ const DocKind = (() => {
       if (m) return tidy(m[1]);
       // un'intestazione in maiuscolo come prima riga (spesso è il fornitore)
       const first = headZone.split('\n').map(l => l.trim()).find(l => l.length > 3);
-      if (first && /^[A-Z0-9À-Ý&'’.\- ]{4,60}$/.test(first.split(/\s[-–]\s/)[0]) && !/\b(?:FATTURA|DOCUMENTO|PAGINA)\b/.test(first)) return tidy(first.split(/\s[-–]\s/)[0]);
+      if (first && /^[A-Z0-9À-Ý&'\u2019.\- ]{4,60}$/.test(first.split(/\s[-\u2013]\s/)[0]) && !/\b(?:FATTURA|DOCUMENTO|PAGINA)\b/.test(first)) return tidy(first.split(/\s[-\u2013]\s/)[0]);
       // l'ente si cerca solo nell'intestazione (dopo «cessionario» è il cliente, non chi emette)
-      const e2 = headZone.match(/\b((?:Comune|Provincia|Regione|Azienda\s+Sanitaria|Universit[àa]|Ministero|Agenzia)[ \t]+(?:di|del|della|delle|degli|dell')[ \t]+[A-Za-zÀ-ÿ][\wÀ-ÿ'’]+(?:[ \t]+[A-ZÀ-Ý][\wÀ-ÿ'’]+){0,3})/i);
+      const e2 = headZone.match(/\b((?:Comune|Provincia|Regione|Azienda\s+Sanitaria|Universit[àa]|Ministero|Agenzia)[ \t]+(?:di|del|della|delle|degli|dell')[ \t]+[A-Za-zÀ-ÿ][\wÀ-ÿ'\u2019]+(?:[ \t]+[A-ZÀ-Ý][\wÀ-ÿ'\u2019]+){0,3})/i);
       return e2 ? tidy(e2[1]) : null;
     }
-    const ente = text.slice(0, 3000).match(/\b((?:Comune|Citt[àa]\s+(?:metropolitana|di)|Provincia|Regione|Libero\s+Consorzio|Azienda\s+Sanitaria|ASP|ASL|Universit[àa]|Ministero|Agenzia|Camera\s+di\s+Commercio|Tribunale|Corte\s+d'?\s?\w+|T\.?A\.?R\.?|INPS|INAIL)(?:[ \t]+(?:di|del|della|degli|dell'|per[ \t]+il|delle)[ \t]+[A-Za-zÀ-ÿ][\wÀ-ÿ'’]+(?:[ \t]+[A-ZÀ-Ý][\wÀ-ÿ'’]+){0,3})?)/i);
+    const ente = text.slice(0, 3000).match(/\b((?:Comune|Citt[àa]\s+(?:metropolitana|di)|Provincia|Regione|Libero\s+Consorzio|Azienda\s+Sanitaria|ASP|ASL|Universit[àa]|Ministero|Agenzia|Camera\s+di\s+Commercio|Tribunale|Corte\s+d'?\s?\w+|T\.?A\.?R\.?|INPS|INAIL)(?:[ \t]+(?:di|del|della|degli|dell'|per[ \t]+il|delle)[ \t]+[A-Za-zÀ-ÿ][\wÀ-ÿ'\u2019]+(?:[ \t]+[A-ZÀ-Ý][\wÀ-ÿ'\u2019]+){0,3})?)/i);
     if (ente && !/^(?:Agenzia|Ministero)$/i.test(ente[1].trim())) {
-      // «COMUNE DI CARINI» → «Comune di Carini»
+      // «COMUNE DI CARINI» \u2192 «Comune di Carini»
       const e = ente[1].trim();
-      return tidy(e === e.toUpperCase() ? e.toLowerCase().replace(/(^|[\s'’])([a-zà-ÿ])/g, (m, a, b) => a + b.toUpperCase()).replace(/\b(Di|Del|Della|Degli|Delle|Dell'|Per|Il)\b/g, w => w.toLowerCase()) : e);
+      return tidy(e === e.toUpperCase() ? e.toLowerCase().replace(/(^|[\s'\u2019])([a-zà-ÿ])/g, (m, a, b) => a + b.toUpperCase()).replace(/\b(Di|Del|Della|Degli|Delle|Dell'|Per|Il)\b/g, w => w.toLowerCase()) : e);
     }
     const m = text.slice(0, 2500).match(COMPANY);
     return m ? tidy(m[1]) : null;
@@ -11524,9 +11597,9 @@ const DocKind = (() => {
    I fatti raccolti servono anche all'assistente (ricette intelligenti).
    ===================================================================== */
 const DocInsight = (() => {
-  const cache = new WeakMap();   // bytes della versione → analisi (promessa)
+  const cache = new WeakMap();   // bytes della versione \u2192 analisi (promessa)
   const SAMPLE = 60;
-  const money = /(?:€\s?)?\b\d{1,3}(?:\.\d{3})*,\d{2}\b/g;
+  const money = /(?:\u20ac\s?)?\b\d{1,3}(?:\.\d{3})*,\d{2}\b/g;
   // segni nel file grezzo (senza aprirlo): firme, cifratura, allegati, moduli
   function rawMarks(bytes) {
     const lim = 48e6;
@@ -11626,7 +11699,7 @@ const DocInsight = (() => {
     return { promise: e.pr, off: () => onUpdate && e.subs.delete(onUpdate) };
   }
 
-  /* —— consigli: cosa fare, perché, in ordine di utilità —— */
+  /* \u2014\u2014 consigli: cosa fare, perché, in ordine di utilità \u2014\u2014 */
   const n = (k, a, b) => plural(k, a, b);
   function advise(f) {
     const out = [];
@@ -11644,15 +11717,15 @@ const DocInsight = (() => {
     else if (mb > 2.5 && f.pages && f.size / f.pages > 600e3) add('comprimi', 60, `Pesa ${fmtSize(f.size)} (${fmtSize(f.size / f.pages)} a pagina): si può alleggerire.`, 'Comprimi');
     if (f.signed) add('firme', 78, 'È firmato digitalmente: puoi verificare chi ha firmato e se il documento è integro.', 'Verifica la firma');
     if (f.pdfa) add('verificapdfa', 70, `Dichiara di essere PDF/A-${f.pdfa}: verifico se lo è davvero, regola per regola.`, 'Verifica');
-    if (f.bilancio) add('analisi', 77, 'È un bilancio: indici, flussi di cassa, rischio e valutazione dell’azienda in un’analisi completa.', 'Analizza');
+    if (f.bilancio) add('analisi', 77, 'È un bilancio: indici, flussi di cassa, rischio e valutazione dell\u2019azienda in un\u2019analisi completa.', 'Analizza');
     if (f.bilancio) add('excel', 76, 'È un bilancio: in Excel con voci ed esercizi affiancati, pronti per i calcoli.', 'In Excel');
     else if (f.moneyLines >= 8) add('excel', 55, 'Ha tabelle con importi: in Excel diventano numeri da sommare e ordinare.', 'In Excel');
     const pii = Object.entries(f.pii).filter(([, c]) => c);
     if (pii.length) {
       const order = typeof PiiKit !== 'undefined' ? PiiKit.ORDER : [];
-      const lbl = { cf: ['codice fiscale', 'codici fiscali'], iban: ['IBAN', 'IBAN'], email: ['email', 'email'], tel: ['telefono', 'telefoni'], piva: ['partita IVA', 'partite IVA'], doc: ['documento d’identità', 'documenti d’identità'], targa: ['targa', 'targhe'], nascita: ['data di nascita', 'date di nascita'], indirizzo: ['indirizzo', 'indirizzi'], nome: ['nome', 'nomi'] };
+      const lbl = { cf: ['codice fiscale', 'codici fiscali'], iban: ['IBAN', 'IBAN'], email: ['email', 'email'], tel: ['telefono', 'telefoni'], piva: ['partita IVA', 'partite IVA'], doc: ['documento d\u2019identità', 'documenti d\u2019identità'], targa: ['targa', 'targhe'], nascita: ['data di nascita', 'date di nascita'], indirizzo: ['indirizzo', 'indirizzi'], nome: ['nome', 'nomi'] };
       const parts = pii.sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0])).slice(0, 3).map(([c, k]) => `${k} ${k === 1 ? lbl[c]?.[0] : lbl[c]?.[1]}`);
-      add('oscura', 62, `Contiene dati personali (${parts.join(', ')}${pii.length > 3 ? '…' : ''}): prima di pubblicarlo o inoltrarlo puoi oscurarli.`, 'Oscura');
+      add('oscura', 62, `Contiene dati personali (${parts.join(', ')}${pii.length > 3 ? '\u2026' : ''}): prima di pubblicarlo o inoltrarlo puoi oscurarli.`, 'Oscura');
     }
     if (f.restricted && !f.needsPassword) add('proteggi', 45, 'Ha limitazioni (stampa, copia o modifica bloccate).', 'Togli le limitazioni');
     const formats = Object.keys(f.formats);
@@ -11675,7 +11748,7 @@ const DocInsight = (() => {
   return { of, analyze, advise, summary };
 })();
 
-/* —— elenco dei file di uno ZIP senza aprirlo tutto (solo l'indice in fondo all'archivio) —— */
+/* \u2014\u2014 elenco dei file di uno ZIP senza aprirlo tutto (solo l'indice in fondo all'archivio) \u2014\u2014 */
 async function zipNames(file) {
   const tailLen = Math.min(file.size, 66000 + 22);
   const tail = new Uint8Array(await file.slice(file.size - tailLen).arrayBuffer());
@@ -11700,8 +11773,8 @@ async function zipNames(file) {
 /* =====================================================================
    Rapporti: lo stesso contenuto (titoli, testo, coppie voce/valore, tabelle) in PDF e in Word.
    Usati da «Estrai i dati», «Confronta PDF», analisi di bilancio. Stile di Officina (Manrope, accento rosso).
-   blocchi: { h: 'Titolo' } · { h2: 'Sottotitolo' } · { p: 'testo', muted? } · { kv: [[voce, valore], …] }
-            { table: { head: [...], rows: [[...]], widths?: [frazioni], align?: ['l'|'r'|'c'], marks?: [riga → 'add'|'del'|'mod'] } }
+   blocchi: { h: 'Titolo' } · { h2: 'Sottotitolo' } · { p: 'testo', muted? } · { kv: [[voce, valore], \u2026] }
+            { table: { head: [...], rows: [[...]], widths?: [frazioni], align?: ['l'|'r'|'c'], marks?: [riga \u2192 'add'|'del'|'mod'] } }
             { box: 'testo', tone: 'ok'|'warn'|'bad' } · { br: true } (nuova pagina)
    ===================================================================== */
 const Report = (() => {
@@ -11843,7 +11916,7 @@ const Report = (() => {
 })();
 
 /* =====================================================================
-   DocFields — i campi principali di un documento letti dalla sua impaginazione, non dal testo «a fiume».
+   DocFields \u2014 i campi principali di un documento letti dalla sua impaginazione, non dal testo «a fiume».
    Le parole tornano righe e celle con la loro posizione (dal PDF o dall'OCR); un dato si cerca accanto alla
    sua etichetta: nella stessa cella («Totale: 1.220,00»), nella cella a destra (tabelle e riepiloghi) o
    nella cella sotto (intestazioni di colonna con i valori nella riga dopo, come nelle fatture elettroniche).
@@ -11865,7 +11938,7 @@ const DocFields = (() => {
     }
     return out;
   }
-  // pagine → righe [{ y, size, cells: [{ x0, x1, text }], text }] (y cresce verso il basso)
+  // pagine \u2192 righe [{ y, size, cells: [{ x0, x1, text }], text }] (y cresce verso il basso)
   function layout(page) {
     const its = [];
     for (const it of page.items || []) {
@@ -11878,7 +11951,7 @@ const DocFields = (() => {
         size = Math.hypot(c, d) || it.height || 10; x0 = e; x1 = e + (it.width || s.length * size * 0.5); y = (page.height || 842) - f;
       } else { x0 = it.x0; x1 = it.x1; y = it.y1; size = Math.max(4, it.y1 - it.y0); }
       // OCR: i bordi dei riquadri letti come «|» e i trattini sparsi non sono testo
-      if (!it.transform && !it.str) { const c = s.replace(/[|¦]/g, '').trim(); if (!c || /^[\[\]_—–\-.,'’"]+$/.test(c)) continue; its.push({ s: c, x0, x1, y, size }); continue; }
+      if (!it.transform && !it.str) { const c = s.replace(/[|¦]/g, '').trim(); if (!c || /^[\[\]_\u2014\u2013\-.,'\u2019"]+$/.test(c)) continue; its.push({ s: c, x0, x1, y, size }); continue; }
       its.push({ s, x0, x1, y, size });
     }
     its.sort((a, b) => a.y - b.y || a.x0 - b.x0);
@@ -11905,19 +11978,19 @@ const DocFields = (() => {
   }
 
   /* ---------- valori ---------- */
-  const AMT = /^(?:(?:€|eur(?:o)?)\s*)?([-−–]?\s*\d{1,3}(?:[.\s']\d{3})*,\d{2}|[-−–]?\d+,\d{2})(?:\s*(?:€|eur(?:o)?))?$/i;
-  const AMT_EN = /^(?:(?:€|eur|usd|\$)\s*)?([-−]?\d{1,3}(?:,\d{3})*\.\d{2})(?:\s*(?:€|eur))?$/i;
+  const AMT = /^(?:(?:\u20ac|eur(?:o)?)\s*)?([-\u2212\u2013]?\s*\d{1,3}(?:[.\s']\d{3})*,\d{2}|[-\u2212\u2013]?\d+,\d{2})(?:\s*(?:\u20ac|eur(?:o)?))?$/i;
+  const AMT_EN = /^(?:(?:\u20ac|eur|usd|\$)\s*)?([-\u2212]?\d{1,3}(?:,\d{3})*\.\d{2})(?:\s*(?:\u20ac|eur))?$/i;
   const amountOf = (s) => {
     s = String(s).trim().replace(/\s*\(.*\)$/, '');
-    let m = AMT.exec(s); if (m) return +m[1].replace(/[−–]/, '-').replace(/[.\s']/g, '').replace(',', '.');
-    m = AMT_EN.exec(s); if (m) return +m[1].replace(/[−]/, '-').replace(/,/g, '');
+    let m = AMT.exec(s); if (m) return +m[1].replace(/[\u2212\u2013]/, '-').replace(/[.\s']/g, '').replace(',', '.');
+    m = AMT_EN.exec(s); if (m) return +m[1].replace(/[\u2212]/, '-').replace(/,/g, '');
     // letture dell'OCR: «1.220.00», «1,220,00», «1 220,00»
-    m = /^(?:(?:€|eur(?:o)?)\s*)?([-−]?\d{1,3}(?:[.,\s]\d{3})*[.,]\d{2})(?:\s*(?:€|eur(?:o)?))?$/i.exec(s);
-    if (m) { const t = m[1].replace(/[−]/, '-').replace(/\s/g, ''); const k = Math.max(t.lastIndexOf('.'), t.lastIndexOf(',')); return +(t.slice(0, k).replace(/[.,]/g, '') + '.' + t.slice(k + 1)); }
+    m = /^(?:(?:\u20ac|eur(?:o)?)\s*)?([-\u2212]?\d{1,3}(?:[.,\s]\d{3})*[.,]\d{2})(?:\s*(?:\u20ac|eur(?:o)?))?$/i.exec(s);
+    if (m) { const t = m[1].replace(/[\u2212]/, '-').replace(/\s/g, ''); const k = Math.max(t.lastIndexOf('.'), t.lastIndexOf(',')); return +(t.slice(0, k).replace(/[.,]/g, '') + '.' + t.slice(k + 1)); }
     return null;
   };
   // un importo dentro un testo più lungo (il primo dopo una posizione)
-  const AMT_IN = /(?:€\s*|eur(?:o)?\s+)?([-−]?\d{1,3}(?:\.\d{3})+,\d{2}|[-−]?\d{1,9},\d{2})(?![\d,])(?:\s*(?:€|eur(?:o)?))?/i;
+  const AMT_IN = /(?:\u20ac\s*|eur(?:o)?\s+)?([-\u2212]?\d{1,3}(?:\.\d{3})+,\d{2}|[-\u2212]?\d{1,9},\d{2})(?![\d,])(?:\s*(?:\u20ac|eur(?:o)?))?/i;
   const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
   const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
   const pad = x => String(x).padStart(2, '0');
@@ -11941,7 +12014,7 @@ const DocFields = (() => {
     return null;
   }
   function deedDate(text) {
-    const m = /l['’]\s?anno\s+(\d{4}|[a-z]+)[\s,]+(?:addì\s+)?(?:il\s+giorno\s+)?(\d{1,2}|[a-zà-ÿ]+)\s+(?:\(\s*\d+\s*\)\s+)?(?:del\s+mese\s+di\s+)?([a-z]+)/i.exec(text);
+    const m = /l['\u2019]\s?anno\s+(\d{4}|[a-z]+)[\s,]+(?:addì\s+)?(?:il\s+giorno\s+)?(\d{1,2}|[a-zà-ÿ]+)\s+(?:\(\s*\d+\s*\)\s+)?(?:del\s+mese\s+di\s+)?([a-z]+)/i.exec(text);
     if (!m) return null;
     const y = wordNum(m[1]), d = wordNum(m[2]), mo = MESI.indexOf(m[3].toLowerCase()) + 1;
     return y && d && mo ? isoOf(d, mo, y) : null;
@@ -11958,7 +12031,7 @@ const DocFields = (() => {
   }
 
   /* ---------- etichette e valori vicini ---------- */
-  // tutte le coppie etichetta → valore del documento, cercando nella cella, a destra e sotto
+  // tutte le coppie etichetta \u2192 valore del documento, cercando nella cella, a destra e sotto
   function pairs(lines, labelRe, accept, { below = 3, right = 3, sumRows = false } = {}) {
     const out = [];
     lines.forEach((L, li) => {
@@ -11968,10 +12041,10 @@ const DocFields = (() => {
         const after = c.text.slice(m.index + m[0].length);
         // nella stessa cella, dopo l'etichetta
         const label = c.text.slice(Math.max(0, m.index - 16), m.index + m[0].length), lab = c.text;
-        const v0 = accept(after.replace(/^\s*[:=\-–]?\s*/, ''), true);
+        const v0 = accept(after.replace(/^\s*[:=\-\u2013]?\s*/, ''), true);
         if (v0 != null) out.push({ v: v0, score: 3, li, ci, page: L.page, where: 'cella', label, lab });
         // l'etichetta deve finire la cella (o quasi) per prendere il valore altrove
-        if (after.replace(/[\s:.€()%\d-]/g, '').length > 3) return;
+        if (after.replace(/[\s:.\u20ac()%\d-]/g, '').length > 3) return;
         const headerRow = L.cells.length >= 3 && L.cells.every(d => !/\d/.test(d.text));
         for (let k = 1; !headerRow && k <= right && ci + k < L.cells.length; k++) {
           const v = accept(L.cells[ci + k].text, false);
@@ -12002,16 +12075,16 @@ const DocFields = (() => {
     return out.sort((a, b) => b.score - a.score);
   }
   const acceptAmount = (s, inCell) => { const t = s.trim(); if (!inCell) return amountOf(t); const m = AMT_IN.exec(t); if (!m || m.index > 12) return null; return amountOf(m[0]); };
-  const acceptDate = (s, inCell) => { const t = s.replace(/^[\s:.,\-–]+/, ''); const d = dateIn(t); return d && d.at <= (inCell ? 1 : 3) ? d.iso : null; };
+  const acceptDate = (s, inCell) => { const t = s.replace(/^[\s:.,\-\u2013]+/, ''); const d = dateIn(t); return d && d.at <= (inCell ? 1 : 3) ? d.iso : null; };
   const acceptNumber = (s, inCell) => { const t = s.trim(); if (!inCell && !NUM_RE.test(t)) return null; return numberIn(t); };
 
   /* ---------- etichette ---------- */
   const LBL = {
-    totale: /(?:^|\b)(?:totale\s+(?:documento|fattura|nota\s+di\s+credito|preventivo|ricevuta|da\s+pagare|a\s+pagare|complessivo|generale|dovuto|ivato|lordo|ordine|offerta|eur(?:o)?|€|importo)|importo\s+(?:totale|complessivo|da\s+pagare|dovuto)|total(?:e)?\s+(?:due|amount|invoice)|amount\s+due|saldo\s+finale(?:\s+(?:euro|contabile))?|saldo\s+(?:da\s+addebitare|a\s+debito|dovuto|da\s+pagare)|netto\s+in\s+busta|spesa\s+complessiva|importo\s+contrattuale|stanziamento\s+complessivo|totale\s+da\s+pagare\s+entro|total(?:e)?)(?![\wÀ-ÿ])\s*(?:eur(?:o)?|€)?\s*:?/i,
+    totale: /(?:^|\b)(?:totale\s+(?:documento|fattura|nota\s+di\s+credito|preventivo|ricevuta|da\s+pagare|a\s+pagare|complessivo|generale|dovuto|ivato|lordo|ordine|offerta|eur(?:o)?|\u20ac|importo)|importo\s+(?:totale|complessivo|da\s+pagare|dovuto)|total(?:e)?\s+(?:due|amount|invoice)|amount\s+due|saldo\s+finale(?:\s+(?:euro|contabile))?|saldo\s+(?:da\s+addebitare|a\s+debito|dovuto|da\s+pagare)|netto\s+in\s+busta|spesa\s+complessiva|importo\s+contrattuale|stanziamento\s+complessivo|totale\s+da\s+pagare\s+entro|total(?:e)?)(?![\wÀ-ÿ])\s*(?:eur(?:o)?|\u20ac)?\s*:?/i,
     imponibile: /(?:^|\b)(?:totale\s+imponibile|imponibile(?:\s+iva)?|base\s+imponibile|totale\s+(?:prestazion[ei]|merce|servizi|imponibile\/netto|netto\s+merce)|subtotal|sub\s*totale)(?![\wÀ-ÿ])\s*:?/i,
     iva: /(?:^|\b)(?:totale\s+(?:iva|imposta)|i\.?v\.?a\.?(?:\s*\d{1,2}(?:[.,]\d+)?\s*%)?|imposta(?:\s+\d{1,2}\s*%)?|vat(?:\s*\([^)]*\))?(?:\s*\d{1,2}\s*%)?)\s*:?/i,
     netto: /(?:^|\b)netto\s+(?:a|da)\s+pagare(?![\wÀ-ÿ])\s*:?/i,
-    ritenuta: /(?:^|\b)ritenuta(?:\s+d['’]\s?acconto)?\b[^:\d]{0,12}(?:\d{1,2}\s*%)?\s*:?/i,
+    ritenuta: /(?:^|\b)ritenuta(?:\s+d['\u2019]\s?acconto)?\b[^:\d]{0,12}(?:\d{1,2}\s*%)?\s*:?/i,
     bollo: /(?:^|\b)(?:importo\s+)?(?:marca\s+da\s+)?bollo(?![\wÀ-ÿ])\s*:?/i,
     scadenza: /(?:^|\b)(?:data\s+(?:di\s+)?scadenza|scadenze|scadenza(?:\s+(?:del\s+)?(?:pagamento|validit[àa]|rata|termine))?|scad\.|due\s+date|valid\w*(?:[^\d\n]{0,40}?\d+\s+giorni)?[^\d\n]{0,40}?(?:fino\s+al|entro\s+il)|valido\s+fino\s+al|scade\s+il|da\s+pagare\s+entro\s+il|entro\s+(?:e\s+non\s+oltre\s+)?il)(?![\wÀ-ÿ])\s*:?/i,
   };
@@ -12037,9 +12110,9 @@ const DocFields = (() => {
     A.iva = A.iva.filter(x => !/imponibil\w*\s*$|imponibil\w*\s+i\.?v\.?a|esent|inclus|compres/i.test(x.label || ''));
     // un'etichetta di IVA dentro «totale imponibile/iva» non conta per l'IVA; e «Totale imposta» non è il totale
     A.totale = A.totale.filter(x => !/imponibile|imposta|\biva\b|\bvat\b|prestazion|merce|servizi/i.test((x.lab || '').replace(/i\.?v\.?a\.?\s+(?:inclusa|compresa)|(?:inclusa|compresa)\s+i\.?v\.?a/gi, '')) && !/prezzo\s+totale|totale\s+riga|importo\s+riga|valore\s+totale\s+riga/i.test(x.label || ''));
-    // «Totale … IVA inclusa» è il totale; «Totale … (IVA esclusa)» è l'imponibile
+    // «Totale \u2026 IVA inclusa» è il totale; «Totale \u2026 (IVA esclusa)» è l'imponibile
     A.totale.push(...pairs(all, /(?:^|\b)(?:totale|importo|prezzo)?[^:\n\d]{0,30}?\(?(?:i\.?v\.?a\.?\s+(?:inclusa|compresa)|(?:inclusa|compresa)\s+i\.?v\.?a\.?|ivat[oa])\)?\s*:?/gi, acceptAmount).map(x => ({ ...x, score: x.score + 0.2 })));
-    A.imponibile.push(...pairs(all, /(?:^|\b)(?:totale|importo|prezzo)[^:\n\d]{0,30}?\(?(?:i\.?v\.?a\.?\s+esclusa|esclus[ao]\s+i\.?v\.?a\.?|al\s+netto\s+(?:dell['’]\s?)?i\.?v\.?a\.?|oltre\s+i\.?v\.?a\.?)\)?\s*:?/gi, acceptAmount));
+    A.imponibile.push(...pairs(all, /(?:^|\b)(?:totale|importo|prezzo)[^:\n\d]{0,30}?\(?(?:i\.?v\.?a\.?\s+esclusa|esclus[ao]\s+i\.?v\.?a\.?|al\s+netto\s+(?:dell['\u2019]\s?)?i\.?v\.?a\.?|oltre\s+i\.?v\.?a\.?)\)?\s*:?/gi, acceptAmount));
     A.totale.sort((a, b) => b.score - a.score); A.imponibile.sort((a, b) => b.score - a.score);
     // senza un totale con l'etichetta: l'«Importo», «la somma di», «pari a», «corrispettivo»
     if (!A.totale.length) A.totale = pairs(all, /(?:^|\b)(?:importo(?:\s+(?:del\s+mandato|da\s+pagare|lordo))?|la\s+somma\s+(?:complessiva\s+)?di|pari\s+a|corrispettivo(?:\s+(?:di|pari\s+a))?)(?![\wÀ-ÿ])\s*:?/gi, acceptAmount).map(x => ({ ...x, score: x.score - 1 }));
@@ -12056,7 +12129,7 @@ const DocFields = (() => {
   }
   const cellText = (lines, li, ci, labelOf) => { const L = lines[li]; if (!L) return ''; if (!labelOf) return L.cells[ci]?.text || ''; return L.text; };
   function titleOf(lines) {
-    // le prime righe con le parole del tipo (FATTURA, DETERMINAZIONE, PREVENTIVO…), preferendo il carattere più grande
+    // le prime righe con le parole del tipo (FATTURA, DETERMINAZIONE, PREVENTIVO\u2026), preferendo il carattere più grande
     const top = lines.slice(0, 18);
     const KW = /\b(fattura|nota\s+di\s+credito|invoice|preventivo|offerta|ricevuta|quietanza|determin(?:a|azione)|deliberazione|delibera|ordinanza|decreto|mandato\s+di\s+pagamento|contratto|verbale|avviso\s+pubblico|bando|cartella\s+di\s+pagamento|estratto\s+(?:di\s+)?conto|cedolino|busta\s+paga|certificazione\s+unica|visura|durc|modello\s+(?:di\s+pagamento\s+unificato\s+)?f\s?24|f24)\b/i;
     const cand = top.filter(L => KW.test(L.text));
@@ -12097,17 +12170,17 @@ const DocFields = (() => {
   const uniq = a => [...new Set(a)];
 
   function docDate(lines, kind, text) {
-    const L = [/(?:^|\b)(?:data\s+(?:del\s+|della\s+|dell['’]\s?)?(?:documento|fattura|emissione|doc\.?|ricevuta|atto|richiesta|di\s+notifica|versamento|estratto(?:\s+conto)?|registrazione|protocollo|seduta|stampa)|invoice\s+date|date\s+of\s+issue|data(?!\s+(?:di\s+|del\s+|dell['’]\s?)?(?:scadenza|nascita|addebito|accredito|valuta|pagamento|consegna|inizio|fine|scad|decorrenza|validit|ultimo|termine|bonifico|operazione)))(?![\wÀ-ÿ])\s*:?/gi];
+    const L = [/(?:^|\b)(?:data\s+(?:del\s+|della\s+|dell['\u2019]\s?)?(?:documento|fattura|emissione|doc\.?|ricevuta|atto|richiesta|di\s+notifica|versamento|estratto(?:\s+conto)?|registrazione|protocollo|seduta|stampa)|invoice\s+date|date\s+of\s+issue|data(?!\s+(?:di\s+|del\s+|dell['\u2019]\s?)?(?:scadenza|nascita|addebito|accredito|valuta|pagamento|consegna|inizio|fine|scad|decorrenza|validit|ultimo|termine|bonifico|operazione)))(?![\wÀ-ÿ])\s*:?/gi];
     const cands = [];
     for (const re of L) for (const x of pairs(lines, re, acceptDate)) cands.push(x);
-    // «n. 145 del 12/03/2026», «… DEL 03/10/2026», «Carini, 18/09/2026», «al 30/09/2026»
+    // «n. 145 del 12/03/2026», «\u2026 DEL 03/10/2026», «Carini, 18/09/2026», «al 30/09/2026»
     const top = lines.slice(0, 40);
     top.forEach((Ln, li) => {
       let m = /\b(?:nr\.?|numero|n°|n\.?(?![a-z]))\s*[\w\/\-.]+\s+(?:del|dd\.?|in\s+data)\s+(.{6,22})/i.exec(Ln.text);
-      // «… della fattura n. 88 del …» in una lettera, «DDT n. 101 del …» in una fattura: è un altro documento citato
+      // «\u2026 della fattura n. 88 del \u2026» in una lettera, «DDT n. 101 del \u2026» in una fattura: è un altro documento citato
       const cited = m && (() => { const before = Ln.text.slice(0, m.index).toLowerCase(); const w = /(fattura|nota\s+di\s+credito|ddt|documento\s+di\s+trasporto|ordine|contratto|delibera(?:zione)?|determina(?:zione)?|preventivo|offerta|ricevuta|protocollo|prot\.?|verbale|ordinanza|decreto|mandato)\s*$/.exec(before.trim()); if (!w) return /\b(?:rif\.?|riferimento|storno|relativ[oa]|oggetto)\b/.test(before); const ty = { fattura: 'fattura', 'nota di credito': 'notacredito', delibera: 'delibera', deliberazione: 'delibera', determina: 'determina', determinazione: 'determina', preventivo: 'preventivo', offerta: 'preventivo', ricevuta: 'ricevuta', contratto: 'contratto', verbale: 'verbale', ordinanza: 'ordinanza', decreto: 'decreto', mandato: 'mandato' }[w[1].replace(/\s+/g, ' ')]; return !ty || (kind.type && ty !== kind.type) || /\b(?:rif\.?|riferimento|storno|relativ[oa]|oggetto|sollecito)\b/.test(before); })();
       if (m && !cited) { const d = dateIn(m[1]); if (d) cands.push({ v: d.iso, score: 2.9 - li * 0.01, li }); }
-      m = /^(?:[A-Z][\wÀ-ÿ'’ ]{2,30}),\s+(?:l[iì]\s+)?(.{6,22})$/i.exec(Ln.text.trim());
+      m = /^(?:[A-Z][\wÀ-ÿ'\u2019 ]{2,30}),\s+(?:l[iì]\s+)?(.{6,22})$/i.exec(Ln.text.trim());
       if (m) { const d = dateIn(m[1]); if (d && d.at === 0) cands.push({ v: d.iso, score: 2.0, li }); }
       m = /\b(?:al|del)\s+(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4})\s*$/i.exec(Ln.text);
       if (m && /estratto|conto|saldo|situazione/i.test(Ln.text)) { const d = dateIn(m[1]); if (d) cands.push({ v: d.iso, score: 2.4, li }); }
@@ -12153,8 +12226,8 @@ const DocFields = (() => {
   const FORMS = /\b(?:s\.?\s?r\.?\s?l\.?(?:\s?s\.?)?|s\.?\s?p\.?\s?a\.?|s\.?\s?n\.?\s?c\.?|s\.?\s?a\.?\s?s\.?|s\.?\s?c\.?\s?a\.?\s?r\.?\s?l\.?|soc\.?\s+coop\.?|societ[àa]\s+cooperativa|onlus|a\.?s\.?d\.?|a\.?p\.?s\.?|ltd|gmbh|inc\.?|s\.?a\.?|sagl|di\s+[A-Z][a-z]+\s+[A-Z][a-z]+)\b/i;
   const ENTE = /^(?:comune|citt[àa]|provincia|regione|libero\s+consorzio|azienda|asp|asl|universit[àa]|ministero|agenzia|camera\s+di\s+commercio|tribunale|corte|t\.?a\.?r\.?|inps|inail|istituto|banca|ente)\b/i;
   const NOT_NAME = /^(?:fattura|invoice|nota\s+di\s+credito|preventivo|documento|pagina|page|data|totale|spett|cliente|destinatario|oggetto|mod(?:ello)?|cedolino|ricevuta|determin|delibera|verbale|contratto|avviso|cartella|estratto|visura|durc|f24|settore|servizio|ufficio|registro|n\.|prot|rep\.|contribuente|delega|sezione|codice|intestatario|riepilog|modalit|descrizione|quantit|importo|prezzo)/i;
-  const tidy = s => s.replace(/\s+/g, ' ').replace(/^(?:spett\.?\s?le|spettabile|egr\.?(?:egio)?|gent\.?(?:ile)?|sig\.?(?:ra|nor[ae]?)?\.?|ditta|alla\s+cortese\s+attenzione\s+(?:di|del(?:la)?)|c\.a\.)\s+/i, '').replace(/[\s,;:–-]+$/, '').replace(/\s+[-–]\s+.*$/, '').trim().slice(0, 80);
-  const titleCase = s => s === s.toUpperCase() && ENTE.test(s) ? s.toLowerCase().replace(/(^|[\s'’(-])([a-zà-ÿ])/g, (m, a, b) => a + b.toUpperCase()).replace(/\b(Di|Del|Della|Degli|Delle|Dell'|Ed|E|Per|Il|La)\b/g, w => w.toLowerCase()) : s;
+  const tidy = s => s.replace(/\s+/g, ' ').replace(/^(?:spett\.?\s?le|spettabile|egr\.?(?:egio)?|gent\.?(?:ile)?|sig\.?(?:ra|nor[ae]?)?\.?|ditta|alla\s+cortese\s+attenzione\s+(?:di|del(?:la)?)|c\.a\.)\s+/i, '').replace(/[\s,;:\u2013-]+$/, '').replace(/\s+[-\u2013]\s+.*$/, '').trim().slice(0, 80);
+  const titleCase = s => s === s.toUpperCase() && ENTE.test(s) ? s.toLowerCase().replace(/(^|[\s'\u2019(-])([a-zà-ÿ])/g, (m, a, b) => a + b.toUpperCase()).replace(/\b(Di|Del|Della|Degli|Delle|Dell'|Ed|E|Per|Il|La)\b/g, w => w.toLowerCase()) : s;
   const ADDR = /^(?:via|viale|v\.le|piazza|p\.zza|corso|c\.so|largo|contrada|c\.da|vicolo|strada|lungomare|località|loc\.)\s|\b(?:via|viale|piazza|corso|c\.so|p\.zza|largo|contrada|c\.da|lungomare)\s+[^\d,]{2,40}\s\d{1,4}\b/i;
   const looksName = s => s && s.length >= 3 && !NOT_NAME.test(s) && !ADDR.test(s) && !/:\s*$/.test(s) && !/\d{4,}|@|https?:|www\.|\d[.,]\d{2}\b|\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}|\b(?:tel|fax|cap|euro|eur)\b/i.test(s) && /[A-Za-zÀ-ÿ]{3}/.test(s);
   function parties(lines, kind, text) {
@@ -12182,12 +12255,12 @@ const DocFields = (() => {
     // DURC, visura: il soggetto è la «Denominazione / ragione sociale»
     if (!issuer && ['durc', 'visura'].includes(t)) issuer = valueAfter(/(?:^|\b)denominazione(?:\s*\/\s*ragione\s+sociale)?\b\s*:?/gi);
     // F24: il contribuente (cognome e nome o denominazione)
-    if (!issuer && t === 'f24') { const m = /cognome,?\s+denominazione\s+o\s+ragione\s+sociale\s*:?\s*([A-ZÀ-Ý][A-ZÀ-Ý'’.&\- ]{1,60}?)(?:\s{2,}|\s+nome\s*:?\s*([A-ZÀ-Ý'’\- ]{2,40}))?\s*$/im.exec(text); if (m) issuer = (m[1].trim() + (m[2] ? ' ' + m[2].trim() : '')).trim(); }
+    if (!issuer && t === 'f24') { const m = /cognome,?\s+denominazione\s+o\s+ragione\s+sociale\s*:?\s*([A-ZÀ-Ý][A-ZÀ-Ý'\u2019.&\- ]{1,60}?)(?:\s{2,}|\s+nome\s*:?\s*([A-ZÀ-Ý'\u2019\- ]{2,40}))?\s*$/im.exec(text); if (m) issuer = (m[1].trim() + (m[2] ? ' ' + m[2].trim() : '')).trim(); }
     // atti della PA: l'ente dell'intestazione
     const PA = ['determina', 'delibera', 'ordinanza', 'decreto', 'bando', 'verbale', 'mandato', 'contratto', 'lettera'];
     if (!issuer && PA.includes(t)) {
       const hd = first.slice(0, 8).find(L => ENTE.test(L.text.trim()) && L.text.length < 60);
-      if (hd) { const cs = hd.cells.map(c => c.text); let n = cs[0]; for (let k = 1; k < cs.length && (/^(?:di|del|della|dello|dei|degli|delle|d['’])\s/i.test(cs[k]) || /^[\wÀ-ÿ]+$/.test(n)); k++) n += ' ' + cs[k]; issuer = titleCase(tidy(n)); }
+      if (hd) { const cs = hd.cells.map(c => c.text); let n = cs[0]; for (let k = 1; k < cs.length && (/^(?:di|del|della|dello|dei|degli|delle|d['\u2019])\s/i.test(cs[k]) || /^[\wÀ-ÿ]+$/.test(n)); k++) n += ' ' + cs[k]; issuer = titleCase(tidy(n)); }
     }
     // altrimenti: il nome più in evidenza in alto (carattere più grande), che non sia il titolo del documento
     if (!issuer) {
@@ -12195,12 +12268,12 @@ const DocFields = (() => {
       const cand = top.flatMap(L => L.cells.map(c => ({ c, L }))).filter(({ c }) => looksName(tidy(c.text)) && !/^(?:spett|egr|gent|al\s|alla\s|ai\s|cliente|destinatario|intestat|bill\s+to)/i.test(c.text))
         .map(({ c, L }) => ({ v: tidy(c.text), size: c.size, y: L.y, x: c.x0, form: FORMS.test(c.text) || ENTE.test(c.text) }));
       cand.sort((a, b) => b.size - a.size || (b.form - a.form) || a.y - b.y);
-      if (cand.length && cand[0].size >= (cand[cand.length - 1].size || 0)) issuer = titleCase(cand[0].v.split(/\s+[-–]\s+/)[0]);
+      if (cand.length && cand[0].size >= (cand[cand.length - 1].size || 0)) issuer = titleCase(cand[0].v.split(/\s+[-\u2013]\s+/)[0]);
     }
     if (!issuer && kind.party) issuer = kind.party;
-    // il destinatario: dopo «Spett.le», «Cliente», «Destinatario», «Intestata a», «Bill to», «Beneficiario», «Dipendente», «Intestatario», «Al …»
+    // il destinatario: dopo «Spett.le», «Cliente», «Destinatario», «Intestata a», «Bill to», «Beneficiario», «Dipendente», «Intestatario», «Al \u2026»
     if (!recipient) {
-      const R = /(?:^|\b)(?:spett(?:\.?\s?le|abile)|cliente|destinatario(?:\s+(?:dell['’]\s?avviso|avviso|del\s+pagamento))?|intestat[ao]\s+a|intestatario(?:\s+(?:fattura|documento|del\s+documento|della\s+fattura))?|titolare|bill\s+to|(?:all['’]\s?|alla\s+)?(?:c\.\s?a\.|cortese\s+attenzione|att(?:\.ne|enzione))(?:\s+(?:di|del(?:la|l['’])?|dei))?|(?:ricevut[oa]|versat[oa]|pagat[oa])\s+da(?:l(?:la|l['’]|lo)?)?(?:\s+sig\.?(?:ra|nor[ae]?)?\.?)?|sold\s+to|beneficiario|dipendente|^al(?:la|l['’]|le|lo|i)?(?=\s+[A-ZÀ-Ý"«])|egr(?:\.|egio)?\s+(?:sig\.?(?:ra|nor[ae]?)?\.?|dott\.?(?:ssa)?|avv\.?)?|gent(?:\.|ile)?\s+(?:sig\.?(?:ra)?\.?|dott\.?(?:ssa)?)?|cessionario(?:\s*\/\s*committente)?)\b\.?\s*:?/gi;
+      const R = /(?:^|\b)(?:spett(?:\.?\s?le|abile)|cliente|destinatario(?:\s+(?:dell['\u2019]\s?avviso|avviso|del\s+pagamento))?|intestat[ao]\s+a|intestatario(?:\s+(?:fattura|documento|del\s+documento|della\s+fattura))?|titolare|bill\s+to|(?:all['\u2019]\s?|alla\s+)?(?:c\.\s?a\.|cortese\s+attenzione|att(?:\.ne|enzione))(?:\s+(?:di|del(?:la|l['\u2019])?|dei))?|(?:ricevut[oa]|versat[oa]|pagat[oa])\s+da(?:l(?:la|l['\u2019]|lo)?)?(?:\s+sig\.?(?:ra|nor[ae]?)?\.?)?|sold\s+to|beneficiario|dipendente|^al(?:la|l['\u2019]|le|lo|i)?(?=\s+[A-ZÀ-Ý"«])|egr(?:\.|egio)?\s+(?:sig\.?(?:ra|nor[ae]?)?\.?|dott\.?(?:ssa)?|avv\.?)?|gent(?:\.|ile)?\s+(?:sig\.?(?:ra)?\.?|dott\.?(?:ssa)?)?|cessionario(?:\s*\/\s*committente)?)\b\.?\s*:?/gi;
       const acc = s => { if (/:\s*$/.test(s.trim()) || /^\s*\(/.test(s)) return null; let v = tidy(s.replace(/^\s*[:\-]?\s*/, '').replace(/\s*[,(-]\s*(?:c\.?\s?f\.?|p\.?\s?iva|cod\.?\s?fisc|vat|partita|matricola)[\s\S]*$/i, '').replace(/\s*,\s*(?:IT)?[A-Z0-9]{11,16}\s*$/i, '').replace(/\s+(?:matricola|c\.?f\.?)\b[\s\S]*$/i, '')); if (!looksName(v) || v.length > 70) return null; if (/^[A-ZÀ-Ý]{2,}\s+[A-ZÀ-Ý]{2,}$/.test(v) && t === 'cedolino') v = v.split(' ').reverse().join(' '); return v; };
       const p = pairs(lines, R, acc, { right: 2, below: 2 });
       // escluso chi emette
@@ -12209,7 +12282,7 @@ const DocFields = (() => {
     }
     // atti: la ditta/beneficiario nominata nel testo
     if (!recipient && ['contratto', 'mandato'].includes(t)) {
-      const m = /\b(?:la\s+ditta|ditta|societ[àa]|impresa)\s+([A-Z][A-Z0-9À-Ý&'’.\- ]{2,60}?(?:S\.?R\.?L\.?|S\.?P\.?A\.?|S\.?N\.?C\.?|S\.?A\.?S\.?))/.exec(text);
+      const m = /\b(?:la\s+ditta|ditta|societ[àa]|impresa)\s+([A-Z][A-Z0-9À-Ý&'\u2019.\- ]{2,60}?(?:S\.?R\.?L\.?|S\.?P\.?A\.?|S\.?N\.?C\.?|S\.?A\.?S\.?))/.exec(text);
       if (m) recipient = tidy(m[1]);
     }
     if (recipient && /^al\s+comune|^alla\s+regione/i.test(recipient)) recipient = recipient.replace(/^al(?:la)?\s+/i, '');
@@ -12230,7 +12303,7 @@ const KeyData = (() => {
     tipo: 'Tipo di documento', data: 'Data', numero: 'Numero', controparte: 'Emesso da', destinatario: 'Destinatario', oggetto: 'Oggetto',
     importo: 'Importi', scadenza: 'Scadenze', cf: 'Codici fiscali', piva: 'Partite IVA', iban: 'IBAN', cig: 'CIG', cup: 'CUP',
     prot: 'Protocollo', pec: 'PEC', email: 'Email', tel: 'Telefoni', norma: 'Riferimenti normativi', nome: 'Persone',
-    indirizzo: 'Indirizzi', nascita: 'Nascita', doc: 'Documenti d’identità', targa: 'Targhe', altro: 'Altri codici', date: 'Altre date',
+    indirizzo: 'Indirizzi', nascita: 'Nascita', doc: 'Documenti d\u2019identità', targa: 'Targhe', altro: 'Altri codici', date: 'Altre date',
   };
   // gruppi mostrati come scelte
   const GROUPS = [
@@ -12244,10 +12317,10 @@ const KeyData = (() => {
     ['persone', 'Persone, indirizzi, documenti', ['nome', 'indirizzo', 'nascita', 'doc', 'targa']],
     ['altro', 'Altri codici e date', ['altro', 'date']],
   ];
-  const AMOUNT = /(?<![\d.,])(?:€\s*|EUR\s*)?([+-]?\d{1,3}(?:\.\d{3})+,\d{2}|[+-]?\d{1,9},\d{2})(?![\d,])(?:\s*(?:€|EUR|euro))?/gi;
+  const AMOUNT = /(?<![\d.,])(?:\u20ac\s*|EUR\s*)?([+-]?\d{1,3}(?:\.\d{3})+,\d{2}|[+-]?\d{1,9},\d{2})(?![\d,])(?:\s*(?:\u20ac|EUR|euro))?/gi;
   const parseAmount = s => +s.replace(/\./g, '').replace(',', '.');
   const AMOUNT_LABELS = [
-    ['Totale', /\btotale\s+(?:documento|fattura|da\s+pagare|complessivo|generale|dovuto|importo|a\s+pagare|ivato|lordo)\b|\bimporto\s+totale\b|\btotale\s*(?:€|eur)?\s*:?\s*$/i],
+    ['Totale', /\btotale\s+(?:documento|fattura|da\s+pagare|complessivo|generale|dovuto|importo|a\s+pagare|ivato|lordo)\b|\bimporto\s+totale\b|\btotale\s*(?:\u20ac|eur)?\s*:?\s*$/i],
     ['Netto a pagare', /\bnetto\s+(?:a\s+pagare|da\s+pagare|in\s+busta)\b/i],
     ['Imponibile', /\bimponibile\b|\btotale\s+imponibile\b/i],
     ['IVA', /\b(?:totale\s+)?i\.?v\.?a\.?\b|\bimposta\b/i],
@@ -12256,7 +12329,7 @@ const KeyData = (() => {
     ['Saldo', /\bsaldo\b/i],
     ['Importo', /\bimporto\b|\bsomma\s+di\b|\bpari\s+a\b|\bcorrispettivo\b|\bspesa\b/i],
   ];
-  const fmtEuro = v => v.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  const fmtEuro = v => v.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' \u20ac';
   const fmtDate = iso => iso ? iso.split('-').reverse().join('/') : '';
   function extract(pages) {
     const items = [], seen = new Map();
@@ -12301,7 +12374,7 @@ const KeyData = (() => {
         // non è un importo: percentuali, quantità con unità, codici
         if (/%\s*$/.test(text.slice(m.index + m[0].length, m.index + m[0].length + 2))) return;
         const lab = AMOUNT_LABELS.find(([, re]) => re.test(before));
-        const label = lab ? lab[0] : (/[€]|eur/i.test(m[0]) ? 'Importo' : null);
+        const label = lab ? lab[0] : (/[\u20ac]|eur/i.test(m[0]) ? 'Importo' : null);
         if (!label) return;
         add('importo', `${label}: ${fmtEuro(v)}`, p, around(m.index), { label, amount: v, norm: label + v.toFixed(2) });
       });
@@ -12318,7 +12391,7 @@ const KeyData = (() => {
       // altri codici utili
       each(/\b(IT\d{3}E\d{8})\b/g, m => add('altro', 'POD ' + m[1], p, around(m.index)));
       each(/\bPDR\s*[:n.°]*\s*(\d{14})\b/gi, m => add('altro', 'PDR ' + m[1], p, around(m.index)));
-      each(/\bREA\s*[:n.°]*\s*([A-Z]{2}\s?[-–]?\s?\d{4,7})\b/g, m => add('altro', 'REA ' + m[1].replace(/\s+/g, ''), p, around(m.index)));
+      each(/\bREA\s*[:n.°]*\s*([A-Z]{2}\s?[-\u2013]?\s?\d{4,7})\b/g, m => add('altro', 'REA ' + m[1].replace(/\s+/g, ''), p, around(m.index)));
       each(/\b(?:codice\s+)?ATECO\s*(?:20\d\d)?\s*[:n.°]*\s*(\d{2}(?:\.\d{1,2}){1,2})\b/gi, m => add('altro', 'ATECO ' + m[1], p, around(m.index)));
       each(/\bcodice\s+tributo\s*[:n.°]*\s*(\d{4}|[A-Z]{2}\d{2})\b/gi, m => add('altro', 'Codice tributo ' + m[1], p, around(m.index)));
       each(/\b(?:matricola|codice\s+cliente|n\.?\s*cliente|n\.?\s*pratica|pratica\s+n\.?)\s*[:n.°]*\s*([A-Z0-9][\w\/\-]{3,20})/gi, m => add('altro', m[0].replace(/\s+/g, ' ').trim(), p, around(m.index)));
@@ -12343,7 +12416,7 @@ const KeyData = (() => {
   function extractLayout(pages) {
     if (typeof DocFields === 'undefined' || !pages.some(p => p.items && p.items.length)) return extract(pages);
     const F = DocFields.analyze(pages);
-    // le voci (codici, importi, date…) sul testo ricostruito riga per riga, pagina per pagina
+    // le voci (codici, importi, date\u2026) sul testo ricostruito riga per riga, pagina per pagina
     const byPage = pages.map(pg => ({ p: pg.p, text: F.lines.filter(L => L.page === pg.p).map(L => L.text).join('\n') || pg.text || '' }));
     const r = extract(byPage);
     const k = F.kind || {}, s = r.summary, A = F.amounts;
@@ -12379,13 +12452,13 @@ async function startEstrai(stage, files) {
   function drawDetail() {
     const r = results[open], d = docs[open];
     rows.forEach((x, i) => x.el.classList.toggle('sel', i === open && many));
-    if (!r) { detail.replaceChildren(h('div', { class: 'muted small', style: { padding: '14px' } }, 'Lettura del documento…')); return; }
+    if (!r) { detail.replaceChildren(h('div', { class: 'muted small', style: { padding: '14px' } }, 'Lettura del documento\u2026')); return; }
     const on = catsOn();
     const items = r.items.filter(i => on.has(i.cat));
     const byCat = new Map(); for (const it of items) { if (!byCat.has(it.cat)) byCat.set(it.cat, []); byCat.get(it.cat).push(it); }
     const order = Object.keys(KeyData.CATS);
     detail.replaceChildren(
-      h('div', { class: 'kd-h' }, h('b', {}, d.name), h('span', { class: 'muted small' }, `${plural(items.length, 'dato', 'dati')}${r.ocr ? ' · ' + plural(r.ocr, 'pagina letta', 'pagine lette') + ' con l’OCR' : ''}`)),
+      h('div', { class: 'kd-h' }, h('b', {}, d.name), h('span', { class: 'muted small' }, `${plural(items.length, 'dato', 'dati')}${r.ocr ? ' · ' + plural(r.ocr, 'pagina letta', 'pagine lette') + ' con l\u2019OCR' : ''}`)),
       items.length ? h('div', { class: 'kd-grid' }, ...order.filter(c => byCat.has(c)).map(c => h('div', { class: 'kd-cat' },
         h('div', { class: 'kd-ct' }, KeyData.CATS[c]),
         ...byCat.get(c).slice(0, 40).map(it => h('div', { class: 'kd-it', title: it.ctx || '' },
@@ -12400,7 +12473,7 @@ async function startEstrai(stage, files) {
     many ? h('div', { class: 'toolbar', style: { maxWidth: '980px', margin: '0 auto 12px' } }, h('div', { class: 'tb-title' }, `${plural(docs.length, 'documento', 'documenti')} · clicca per vedere i dati di ciascuno`)) : null,
     many ? h('div', { class: 'filelist kd-files' }, rows.map(r => r.el)) : null,
     h('div', { class: 'kd-wrap' }, detail)), [
-    h('div', { class: 'hint ok' }, many ? 'Ogni documento diventa una riga dell’Excel «Riepilogo» (tipo, data, numero, chi lo emette e a chi è destinato, importi, codici); nel foglio «Tutti i dati» trovi ogni dato con la pagina.' : 'I dati principali del documento, verificati (codici fiscali, partite IVA e IBAN con le cifre di controllo), con la pagina in cui compaiono.'),
+    h('div', { class: 'hint ok' }, many ? 'Ogni documento diventa una riga dell\u2019Excel «Riepilogo» (tipo, data, numero, chi lo emette e a chi è destinato, importi, codici); nel foglio «Tutti i dati» trovi ogni dato con la pagina.' : 'I dati principali del documento, verificati (codici fiscali, partite IVA e IBAN con le cifre di controllo), con la pagina in cui compaiono.'),
     sec('Dati da estrarre', sideGroups),
     sec('Formato', checkbox('Excel (.xlsx)', st.xlsx, v => st.xlsx = v), checkbox('Word (.docx)', st.docx, v => st.docx = v), checkbox('PDF', st.pdf, v => st.pdf = v)),
   ], [runBtn]);
@@ -12417,7 +12490,7 @@ async function startEstrai(stage, files) {
       for (;;) {
         const i = next++; if (i >= docs.length || !alive) return;
         const d = docs[i], r = rows[i];
-        r.start('Lettura…');
+        r.start('Lettura\u2026');
         try {
           const pages = []; let ocr = 0;
           for (let p = 1; p <= d.numPages && alive; p++) {
@@ -12425,7 +12498,7 @@ async function startEstrai(stage, files) {
             const tc = await page.getTextContent();
             let text = tc.items.map(it => it.str + (it.hasEOL ? '\n' : ' ')).join(''), items = DocFields.itemsFromPdf(tc, page.getViewport({ scale: 1 }));
             if (text.replace(/\s/g, '').length < 20 && typeof Tesseract !== 'undefined') {
-              r.prog(null, `Pagina ${p}: lettura della scansione (OCR)…`);
+              r.prog(null, `Pagina ${p}: lettura della scansione (OCR)\u2026`);
               try { const rec = await ocrRecognizePage(getW(k), d.pdfjs, p, { dpi: 300, auto: true, fix: true, langs: new Set(['ita']) }); text = rec.data.text || '';
                 items = (rec.data.lines || []).flatMap(l => (l.words || []).filter(w => (w.text || '').trim() && w.bbox && (w.confidence ?? 100) >= 30).map(w => ({ text: w.text, x0: w.bbox.x0, x1: w.bbox.x1, y0: w.bbox.y0, y1: w.bbox.y1 })));
                 rec.r.canvas.width = 0; rec.prep.release?.(); ocr++; } catch (e) { console.warn(e); }
@@ -12446,8 +12519,8 @@ async function startEstrai(stage, files) {
 
   async function run() {
     if (!st.xlsx && !st.docx && !st.pdf) return toast('Scegli almeno un formato', 'error');
-    await withBusy('Estrazione dei dati…', async () => {
-      Busy.set(null, 'Lettura dei documenti…');
+    await withBusy('Estrazione dei dati\u2026', async () => {
+      Busy.set(null, 'Lettura dei documenti\u2026');
       await Busy.until(reading);
       const on = catsOn();
       const base = many ? `Dati estratti (${docs.length} documenti)` : `${docs[0].base} - dati`;
@@ -12529,7 +12602,7 @@ const PdfExtract = (() => {
     const k = nm(cs);
     return { n: k === 'DeviceRGB' ? 3 : k === 'DeviceCMYK' ? 4 : 1 };
   }
-  // pixel grezzi → RGBA
+  // pixel grezzi \u2192 RGBA
   function toRGBA(raw, w, hh, bpc, ci, decodeArr) {
     const out = new Uint8ClampedArray(w * hh * 4);
     const n = ci.n, rowBytes = Math.ceil(w * n * bpc / 8);
@@ -12602,7 +12675,7 @@ const PdfExtract = (() => {
           const bytes = f.length === 1 ? e.s.contents : outerDecode(ctx, e.s, f.length - 1);
           const jpg = last === 'DCTDecode';
           if (jpg && !(bytes[0] === 0xFF && bytes[1] === 0xD8)) throw new Error('JPEG non valido');
-          // JPEG in CMYK: molti programmi lo mostrano con i colori invertiti → si ridisegna in RGB
+          // JPEG in CMYK: molti programmi lo mostrano con i colori invertiti \u2192 si ridisegna in RGB
           const cmyk = jpg && colorInfo(ctx, d.get(PDFName.of('ColorSpace'))).n === 4;
           if (!cmyk) { out.push({ ext: jpg ? 'jpg' : 'jp2', bytes, w, h: hh, pages: e.pages, type: jpg ? 'image/jpeg' : 'image/jp2', orig: true }); continue; }
           out.push({ unsupported: 'CMYK', w, h: hh, pages: e.pages }); continue;
@@ -12693,18 +12766,18 @@ async function startToImages(stage, files) {
     const rangeIn = h('input', { class: 'input', value: st.rangeText, placeholder: 'es. 1-3, 5 (o clicca le pagine)', hidden: st.range !== 'some', oninput: () => { st.rangeText = rangeIn.value; markSel(); } });
     const qIn = h('input', { type: 'range', min: 50, max: 100, value: Math.round(st.q * 100), oninput: () => { st.q = qIn.value / 100; qv.textContent = qIn.value + '%'; } }), qv = h('b', {}, Math.round(st.q * 100) + '%');
     if (st.mode === 'pages') opts.replaceChildren(
-      h('div', { class: 'hint' }, `Ogni pagina diventa un’immagine (${plural(pagesTotal, 'pagina', 'pagine')} in tutto).`),
+      h('div', { class: 'hint' }, `Ogni pagina diventa un\u2019immagine (${plural(pagesTotal, 'pagina', 'pagine')} in tutto).`),
       sec('Formato', seg(Object.entries(FMT).map(([k, v]) => [k, v[0]]), st.fmt, v => { st.fmt = v; drawOpts(); }),
         h('div', { class: 'muted small', style: { marginTop: '6px' } }, { jpg: 'Leggero, per foto e scansioni.', png: 'Senza perdita, ideale per testo e grafici.', webp: 'Molto leggero, per il web.', tif: 'Per archivi e programmi di stampa.' }[st.fmt])),
       sec('Risoluzione', seg([[72, 'Schermo'], [150, '150 dpi'], [200, '200 dpi'], [300, '300 dpi'], [600, '600 dpi']], st.dpi, v => st.dpi = +v),
-        h('div', { class: 'muted small', style: { marginTop: '6px' } }, '150 dpi per leggere a schermo, 300 dpi per stampare o per l’OCR.')),
+        h('div', { class: 'muted small', style: { marginTop: '6px' } }, '150 dpi per leggere a schermo, 300 dpi per stampare o per l\u2019OCR.')),
       st.fmt === 'jpg' || st.fmt === 'webp' ? sec('Qualità', h('div', { class: 'row' }, qIn, qv)) : null,
       sec('', checkbox('In bianco e nero (scala di grigi)', st.gray, v => st.gray = v)),
       many ? null : sec('Pagine', seg([['all', 'Tutte'], ['some', 'Solo alcune']], st.range, v => { st.range = v; rangeIn.hidden = v !== 'some'; markSel(); }), rangeIn));
     else if (st.mode === 'images') opts.replaceChildren(
       h('div', { class: 'hint' }, 'Le immagini come sono dentro il PDF, alla loro risoluzione: le foto JPEG senza ricompressione (stessa qualità), le altre in PNG con la trasparenza. Ognuna una volta sola, anche se ripetuta (es. il logo in ogni pagina).'),
       checkbox('Includi anche le immagini piccole (icone, linee)', st.small, v => st.small = v));
-    else if (st.mode === 'text') opts.replaceChildren(h('div', { class: 'hint' }, 'Tutto il testo del PDF in un file .txt, pagina per pagina. Per le scansioni senza testo usa prima l’OCR.'),
+    else if (st.mode === 'text') opts.replaceChildren(h('div', { class: 'hint' }, 'Tutto il testo del PDF in un file .txt, pagina per pagina. Per le scansioni senza testo usa prima l\u2019OCR.'),
       counts.txt === 0 ? h('div', { class: 'hint warn' }, 'Questo PDF sembra una scansione: non ha testo da estrarre.') : null);
     else opts.replaceChildren(h('div', { class: 'hint' }, counts.att ? `Il PDF contiene ${plural(counts.att, 'file allegato', 'file allegati')}: si salvano così come sono (es. la fattura XML dentro il PDF).` : 'Il PDF non contiene file allegati.'));
     if (!many) markSel();
@@ -12730,7 +12803,7 @@ async function startToImages(stage, files) {
   ], [h('button', { class: 'btn primary big btn-run', onclick: run }, ic('image', 18), 'Estrai')]);
 
   async function run() {
-    await withBusy(st.mode === 'pages' ? 'Pagine in immagini…' : 'Estrazione…', async () => {
+    await withBusy(st.mode === 'pages' ? 'Pagine in immagini\u2026' : 'Estrazione\u2026', async () => {
       const outs = []; let skippedAll = 0;
       const pad = (n, N) => String(n).padStart(String(N).length, '0');
       for (const [di, d] of docs.entries()) {
@@ -12761,9 +12834,9 @@ async function startToImages(stage, files) {
           });
           outs.push(...res);
         } else if (st.mode === 'images') {
-          Busy.set(di / docs.length, `${d.name}: ricerca delle immagini…`);
+          Busy.set(di / docs.length, `${d.name}: ricerca delle immagini\u2026`);
           let skipped = 0;
-          let imgs = await PdfExtract.images(d.bytes, { minSize: st.small ? 1 : 24, onProgress: f => Busy.set((di + f) / docs.length, `${d.name}: estrazione delle immagini…`) });
+          let imgs = await PdfExtract.images(d.bytes, { minSize: st.small ? 1 : 24, onProgress: f => Busy.set((di + f) / docs.length, `${d.name}: estrazione delle immagini\u2026`) });
           // fax e JBIG2: dalla pagina disegnata
           const unsup = imgs.filter(x => x.unsupported);
           imgs = imgs.filter(x => !x.unsupported);
@@ -12776,7 +12849,7 @@ async function startToImages(stage, files) {
           }
           skippedAll += skipped;
           imgs.sort((a, b) => a.pages[0] - b.pages[0]);
-          imgs.forEach((x, i) => outs.push({ name: `${d.base}-immagine-${pad(i + 1, imgs.length)}.${x.ext}`, bytes: x.bytes, type: x.type, info: `${x.w} × ${x.h} px · pag. ${x.pages.slice(0, 5).join(', ')}${x.pages.length > 5 ? '…' : ''}${x.orig ? ' · originale' : ''}` }));
+          imgs.forEach((x, i) => outs.push({ name: `${d.base}-immagine-${pad(i + 1, imgs.length)}.${x.ext}`, bytes: x.bytes, type: x.type, info: `${x.w} × ${x.h} px · pag. ${x.pages.slice(0, 5).join(', ')}${x.pages.length > 5 ? '\u2026' : ''}${x.orig ? ' · originale' : ''}` }));
         } else if (st.mode === 'text') {
           Busy.set(di / docs.length, d.name);
           const t = await PdfExtract.text(d.pdfjs, d.numPages);
@@ -12795,7 +12868,7 @@ async function startToImages(stage, files) {
 }
 
 /* =====================================================================
-   Impaginazione: tutte le pagine nello stesso formato (A4…), più pagine per foglio, libretto da
+   Impaginazione: tutte le pagine nello stesso formato (A4\u2026), più pagine per foglio, libretto da
    stampare fronte/retro, margini (per la rilegatura o rifilati), pagine doppie divise in due.
    Un solo «piano» (fogli con le pagine al loro posto) disegna l'anteprima e produce il PDF:
    quello che si vede è quello che si ottiene.
@@ -13127,17 +13200,17 @@ const Impose = (() => {
 })();
 
 async function startImpagina(stage, files, tool, opt = {}) {
-  const doc = await withBusy('Apertura del documento…', () => openPdf(files[0]));
+  const doc = await withBusy('Apertura del documento\u2026', () => openPdf(files[0]));
   if (!doc) throw (withBusy.last || new Error('Impossibile aprire il file'));
   const N = doc.numPages;
   // formati delle pagine come si vedono (rotazione e ritaglio compresi)
-  const sizes = await withBusy('Lettura delle pagine…', async () => {
+  const sizes = await withBusy('Lettura delle pagine\u2026', async () => {
     const lib = await PDFDocument.load(doc.bytes, { ignoreEncryption: true, updateMetadata: false });
     return lib.getPages().map(pg => { const cb = pg.getCropBox(), r = ((pg.getRotation().angle % 360) + 360) % 360; return r % 180 ? { w: cb.height, h: cb.width } : { w: cb.width, h: cb.height }; });
   });
   const mixed = new Set(sizes.map(s => Math.round(Math.min(s.w, s.h) / 6) + 'x' + Math.round(Math.max(s.w, s.h) / 6))).size > 1;
   const doubles = sizes.filter(s => s.w > s.h * 1.1).length;
-  // il modo più probabile, dal documento: formati misti → uniforma; scansioni a doppia pagina → dividi
+  // il modo più probabile, dal documento: formati misti \u2192 uniforma; scansioni a doppia pagina \u2192 dividi
   const st = {
     mode: mixed ? 'uniform' : doubles > N / 2 && N > 1 ? 'split' : 'nup',
     paper: 'a4', orient: 'auto', fit: 'fit', grow: true, keepSame: true, margin: 0,
@@ -13176,7 +13249,7 @@ async function startImpagina(stage, files, tool, opt = {}) {
         sec('Adattamento', seg([['fit', 'Adatta intera'], ['fill', 'Riempi il foglio']], st.fit, v => { st.fit = v; drawOpts(); refresh(); }),
           h('div', { class: 'muted small', style: { marginTop: '6px' } }, st.fit === 'fit' ? 'La pagina entra tutta, centrata: nulla viene tagliato.' : 'La pagina copre tutto il foglio: i bordi in eccesso vengono tagliati.')),
         sec('', st.fit === 'fit' ? checkbox('Ingrandisci le pagine più piccole', st.grow, v => { st.grow = v; refresh(); }, 'Spento: ricevute e foglietti restano a grandezza reale, al centro del foglio.') : null,
-          checkbox('Lascia com’è chi ha già il formato giusto', st.keepSame, v => { st.keepSame = v; refresh(); })),
+          checkbox('Lascia com\u2019è chi ha già il formato giusto', st.keepSame, v => { st.keepSame = v; refresh(); })),
         h('div', { class: 'row' }, numIn('margin', 0, 50)));
     } else if (st.mode === 'nup') {
       o.push(sec('Pagine per foglio', seg([[2, '2'], [4, '4'], [6, '6'], [9, '9']], st.n, v => { st.n = +v; refresh(); })),
@@ -13185,9 +13258,9 @@ async function startImpagina(stage, files, tool, opt = {}) {
         sec('', checkbox('Bordo intorno a ogni pagina', st.border, v => { st.border = v; refresh(); })),
         h('div', { class: 'row' }, numIn('margin', 0, 30)));
     } else if (st.mode === 'booklet') {
-      o.push(sec('Foglio di stampa', seg([['a4', 'A4 → libretto A5'], ['a3', 'A3 → libretto A4']], st.paper, v => { st.paper = v; refresh(); })),
+      o.push(sec('Foglio di stampa', seg([['a4', 'A4 \u2192 libretto A5'], ['a3', 'A3 \u2192 libretto A4']], st.paper, v => { st.paper = v; refresh(); })),
         sec('Rilegatura', seg([[0, 'Libretto unico'], [5, 'Fascicoli da 5'], [10, 'Fascicoli da 10']], st.sig, v => { st.sig = +v; refresh(); }),
-          h('div', { class: 'muted small', style: { marginTop: '6px' } }, 'Con molte pagine un libretto unico non si piega bene: meglio fascicoli da 5 o 10 fogli (20 o 40 pagine), da pinzare e unire uno dopo l’altro.')),
+          h('div', { class: 'muted small', style: { marginTop: '6px' } }, 'Con molte pagine un libretto unico non si piega bene: meglio fascicoli da 5 o 10 fogli (20 o 40 pagine), da pinzare e unire uno dopo l\u2019altro.')),
         sec('', checkbox('Pagine accostate alla piega', st.toFold, v => { st.toFold = v; refresh(); })),
         h('div', { class: 'row' }, numIn('margin', 0, 30), numIn('gutter', 0, 30)),
         h('div', { class: 'hint' }, 'Stampa fronte/retro capovolgendo sul ', h('b', {}, 'lato corto'), ', piega a metà e pinza al centro.'));
@@ -13205,7 +13278,7 @@ async function startImpagina(stage, files, tool, opt = {}) {
           st.pscale === 'custom' ? h('div', { class: 'row' }, numIn('pct', 5, 400, 1, '%')) : null,
           h('div', { class: 'muted small', style: { marginTop: '6px' } }, st.pscale === '100' ? 'Le misure sulla carta sono quelle della tavola: un righello sul foglio stampato dà la scala del disegno. Stampa «a grandezza reale» (100%, senza «adatta alla pagina»).' : st.pscale === 'fit1' ? 'Tutta la tavola su un solo foglio, ridotta: comoda da leggere, ma non più in scala.' : 'Per esempio 50%: una tavola A0 diventa un A2, su meno fogli.')),
         st.pscale !== 'fit1' ? h('div', { class: 'row' }, numIn('overlap', 0, 30), numIn('margin', 0, 20)) : null,
-        st.pscale !== 'fit1' ? sec('', checkbox('Crocini, linee di unione e nome di ogni foglio', st.marks, v => { st.marks = v; refresh(); }, 'Ogni foglio ha il suo nome (A1, A2, B1…): righe con le lettere, colonne con i numeri.')) : null);
+        st.pscale !== 'fit1' ? sec('', checkbox('Crocini, linee di unione e nome di ogni foglio', st.marks, v => { st.marks = v; refresh(); }, 'Ogni foglio ha il suo nome (A1, A2, B1\u2026): righe con le lettere, colonne con i numeri.')) : null);
     } else if (st.mode === 'split') {
       const cutIn = h('input', { type: 'range', min: 35, max: 65, value: Math.round(st.cut * 100), oninput: () => { st.cut = cutIn.value / 100; cv.textContent = cutIn.value + '%'; refresh(); } }), cv = h('b', {}, Math.round(st.cut * 100) + '%');
       o.push(sec('Pagine da dividere', seg([[false, `Solo le doppie (${doubles})`], [true, 'Tutte']], st.splitAll, v => { st.splitAll = v; drawOpts(); refresh(); })),
@@ -13237,7 +13310,7 @@ async function startImpagina(stage, files, tool, opt = {}) {
       grid.append(h('figure', { class: 'imp-sheet' + (sh.same ? ' same' : '') }, h('div', { class: 'imp-paper' }, c), h('figcaption', {}, h('b', {}, label), h('span', {}, `${fmtName} · ${sub}`))));
       return [c, sh, k * dpr];
     });
-    if (sheets.length > LIMIT) grid.append(h('div', { class: 'imp-more muted' }, `… e ${plural(sheets.length - LIMIT, 'altro foglio', 'altri fogli')}`));
+    if (sheets.length > LIMIT) grid.append(h('div', { class: 'imp-more muted' }, `\u2026 e ${plural(sheets.length - LIMIT, 'altro foglio', 'altri fogli')}`));
     for (const [c, sh, k] of cards) {
       const cx = c.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height);
       if (sh.fold) { cx.strokeStyle = '#c9ccd3'; cx.setLineDash([4, 4]); cx.beginPath(); cx.moveTo(c.width / 2, 0); cx.lineTo(c.width / 2, c.height); cx.stroke(); cx.setLineDash([]); }
@@ -13254,9 +13327,9 @@ async function startImpagina(stage, files, tool, opt = {}) {
   }
   async function ensureCrops() {
     if (crops || cropsBusy) return; cropsBusy = true;
-    summary.textContent = 'Ricerca dei margini bianchi…';
+    summary.textContent = 'Ricerca dei margini bianchi\u2026';
     const res = new Array(N); let done = 0;
-    await inParallel(Array.from({ length: N }, (_, i) => i), parallelSlots(N), async i => { res[i] = await Impose.contentBox(doc.pdfjs, i + 1).catch(() => null); if (++done % 5 === 0) summary.textContent = `Ricerca dei margini bianchi… ${done} di ${N}`; });
+    await inParallel(Array.from({ length: N }, (_, i) => i), parallelSlots(N), async i => { res[i] = await Impose.contentBox(doc.pdfjs, i + 1).catch(() => null); if (++done % 5 === 0) summary.textContent = `Ricerca dei margini bianchi\u2026 ${done} di ${N}`; });
     crops = res; cropsBusy = false; refresh();
   }
   /* ---------- le pagine da impaginare: si scelgono, si tolgono e si riordinano qui (come in Organizza) ---------- */
@@ -13270,11 +13343,11 @@ async function startImpagina(stage, files, tool, opt = {}) {
   const resetBtn = h('button', { class: 'btn sm ghost', onclick: () => { seq = Array.from({ length: N }, (_, i) => i); selP.clear(); drawPages(); refresh(); say('Pagine ripristinate'); } }, ic('reset', 15), 'Ripristina');
   const pagesBox = h('details', { class: 'imp-pbox', open: N > 1 && N <= 40 || null },
     h('summary', {}, h('b', {}, 'Pagine da impaginare'), pinfo),
-    h('div', { class: 'imp-pbar' }, h('span', { class: 'muted small' }, IS_TOUCH ? 'Tocca per selezionare, tieni premuto per spostare' : 'Clic per selezionare, trascina per cambiare l’ordine'), h('span', { class: 'grow' }), allBtn, delBtn, resetBtn),
+    h('div', { class: 'imp-pbar' }, h('span', { class: 'muted small' }, IS_TOUCH ? 'Tocca per selezionare, tieni premuto per spostare' : 'Clic per selezionare, trascina per cambiare l\u2019ordine'), h('span', { class: 'grow' }), allBtn, delBtn, resetBtn),
     pgrid,
     TOOLS.ordina ? h('div', { class: 'muted small imp-more' }, 'Ti servono pagine bianche, duplicati o estrazioni? ',
       h('button', { class: 'linkish', onclick: async () => {
-        const f = await withBusy('Preparazione delle pagine…', async () => new File([await pdfWithPages(doc.bytes, seq)], doc.base + '.pdf', { type: 'application/pdf' }));
+        const f = await withBusy('Preparazione delle pagine\u2026', async () => new File([await pdfWithPages(doc.bytes, seq)], doc.base + '.pdf', { type: 'application/pdf' }));
         if (f) handoff('ordina', f);
       } }, 'Apri queste pagine in Organizza')) : null);
   function card(p) {
@@ -13309,8 +13382,8 @@ async function startImpagina(stage, files, tool, opt = {}) {
   drawPages();
 
   function refresh() {
-    if (st.mode === 'margins' && st.mType === 'crop' && !crops) { ensureCrops(); grid.replaceChildren(h('div', { class: 'muted', style: { padding: '24px' } }, 'Ricerca dei margini bianchi…')); return; }
-    // si impagina la sequenza scelta: indici della sequenza → pagine originali
+    if (st.mode === 'margins' && st.mType === 'crop' && !crops) { ensureCrops(); grid.replaceChildren(h('div', { class: 'muted', style: { padding: '24px' } }, 'Ricerca dei margini bianchi\u2026')); return; }
+    // si impagina la sequenza scelta: indici della sequenza \u2192 pagine originali
     let sheets; try { sheets = Impose.plan(seq.map(i => sizes[i]), st, crops ? seq.map(i => crops[i]) : null); sheets.forEach(sh => sh.items.forEach(it => { it.p = seq[it.p]; })); } catch (e) { console.error(e); summary.textContent = e.message; return; }
     current = sheets;
     const changed = sheets.filter(s => !s.same).length;
@@ -13333,8 +13406,8 @@ async function startImpagina(stage, files, tool, opt = {}) {
   async function run() {
     const sheets = current;
     if (!sheets.length) return toast('Niente da impaginare', 'error');
-    if (sheets.every(s => s.same) && isIdentity()) return toast('Le pagine sono già a posto: non c’è nulla da cambiare.');
-    await withBusy('Impaginazione…', async () => {
+    if (sheets.every(s => s.same) && isIdentity()) return toast('Le pagine sono già a posto: non c\u2019è nulla da cambiare.');
+    await withBusy('Impaginazione\u2026', async () => {
       // pagine tolte o riordinate: prima un PDF con le pagine scelte, nell'ordine scelto (segnalibri e moduli restano)
       let src = doc.bytes, plan = sheets;
       if (!isIdentity()) {
@@ -13355,7 +13428,7 @@ async function startImpagina(stage, files, tool, opt = {}) {
    Proteggi e sblocca. PdfCrypt legge e scrive la cifratura standard dei PDF:
    - apertura: RC4 40/128 bit (R2-R3), AES 128 (R4), AES 256 (R5-R6), anche con gli oggetti in «object stream»;
    - protezione: AES 256 bit (R6, la più robusta prevista dal formato), password di apertura e limiti
-     (stampa, copia, modifica…).
+     (stampa, copia, modifica\u2026).
    Usato anche da openPdf: un PDF protetto si apre in ogni strumento chiedendo la password.
    ===================================================================== */
 const PdfCrypt = (() => {
@@ -13657,7 +13730,7 @@ async function unlockForOpen(bytes, name) {
 
 /* ----------------------------- lo strumento ------------------------------ */
 async function startProteggi(stage, files) {
-  const items = await withBusy('Lettura dei file…', async () => {
+  const items = await withBusy('Lettura dei file\u2026', async () => {
     const out = [];
     for (const [i, f] of files.entries()) {
       Busy.set(i / files.length, f.name);
@@ -13707,7 +13780,7 @@ async function startProteggi(stage, files) {
     const cur = pwField('cur', 'Password attuale', { auto: 'current-password' });
     if (st.mode === 'unlock') {
       if (needPw) o.push(sec('Password per aprire', cur.el, h('div', { class: 'muted small', style: { marginTop: '6px' } }, items.length > 1 ? 'La stessa per tutti i file che la chiedono.' : 'Quella con cui il file è stato protetto.')));
-      o.push(h('div', { class: 'hint' }, needPw ? 'Il file sbloccato si apre senza password e senza limiti di stampa o copia.' : 'Il file si apre già senza password ma ha dei limiti (stampa, copia, modifica…): lo sblocco li toglie.'),
+      o.push(h('div', { class: 'hint' }, needPw ? 'Il file sbloccato si apre senza password e senza limiti di stampa o copia.' : 'Il file si apre già senza password ma ha dei limiti (stampa, copia, modifica\u2026): lo sblocco li toglie.'),
         h('div', { class: 'muted small' }, 'Usa lo sblocco solo per documenti tuoi o che hai il diritto di modificare.'));
     } else {
       if (needPw) o.push(sec('Password attuale', cur.el));
@@ -13734,7 +13807,7 @@ async function startProteggi(stage, files) {
 
   async function run() {
     if (st.mode === 'protect' && st.pw && st.pw !== st.pw2) return toast('Le due password non coincidono', 'error');
-    await withBusy(st.mode === 'unlock' ? 'Sblocco…' : 'Protezione…', async () => {
+    await withBusy(st.mode === 'unlock' ? 'Sblocco\u2026' : 'Protezione\u2026', async () => {
       const outs = [], errors = [];
       for (const [i, x] of items.entries()) {
         Busy.check(); rows[i].start(); Busy.set(i / items.length, x.name);
@@ -13772,7 +13845,7 @@ async function startProteggi(stage, files) {
    ===================================================================== */
 const Pipeline = (() => {
   const { PDFName, PDFRawStream, PDFNumber, PDFDict, PDFRef, PDFArray, decodePDFRawStream } = PDFLib;
-  /* —— immagini più leggere, testo intatto (a differenza della compressione che trasforma le pagine in foto) —— */
+  /* \u2014\u2014 immagini più leggere, testo intatto (a differenza della compressione che trasforma le pagine in foto) \u2014\u2014 */
   async function shrinkImages(bytes, { maxSide = 1700, q = 0.75 } = {}, onProgress = () => {}) {
     const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
     const ctx = pdf.context;
@@ -13883,7 +13956,7 @@ const Pipeline = (() => {
   return { shrinkImages, compressTo, clean, flatten, orient, a4, ocr, pdfa, LEVELS };
 })();
 
-/* —— i passaggi possibili, con il loro perché —— */
+/* \u2014\u2014 i passaggi possibili, con il loro perché \u2014\u2014 */
 const STEPS = {
   orient: { label: 'Raddrizza le pagine', icon: 'rotate' },
   a4: { label: 'Tutte le pagine in A4', icon: 'layout' },
@@ -13912,7 +13985,7 @@ function planFor(goal, f, opt = {}) {
   const rot = (f.upside?.length || 0) + (f.sideways?.length || 0);
   const formats = Object.keys(f.formats || {}).length;
   const warn = [];
-  if (f.signed) warn.push('Il file è firmato digitalmente: qualsiasi modifica rende la firma non più valida. Per inviarlo così com’è non serve fare nulla (al massimo rinominarlo).');
+  if (f.signed) warn.push('Il file è firmato digitalmente: qualsiasi modifica rende la firma non più valida. Per inviarlo così com\u2019è non serve fare nulla (al massimo rinominarlo).');
   if (f.needsPassword) warn.push('Il file è protetto da password: ti verrà chiesta per aprirlo.');
   const orientWhy = rot ? `${plural(rot, 'pagina è storta', 'pagine sono storte')} (capovolte o di lato).` : scanned !== 'none' ? 'Le scansioni a volte sono capovolte: controllo pagina per pagina.' : null;
   const ocrWhy = scanned === 'all' ? 'È una scansione: senza testo non si può cercare né copiare.' : scanned === 'some' ? `${plural(f.scanned.length, 'pagina è una scansione', 'pagine sono scansioni')} senza testo.` : null;
@@ -13934,7 +14007,7 @@ function planFor(goal, f, opt = {}) {
       break;
     case 'mail':
       if (orientWhy) add('orient', orientWhy);
-      add('compress', mb > 3 ? `Pesa ${fmtSize(f.size)}: per l’email conviene stare sotto qualche MB.` : 'Lo ottimizzo senza toccare la qualità.', true, { target: 4 * 1048576 });
+      add('compress', mb > 3 ? `Pesa ${fmtSize(f.size)}: per l\u2019email conviene stare sotto qualche MB.` : 'Lo ottimizzo senza toccare la qualità.', true, { target: 4 * 1048576 });
       add('name', 'Un nome chiaro per chi lo riceve.', false);
       break;
     case 'stampa':
@@ -13952,8 +14025,8 @@ function planFor(goal, f, opt = {}) {
     case 'riservato':
       if (f.fields) add('flatten', 'Chi lo riceve non può cambiare i valori compilati.');
       add('clean', 'Via autore, programmi usati e altri dati nascosti nel file.');
-      if (mb > 10) add('compress', `Pesa ${fmtSize(f.size)}: lo alleggerisco per l’invio.`, true, { target: 10 * 1048576 });
-      add('protect', 'Cifratura AES 256: senza password non si apre. La password mandala per un’altra strada (SMS, telefono).');
+      if (mb > 10) add('compress', `Pesa ${fmtSize(f.size)}: lo alleggerisco per l\u2019invio.`, true, { target: 10 * 1048576 });
+      add('protect', 'Cifratura AES 256: senza password non si apre. La password mandala per un\u2019altra strada (SMS, telefono).');
       break;
     case 'leggibile':
       if (orientWhy) add('orient', orientWhy);
@@ -13985,7 +14058,7 @@ const Recipes = (() => {
     Ricette.save({ id: old?.id, name: r.name, steps: r.steps.map(id => ({ id, p: id === 'compress' ? { mode: 'target', mb: r.mb || 5 } : id === 'name' ? { pattern: '{contenuto}' } : { ...(Ricette.STEPS[id]?.def || {}) } })) });
   };
   const remove = id => typeof Ricette === 'undefined' ? store(K, load(K, []).filter(r => r.id !== id)) : Ricette.remove(id);
-  // strumenti del documento attivo → passaggi automatici
+  // strumenti del documento attivo \u2192 passaggi automatici
   const MAP = { ruota: 'orient', ocr: 'ocr', pdfa: 'pdfa', comprimi: 'compress', impagina: 'a4' };
   let lastChain = '';
   function watch() {
@@ -14023,7 +14096,7 @@ function askText(title, value = '') {
 }
 async function startAssistente(stage, files) {
   const docs = [], errs = [];
-  await withBusy('Lettura dei file…', async () => {
+  await withBusy('Lettura dei file\u2026', async () => {
     // (come negli altri strumenti: file vuoto o rotto detto subito, password chiesta, PDF estratto dai .p7m)
     for (const [i, f] of files.entries()) { Busy.set(i / files.length, f.name); try { const d = await openPdf(f); docs.push({ name: d.name || f.name, base: stripExt(d.name || f.name), bytes: d.bytes }); try { d.pdfjs?.destroy?.(); } catch { } } catch (e) { if (e?.cancel) throw e; errs.push(e); toast(`${f.name}: ${Errors.explain(e, { file: f }).text}`, 'error'); } }
   });
@@ -14033,7 +14106,7 @@ async function startAssistente(stage, files) {
   docs.forEach((d, i) => DocInsight.of(d.bytes, f => { st.facts[i] = f; if (f.done) draw(); }));
   const box = h('div', { class: 'as' });
   const factLine = (d, f) => h('div', { class: 'as-file' }, ic('file', 18), h('b', {}, d.name),
-    h('span', { class: 'muted small' }, f ? [f.pages ? plural(f.pages, 'pagina', 'pagine') : null, fmtSize(d.bytes.length), DocInsight.summary(f) || null, f.signed ? 'firmato' : null, f.done ? null : 'analisi…'].filter(Boolean).join(' · ') : 'analisi…'));
+    h('span', { class: 'muted small' }, f ? [f.pages ? plural(f.pages, 'pagina', 'pagine') : null, fmtSize(d.bytes.length), DocInsight.summary(f) || null, f.signed ? 'firmato' : null, f.done ? null : 'analisi\u2026'].filter(Boolean).join(' · ') : 'analisi\u2026'));
   function draw() {
     const f0 = st.facts[0];
     const ready = st.facts.every(f => f?.done);
@@ -14041,14 +14114,14 @@ async function startAssistente(stage, files) {
     const goalCards = h('div', { class: 'as-goals' }, GOALS.map(g => h('button', { class: 'as-goal' + (st.goal === g.id && !st.recipe ? ' on' : ''), dataset: { goal: g.id }, onclick: () => { st.goal = g.id; st.recipe = null; st.steps = null; draw(); } },
       h('span', { class: 'as-gi' }, ic(g.icon, 20)), h('b', {}, g.title), h('span', { class: 'muted small' }, g.sub))));
     const ask = h('input', { class: 'input as-ask', placeholder: 'Oppure scrivilo: «lo devo caricare sul portale del concorso, massimo 2 MB»', onkeydown: e => { if (e.key === 'Enter') understand(); } });
-    function understand() { const r = parseGoal(ask.value); if (!r.goal) return toast('Non ho capito l’obiettivo: scegline uno qui sopra', 'error'); st.goal = r.goal; st.recipe = null; if (r.mb) st.mb = r.mb; st.steps = null; draw(); }
+    function understand() { const r = parseGoal(ask.value); if (!r.goal) return toast('Non ho capito l\u2019obiettivo: scegline uno qui sopra', 'error'); st.goal = r.goal; st.recipe = null; if (r.mb) st.mb = r.mb; st.steps = null; draw(); }
     const recipes = Recipes.list();
     const recBox = recipes.length || sug ? h('div', { class: 'as-recipes' },
-      h('div', { class: 'sec-t' }, 'Le tue ricette', h('button', { class: 'linkish small', style: { marginLeft: '10px', textTransform: 'none', letterSpacing: 0 }, onclick: () => nav('ricette') }, 'Tutte le ricette e l’editor')),
+      h('div', { class: 'sec-t' }, 'Le tue ricette', h('button', { class: 'linkish small', style: { marginLeft: '10px', textTransform: 'none', letterSpacing: 0 }, onclick: () => nav('ricette') }, 'Tutte le ricette e l\u2019editor')),
       h('div', { class: 'chips' }, recipes.map(r => h('span', { class: 'chip as-rc' + (st.recipe?.id === r.id ? ' on' : '') },
         h('button', { class: 'linkish', onclick: () => { st.recipe = r; st.goal = null; st.mb = r.mb || st.mb; st.steps = r.steps.map(id => ({ id, on: true, why: 'Dalla tua ricetta «' + r.name + '».', target: id === 'compress' ? (r.mb || 5) * 1048576 : undefined })); draw(); } }, r.name),
         h('button', { class: 'as-x', title: 'Elimina la ricetta', onclick: () => { Recipes.remove(r.id); draw(); } }, '×')))),
-      sug ? h('div', { class: 'hint as-sug' }, `Lo fai spesso: ${sug.steps.map(s => STEPS[s].label.toLowerCase()).join(' → ')} (${sug.n} volte). `,
+      sug ? h('div', { class: 'hint as-sug' }, `Lo fai spesso: ${sug.steps.map(s => STEPS[s].label.toLowerCase()).join(' \u2192 ')} (${sug.n} volte). `,
         h('button', { class: 'linkish', onclick: async () => { const name = await askText('Nome della ricetta', sug.steps.map(s => STEPS[s].label).join(' + ')); if (name) { Recipes.save({ name, steps: sug.steps }); Recipes.dismiss(sug.steps.join('>')); draw(); } } }, 'Salvalo come ricetta'), ' · ',
         h('button', { class: 'linkish', onclick: () => { Recipes.dismiss(sug.steps.join('>')); draw(); } }, 'No, grazie')) : null) : null;
     let planEl = null;
@@ -14066,7 +14139,7 @@ async function startAssistente(stage, files) {
         h('div', { class: 'row' }, h('input', { class: 'input as-pw', value: st.pw, placeholder: 'Scegli una password', oninput: e => { st.pw = e.target.value; } }),
           h('button', { class: 'btn sm', onclick: () => { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'; st.pw = Array.from(crypto.getRandomValues(new Uint32Array(14)), v => A[v % A.length]).join(''); draw(); } }, ic('wand', 15), 'Genera'))));
       planEl = h('div', { class: 'as-plan' },
-        h('div', { class: 'sec-t' }, docs.length > 1 ? `Il piano (per «${docs[0].name}»; per gli altri file si adatta a com’è fatto ciascuno)` : 'Il piano'),
+        h('div', { class: 'sec-t' }, docs.length > 1 ? `Il piano (per «${docs[0].name}»; per gli altri file si adatta a com\u2019è fatto ciascuno)` : 'Il piano'),
         ...(st.warn || []).map(w => h('div', { class: 'hint warn' }, w)),
         st.steps.length ? h('div', { class: 'as-steps' }, stepRows) : h('div', { class: 'hint ok' }, 'Il file è già a posto per questo uso: non serve fare nulla.'),
         ...params);
@@ -14076,7 +14149,7 @@ async function startAssistente(stage, files) {
       h('h2', { class: 'as-q' }, 'A cosa ti serve?'), goalCards, h('div', { class: 'row as-askrow' }, ask, h('button', { class: 'btn', onclick: understand }, 'Ok')),
       recBox, planEl);
     runBtn.disabled = !st.steps || !st.steps.some(s => s.on) || !ready;
-    runBtn.lastChild.textContent = !ready ? 'Analisi dei file…' : st.steps?.some(s => s.on) ? `Fai ${plural(st.steps.filter(s => s.on).length, 'il passaggio', 'i passaggi')}` : 'Scegli cosa ti serve';
+    runBtn.lastChild.textContent = !ready ? 'Analisi dei file\u2026' : st.steps?.some(s => s.on) ? `Fai ${plural(st.steps.filter(s => s.on).length, 'il passaggio', 'i passaggi')}` : 'Scegli cosa ti serve';
   }
   const runBtn = h('button', { class: 'btn primary big btn-run', onclick: run }, ic('wand', 18), h('span', {}, ''));
   stage.replaceChildren(h('div', { class: 'as-wrap' }, box, h('div', { class: 'as-foot' }, runBtn)));
@@ -14085,7 +14158,7 @@ async function startAssistente(stage, files) {
   async function run() {
     const chosen = st.steps.filter(s => s.on).map(s => s.id);
     if (chosen.includes('protect') && !st.pw) return toast('Scegli la password per proteggere il file', 'error');
-    await withBusy('Al lavoro…', async () => {
+    await withBusy('Al lavoro\u2026', async () => {
       const outs = [], notes = [];
       let worker = null;
       const getWorker = async () => worker ||= await makeOcrWorker(new Set(['ita']), 300);
@@ -14119,13 +14192,13 @@ async function startAssistente(stage, files) {
       // la combinazione appena usata: salvabile come ricetta
       const saveBox = st.recipe ? null : h('div', { class: 'as-save' }, h('span', { class: 'muted small' }, 'Ti capiterà di nuovo?'),
         h('button', { class: 'btn sm', onclick: async e => { const box2 = e.currentTarget.closest('.as-save'); const g = GOALS.find(x => x.id === st.goal); const name = await askText('Nome della ricetta', g ? g.title : 'La mia ricetta'); if (!name) return; Recipes.save({ name, steps: chosen, mb: st.mb }); box2.replaceChildren(h('span', { class: 'small' }, `Ricetta «${name}» salvata: la ritrovi in «Fai tutto tu».`)); } }, ic('plus', 15), 'Salva come ricetta'));
-      showResult(outs, { title: outs.length > 1 ? 'File pronti' : 'File pronto', zipName: 'pronti.zip', note: [st.pw && chosen.includes('protect') ? `Password: ${st.pw} (inviala per un’altra strada).` : '', ...notes].filter(Boolean).join(' ') || undefined, extra: saveBox });
+      showResult(outs, { title: outs.length > 1 ? 'File pronti' : 'File pronto', zipName: 'pronti.zip', note: [st.pw && chosen.includes('protect') ? `Password: ${st.pw} (inviala per un\u2019altra strada).` : '', ...notes].filter(Boolean).join(' ') || undefined, extra: saveBox });
     }, { job: true });
   }
 }
 
 /* =====================================================================
-   Oscura PDF — aree disegnate a mano, ricerca di parole e riconoscimento
+   Oscura PDF \u2014 aree disegnate a mano, ricerca di parole e riconoscimento
    automatico dei dati personali (PiiKit), anche nelle scansioni (OCR).
    Il colore di ogni area si adatta allo sfondo: barra nera sul chiaro,
    bianca sullo scuro (oppure come lo sfondo, o sempre nera/bianca); si può
@@ -14138,7 +14211,7 @@ const RedactKit = (() => {
     let o = '';
     for (const c of s) {
       let d = c.normalize('NFD')[0] || c;
-      if (/[‘’`´ʼ]/.test(d)) d = "'"; else if (/[‐‑‒–—―−]/.test(d)) d = '-'; else if (/[  -​]/.test(d)) d = ' ';
+      if (/[\u2018\u2019`´\u02bc]/.test(d)) d = "'"; else if (/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/.test(d)) d = '-'; else if (/[ \u2000-\u200b]/.test(d)) d = ' ';
       o += d.length === 1 ? d : c;
     }
     return o;
@@ -14282,7 +14355,7 @@ const RedactKit = (() => {
   }
   /* righe di caratteri in una foto (targhe, cartelli, didascalie): segni d'inchiostro di altezza simile, allineati e
      vicini, su uno sfondo uniforme. Il rumore e le forme di una foto non hanno né l'allineamento né lo sfondo uniforme.
-     img: { w, h, a (RGBA), s (px per pt) } → zone in pt, le più probabili prima (al più 12) */
+     img: { w, h, a (RGBA), s (px per pt) } \u2192 zone in pt, le più probabili prima (al più 12) */
   function textZones(img) {
     const median = v => { if (!v.length) return 0; const s2 = v.slice().sort((p, q) => p - q); return s2[s2.length >> 1]; };
     const { w: W, h: H, a } = img, n = W * H, g = new Uint8Array(n);
@@ -14377,7 +14450,7 @@ async function startRedact(stage, files, _tool, auto = null) {
   const RK = RedactKit;
   // auto: il motore lavora senza interfaccia (per «più file») e restituisce il risultato invece di mostrarlo
   const busy = (t, fn, o) => auto ? fn() : withBusy(t, fn, o);
-  const doc = await busy('Apertura del documento…', () => openPdf(files[0]));
+  const doc = await busy('Apertura del documento\u2026', () => openPdf(files[0]));
   if (!doc) throw (withBusy.last || new Error('Impossibile aprire il file'));
   const N = doc.numPages;
   const origBytes = doc.bytes;   // (l'impronta del rapporto è quella del file ricevuto)
@@ -14385,12 +14458,12 @@ async function startRedact(stage, files, _tool, auto = null) {
   const st = { color: 'match', dpi: 200, preview: false, meta: true, regex: false, cs: false, pan: false, pick: 'words', verify: true, model: 'gdpr', report: true, clean: true, ...(auto?.st || {}) };
   const keyOf = t => RK.normChars(String(t || '')).toUpperCase().replace(/[^A-Z0-9]/g, '');
   let quietAdd = false;
-  /* —— fuori dal testo delle pagine: campi compilati, commenti, collegamenti, allegati, segnalibri, metadati ——
+  /* \u2014\u2014 fuori dal testo delle pagine: campi compilati, commenti, collegamenti, allegati, segnalibri, metadati \u2014\u2014
      I dati personali stanno spesso anche lì (una nota con l'IBAN, il codice fiscale in un campo, l'e-mail in un
      collegamento). I campi compilati diventano parte della pagina: si trovano e si oscurano come il resto del testo.
      Commenti e collegamenti con dati personali si tolgono dal file prodotto (opzione, attiva di base); allegati e
      segnalibri non vengono copiati; i metadati seguono la loro opzione. */
-  const outside = await busy('Controllo di commenti, campi e allegati…', async () => {
+  const outside = await busy('Controllo di commenti, campi e allegati\u2026', async () => {
     const o = { comments: [], links: [], fields: 0, attach: [], outline: [], meta: '', flattened: false, flatFail: false, hits: [] };
     for (let p = 1; p <= N; p++) {
       let anns = []; try { anns = await (await doc.pdfjs.getPage(p)).getAnnotations(); } catch { }
@@ -14428,21 +14501,22 @@ async function startRedact(stage, files, _tool, auto = null) {
   const pickOn = cat => { const m = MODELS[st.model]?.cats; return m ? m.includes(cat) : !PiiKit.SOFT.has(cat); };
   const idxCache = new Map();
   let results = [], pii = null;   // risultati della ricerca e dei dati sensibili (da confermare)
-  const hist = [];
-  const save = () => { hist.push(JSON.stringify(boxes)); if (hist.length > 60) hist.shift(); };
+  // annulla, ripeti e ripristina tutto: il meccanismo comune a tutti gli strumenti che modificano (Ctrl+Z, Ctrl+Y)
+  const storia = storiaModifiche({ get: () => boxes, set: v => { v.forEach((b, i) => { boxes[i] = b; }); changed(); }, cosa: 'documento', tasti: !auto });
+  const save = () => storia.prima();
   // un motore OCR per gruppo di pagine scansionate (creati solo se servono)
   const workers = [];
   onLeave(() => { workers.forEach(w => w && w.then(x => x.terminate()).catch(() => {})); });
   const getWorker = k => {
     if (!workers[k]) {
-      Busy.set(null, 'Pagina scansionata: avvio del riconoscimento del testo…');
+      Busy.set(null, 'Pagina scansionata: avvio del riconoscimento del testo\u2026');
       workers[k] = makeOcrWorker(new Set(['ita']), 300).then(w => { w._box.log = m => { if (OCR_STATUS[m.status]) Busy.set(null, OCR_STATUS[m.status]); }; return w; });
       workers[k].catch(() => { workers[k] = null; });
     }
     return workers[k];
   };
 
-  /* —— testo delle pagine (OCR per le scansioni) —— */
+  /* \u2014\u2014 testo delle pagine (OCR per le scansioni) \u2014\u2014 */
   function indexOf(p, label, slot = 0) {
     if (!idxCache.has(p)) {
       const job = (async () => {
@@ -14465,7 +14539,7 @@ async function startRedact(stage, files, _tool, auto = null) {
           }
           if ((few || inv || mixed) && typeof Tesseract !== 'undefined') {
             const w = { then: (res, rej) => getWorker(slot).then(res, rej) };   // avviato solo se la pagina non è già stata letta
-            Busy.set(null, `${label || 'Pagina'} ${p} di ${N}: lettura della scansione (OCR)…`);
+            Busy.set(null, `${label || 'Pagina'} ${p} di ${N}: lettura della scansione (OCR)\u2026`);
             if (mixed) { const pg = await doc.pdfjs.getPage(p), had = PageText.boxes(await pg.getTextContent(), pg.getViewport({ scale: 1 })); idx = RK.mergeIdx(idx, await RK.ocrIndex(w, doc.pdfjs, p, { skip: had })); }
             else idx = await RK.ocrIndex(w, doc.pdfjs, p);
           }
@@ -14499,7 +14573,7 @@ async function startRedact(stage, files, _tool, auto = null) {
       return idx;
     });
   }
-  /* —— sfondo sotto un'area (per il colore automatico) —— */
+  /* \u2014\u2014 sfondo sotto un'area (per il colore automatico) \u2014\u2014 */
   const imgCache = new Map();
   async function pageImg(p) {
     if (imgCache.has(p)) return imgCache.get(p);
@@ -14553,29 +14627,21 @@ async function startRedact(stage, files, _tool, auto = null) {
     return n;
   }
 
-  /* —— vista —— */
+  /* \u2014\u2014 vista \u2014\u2014 */
   const previewBtn = toolBtn('eye', 'Anteprima finale', 'Mostra come apparirà il documento', () => { st.preview = !st.preview; previewBtn.classList.toggle('on', st.preview); viewer.refresh(); });
-  const undoBtn = toolBtn('undo', 'Annulla', 'Annulla (Ctrl+Z)', undo);
   // al telefono l'elenco dei dati trovati è sotto la pagina: in cima, il conto e la scorciatoia per arrivarci
   const piiJump = h('button', { class: 'btn sm pii-jump', hidden: true, onclick: () => {
     piiBox.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
     const t = piiBox.querySelector('.pii-title'); t?.focus({ preventScroll: true });
   } });
   const clearPageBtn = toolBtn('trash', 'Svuota pagina', 'Rimuovi le aree di questa pagina', () => { if (!boxes[viewer.page - 1].length) return; save(); boxes[viewer.page - 1] = []; changed(); });
-  // tutte le aree di tutte le pagine via: il documento com'era all'apertura (si annulla con Ctrl+Z)
-  const resetAllBtn = toolBtn('reset', 'Ripristina', 'Ripristina tutto: togli le aree da oscurare di tutte le pagine', async () => {
-    if (!boxes.some(b => b.length)) return toast('Non ci sono aree da togliere');
-    if (typeof confirmDlg === 'undefined') Later.all();
-    if (!(await confirmDlg('Tolgo tutte le aree da oscurare, in tutte le pagine? Puoi rimetterle con Annulla (Ctrl+Z).', { ok: 'Ripristina tutto' }))) return;
-    save(); boxes.forEach((_, i) => { boxes[i] = []; }); changed(); toast('Tutte le aree tolte: il documento è com’era all’apertura');
-  });
   const panBtn = toolBtn('hand', 'Scorri', 'Tocca per scorrere la pagina invece di disegnare', () => { st.pan = !st.pan; panBtn.classList.toggle('on', st.pan); viewer.overlay.dataset.pan = st.pan ? '1' : ''; });
   // scelta veloce: clic su una parola (o trascinando da una parola all'altra, doppio clic per la riga intera);
   // nello spazio vuoto si disegna un'area libera
   const pickSeg = seg([['words', 'Parole'], ['area', 'Area libera']], st.pick, v => { st.pick = v; viewer.refresh(); });
   pickSeg.classList.add('rpick'); pickSeg.title = 'Parole: clic sulle parole da oscurare · Area libera: trascina un rettangolo';
   const viewer = auto ? { refresh() { }, go() { }, render() { }, destroy() { }, page: 1, cur: 1, overlay: h('div'), el: h('div'), thumbBtns: [], toPt: () => ({ x: 0, y: 0 }) } : new Viewer(doc, {
-    tools: [pickSeg, IS_TOUCH ? panBtn : null, previewBtn, undoBtn, clearPageBtn, resetAllBtn].filter(Boolean),
+    tools: (() => { const [u, r, t] = storia.bottoni(); return [pickSeg, IS_TOUCH ? panBtn : null, previewBtn, u, IS_TOUCH ? null : r, clearPageBtn, t].filter(Boolean); })(),
     onOverlay: draw, fit: IS_TOUCH ? 'page' : 'width',
   });
   const wordsBy = new Map(); // pagina -> { idx, words }
@@ -14610,7 +14676,7 @@ async function startRedact(stage, files, _tool, auto = null) {
         const fill = RK.fillOf(b, st.color);
         return h('div', { class: 'rbox' + (st.preview ? ' final' : '') + (fill === '#FFFFFF' ? ' light' : ''), dataset: { id: b.id }, style: { left: b.x * z + 'px', top: b.y * z + 'px', width: b.w * z + 'px', height: b.h * z + 'px', '--rc': fill } },
           h('button', { class: 'rx', title: 'Rimuovi', 'data-rm': b.id }, ic('x', 12, 3)),
-          h('button', { class: 'rcol', title: `Colore: ${COLOR_LBL[b.color] || 'automatico'} (tocca per cambiare)`, 'aria-label': 'Cambia il colore di quest’area', 'data-col': b.id, style: { '--rc': fill } }));
+          h('button', { class: 'rcol', title: `Colore: ${COLOR_LBL[b.color] || 'automatico'} (tocca per cambiare)`, 'aria-label': 'Cambia il colore di quest\u2019area', 'data-col': b.id, style: { '--rc': fill } }));
       }));
   }
   const ov = viewer.overlay;
@@ -14638,7 +14704,7 @@ async function startRedact(stage, files, _tool, auto = null) {
         save(); await addBoxes(viewer.page, joinBoxes(W.words.slice(i0, i1 + 1).flatMap(w => w.boxes.map((q, j) => ({ ...q, t: j ? '' : w.t }))))); changed();
         // la stessa parola (o frase) altrove nel documento: un clic per oscurarla ovunque
         const phrase = W.words.slice(i0, i1 + 1).map(w => w.t).join(' ').replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
-        if (phrase.length >= 3 && typeof toastActions === 'function') toastActions(`Oscurare «${phrase.length > 28 ? phrase.slice(0, 28) + '…' : phrase}» anche dove compare nel resto del documento?`, [['Sì, ovunque', async () => { qIn.value = phrase; await search(); if (results.some(r => r.on)) await addResults(); }]]);
+        if (phrase.length >= 3 && typeof toastActions === 'function') toastActions(`Oscurare «${phrase.length > 28 ? phrase.slice(0, 28) + '\u2026' : phrase}» anche dove compare nel resto del documento?`, [['Sì, ovunque', async () => { qIn.value = phrase; await search(); if (results.some(r => r.on)) await addResults(); }]]);
       };
       ov.addEventListener('pointermove', mv); ov.addEventListener('pointerup', up); ov.addEventListener('pointercancel', up);
       return;
@@ -14666,12 +14732,10 @@ async function startRedact(stage, files, _tool, auto = null) {
     save(); await addBoxes(viewer.page, joinBoxes(W.words.filter(w => w.line === w0.line).flatMap(w => w.boxes.map((q, j) => ({ ...q, t: j ? '' : w.t }))))); changed();
   });
   // i passi che non avevano cambiato nulla si saltano: Ctrl+Z annulla sempre qualcosa di visibile
-  function undo() { const c = JSON.stringify(boxes); while (hist.length && hist[hist.length - 1] === c) hist.pop(); if (!hist.length) return; const prev = JSON.parse(hist.pop()); prev.forEach((b, i) => boxes[i] = b); changed(); }
-  const keyh = e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName)) { e.preventDefault(); undo(); } };
-  if (!auto) { document.addEventListener('keydown', keyh); onLeave(() => { document.removeEventListener('keydown', keyh); viewer.destroy(); }); }
+  if (!auto) onLeave(() => viewer.destroy());
 
   const countEl = h('div', { class: 'hint' });
-  const runBtn = h('button', { class: 'btn primary big btn-run', onclick: run }, ic('redact', 18), 'Applica l’oscuramento');
+  const runBtn = h('button', { class: 'btn primary big btn-run', onclick: run }, ic('redact', 18), 'Applica l\u2019oscuramento');
   // il pulsante principale vale anche per i dati trovati e non ancora aggiunti: li oscura e salva in un passo
   const pendingN = () => (pii ? pii.items.filter(i => i.on).length : 0) + results.filter(r => r.on).length;
   function updRun(tot = boxes.reduce((s, b) => s + b.length, 0)) {
@@ -14679,7 +14743,7 @@ async function startRedact(stage, files, _tool, auto = null) {
     runBtn.disabled = false;
     // finché non c'è nulla da oscurare, il pulsante principale cerca i dati sensibili (sul telefono il pannello è sotto)
     const cleanOnly = !tot && !pend && pii && st.clean && outside.hits.length;
-    runBtn.replaceChildren(ic(tot || pend || cleanOnly ? 'redact' : 'search', 18), pend ? `Oscura ${plural(pend, 'dato selezionato', 'dati selezionati')}${tot ? ' e le aree' : ''}` : tot ? 'Applica l’oscuramento' : cleanOnly ? 'Togli i dati da commenti e collegamenti' : 'Trova i dati sensibili');
+    runBtn.replaceChildren(ic(tot || pend || cleanOnly ? 'redact' : 'search', 18), pend ? `Oscura ${plural(pend, 'dato selezionato', 'dati selezionati')}${tot ? ' e le aree' : ''}` : tot ? 'Applica l\u2019oscuramento' : cleanOnly ? 'Togli i dati da commenti e collegamenti' : 'Trova i dati sensibili');
     // la stessa azione non compare due volte: finché il pulsante principale cerca, quello del pannello resta nascosto
     const fb = runBtn.closest('.ws')?.querySelector('.find-pii'); if (fb) { fb.hidden = !(tot || pend) && !pii; fb.replaceChildren(ic('search', 16), pii ? 'Cerca di nuovo i dati sensibili' : 'Trova i dati sensibili'); }
   }
@@ -14687,18 +14751,18 @@ async function startRedact(stage, files, _tool, auto = null) {
     viewer.refresh();
     const all = boxes.flat(), tot = all.length, pg = boxes.filter(b => b.length).length;
     const light = all.filter(b => RK.fillOf(b, st.color) !== '#000000').length;
-    countEl.textContent = tot ? `${plural(tot, 'area da oscurare', 'aree da oscurare')} su ${plural(pg, 'pagina', 'pagine')}${light && light < tot ? ` (${light} in chiaro su fondo scuro)` : ''}.` : 'Nessuna area ancora: trova i dati sensibili, clicca le parole sulla pagina (trascina per sceglierne di più, doppio clic per la riga) o disegna un’area.';
+    countEl.textContent = tot ? `${plural(tot, 'area da oscurare', 'aree da oscurare')} su ${plural(pg, 'pagina', 'pagine')}${light && light < tot ? ` (${light} in chiaro su fondo scuro)` : ''}.` : 'Nessuna area ancora: trova i dati sensibili, clicca le parole sulla pagina (trascina per sceglierne di più, doppio clic per la riga) o disegna un\u2019area.';
     updRun(tot);
     viewer.thumbBtns.forEach((b, i) => b.style.boxShadow = boxes[i].length ? 'inset 0 -3px 0 var(--accent)' : '');
   }
 
-  /* —— dati sensibili —— */
+  /* \u2014\u2014 dati sensibili \u2014\u2014 */
   const piiBox = h('div', { class: 'pii' });
   async function findPii() {
     const per = [];
-    const ok = await busy('Ricerca dei dati sensibili…', async () => {
+    const ok = await busy('Ricerca dei dati sensibili\u2026', async () => {
       const idxs = await indexAll();
-      Busy.set(1, 'Riconoscimento dei dati…');
+      Busy.set(1, 'Riconoscimento dei dati\u2026');
       const all = idxs.map(i => i.text).join('\n');
       const cfs = PiiKit.cfsOf(all);
       // primo giro: i nomi certi; secondo giro: gli stessi cognomi in tutto il documento
@@ -14714,7 +14778,7 @@ async function startRedact(stage, files, _tool, auto = null) {
             if (per.some(q => q.page === k + 1 && q.at && q.at[0] < e0 && s0 < q.at[1])) continue;
             const bx = RK.boxesOf(idx, s0, e0); if (bx.length) per.push({ page: k + 1, cat: it.cat, text: it.text, sure: it.sure, boxes: bx, on: pickOn(it.cat), at: [s0, e0] }); } }); } }
       // firme e timbri (nelle scansioni) e codici QR o a barre (ovunque): si vedono, non sono testo
-      Busy.set(1, 'Firme, timbri e codici…');
+      Busy.set(1, 'Firme, timbri e codici\u2026');
       const bd = typeof BarcodeDetector !== 'undefined' ? await BarcodeDetector.getSupportedFormats().then(f => f.length ? new BarcodeDetector({ formats: f.filter(x => /qr|data_matrix|pdf417|aztec/.test(x)) }) : null).catch(() => null) : null;
       const signs = await inParallel(idxs.map((_, k) => k), parallelSlots(idxs.length), async k => {
         const per = [];
@@ -14753,7 +14817,7 @@ async function startRedact(stage, files, _tool, auto = null) {
   }
   function drawPii() {
     piiJump.hidden = !pii?.items.length;
-    if (pii?.items.length) { const n = pii.items.filter(i => i.on).length; piiJump.replaceChildren(ic('list', 16), h('span', { class: 'grow' }, `${plural(pii.items.length, 'dato trovato', 'dati trovati')}${n < pii.items.length ? ` · ${n} da oscurare` : ''}`), h('span', { class: 'pj-go' }, 'Vedi l’elenco'), ic('chevron', 16)); }
+    if (pii?.items.length) { const n = pii.items.filter(i => i.on).length; piiJump.replaceChildren(ic('list', 16), h('span', { class: 'grow' }, `${plural(pii.items.length, 'dato trovato', 'dati trovati')}${n < pii.items.length ? ` · ${n} da oscurare` : ''}`), h('span', { class: 'pj-go' }, 'Vedi l\u2019elenco'), ic('chevron', 16)); }
     if (!pii) { piiBox.replaceChildren(); return; }
     const by = new Map();
     for (const it of pii.items) { if (!by.has(it.cat)) by.set(it.cat, []); by.get(it.cat).push(it); }
@@ -14776,8 +14840,8 @@ async function startRedact(stage, files, _tool, auto = null) {
             const c2 = h('input', { type: 'checkbox', checked: occ.some(i => i.on), onchange: () => { occ.forEach(i => i.on = c2.checked); drawPii(); viewer.refresh(); }, onclick: e => e.stopPropagation() });
             const pages = [...new Set(occ.map(i => i.page))];
             return h('label', { class: 'result', onclick: () => viewer.go(pages[0]) }, c2,
-              h('div', {}, h('code', { title: occ[0].text }, occ[0].text.length > 42 ? occ[0].text.slice(0, 42) + '…' : occ[0].text), !occ[0].sure ? h('span', { class: 'pii-q', title: 'Riconosciuto con meno sicurezza: controllalo' }, '?') : null,
-                h('div', { class: 'muted small' }, `${occ.length > 1 ? occ.length + ' volte · ' : ''}p. ${pages.slice(0, 6).join(', ')}${pages.length > 6 ? '…' : ''}`)));
+              h('div', {}, h('code', { title: occ[0].text }, occ[0].text.length > 42 ? occ[0].text.slice(0, 42) + '\u2026' : occ[0].text), !occ[0].sure ? h('span', { class: 'pii-q', title: 'Riconosciuto con meno sicurezza: controllalo' }, '?') : null,
+                h('div', { class: 'muted small' }, `${occ.length > 1 ? occ.length + ' volte · ' : ''}p. ${pages.slice(0, 6).join(', ')}${pages.length > 6 ? '\u2026' : ''}`)));
           })) : null);
       }),
       pii.items.length ? h('button', { class: 'btn add-pii', style: { width: '100%', marginTop: '6px' }, disabled: !on, onclick: addPii }, ic('plus', 16), `Aggiungi alla pagina per controllarli (${on})`) : null);
@@ -14791,8 +14855,8 @@ async function startRedact(stage, files, _tool, auto = null) {
     const first = boxes.findIndex(b => b.length); if (first >= 0 && !boxes[viewer.page - 1].length) viewer.go(first + 1);
   }
 
-  /* —— ricerca di parole —— */
-  const qIn = h('input', { class: 'input redact-q', placeholder: 'Parola, nome, numero…', onkeydown: e => { if (e.key === 'Enter') search(); } });
+  /* \u2014\u2014 ricerca di parole \u2014\u2014 */
+  const qIn = h('input', { class: 'input redact-q', placeholder: 'Parola, nome, numero\u2026', onkeydown: e => { if (e.key === 'Enter') search(); } });
   const resList = h('div', { class: 'results' });
   const resHead = h('div', { class: 'row', hidden: true });
   const regexChk = h('input', { type: 'checkbox', onchange: () => st.regex = regexChk.checked });
@@ -14802,7 +14866,7 @@ async function startRedact(stage, files, _tool, auto = null) {
     let re;
     try { re = RK.queryRegex(q, st); } catch { return toast('Espressione regolare non valida', 'error'); }
     const found = [];
-    const ok = await busy('Ricerca nel documento…', async () => {
+    const ok = await busy('Ricerca nel documento\u2026', async () => {
       const all = await indexAll();
       for (let p = 1; p <= N; p++) {
         const idx = all[p - 1]; const hay = st.regex ? idx.text : idx.norm;
@@ -14826,7 +14890,7 @@ async function startRedact(stage, files, _tool, auto = null) {
     updRun();
     resList.replaceChildren(...results.map(r => {
       const cb = h('input', { type: 'checkbox', checked: r.on, onchange: () => { r.on = cb.checked; drawResults(); viewer.refresh(); }, onclick: e => e.stopPropagation() });
-      return h('label', { class: 'result', onclick: () => viewer.go(r.page) }, cb, h('div', {}, h('span', { class: 'muted' }, `p. ${r.page}  `), h('code', {}, r.text.length > 40 ? r.text.slice(0, 40) + '…' : r.text)));
+      return h('label', { class: 'result', onclick: () => viewer.go(r.page) }, cb, h('div', {}, h('span', { class: 'muted' }, `p. ${r.page}  `), h('code', {}, r.text.length > 40 ? r.text.slice(0, 40) + '\u2026' : r.text)));
     }));
   }
   async function addResults() {
@@ -14854,7 +14918,7 @@ async function startRedact(stage, files, _tool, auto = null) {
     sec('Aree', countEl),
     sec('Colore delle aree',
       seg([['match', 'Sfondo'], ['auto', 'Auto'], ['#000000', 'Nero'], ['#FFFFFF', 'Bianco']], st.color, v => { st.color = v; drawHint(); changed(); }), colorHint,
-      h('div', { class: 'muted small', style: { marginTop: '4px' } }, 'Puoi cambiare il colore di una singola area con il pallino sull’area.')),
+      h('div', { class: 'muted small', style: { marginTop: '4px' } }, 'Puoi cambiare il colore di una singola area con il pallino sull\u2019area.')),
     outsideN() ? sec('Fuori dal testo delle pagine', (() => {
       const o = outside, cats = where => [...new Set(o.hits.filter(x => x.where === where).map(x => PiiKit.CATS[x.cat] || x.cat))];
       const li = (t, c) => h('li', {}, t, c && c.length ? h('span', { class: 'rd-out-pii' }, ' · dati personali: ' + c.join(', ')) : null);
@@ -14870,7 +14934,7 @@ async function startRedact(stage, files, _tool, auto = null) {
       h('label', { class: 'field' }, 'Qualità delle pagine oscurate', seg([[150, '150 dpi'], [200, '200 dpi'], [300, '300 dpi']], st.dpi, v => st.dpi = v)),
       checkbox('Rimuovi i metadati del documento', st.meta, v => st.meta = v, 'Autore, titolo, software e date di creazione.'),
       checkbox('Verifica il risultato rileggendolo', st.verify, v => st.verify = v, 'Le pagine oscurate si rileggono come farebbe chiunque: se un dato oscurato si legge ancora, te lo dico.'),
-      checkbox('Rapporto di oscuramento', st.report, v => st.report = v, 'Un PDF a parte con che cosa è stato tolto (categorie e pagine, mai i dati), le impronte del file prima e dopo e l’esito della verifica: per dimostrarlo.')),
+      checkbox('Rapporto di oscuramento', st.report, v => st.report = v, 'Un PDF a parte con che cosa è stato tolto (categorie e pagine, mai i dati), le impronte del file prima e dopo e l\u2019esito della verifica: per dimostrarlo.')),
     h('div', { class: 'hint warn' }, 'Oscuramento definitivo: le pagine con aree oscurate diventano immagini, quindi ciò che sta sotto le aree sparisce davvero. Il resto del testo resta ricercabile.'),
   ], [runBtn]);
   changed();
@@ -14942,7 +15006,7 @@ async function startRedact(stage, files, _tool, auto = null) {
     line(`Originale: ${doc.name || doc.base + '.pdf'} · ${N} ${N === 1 ? 'pagina' : 'pagine'}`); line(`Impronta SHA-256 dell'originale: ${h0}`, { size: 8.5 });
     line(`Oscurato: ${doc.base}-oscurato.pdf`); line(`Impronta SHA-256 del file oscurato: ${h1}`, { size: 8.5, gap: 10 });
     line('Che cosa è stato oscurato (senza riportare i dati)', { size: 12, bold: true });
-    for (const [k, n] of [...byCat].sort((a, b) => b[1] - a[1])) line(`• ${k}: ${n} ${n === 1 ? 'area' : 'aree'}`, { gap: 2 });
+    for (const [k, n] of [...byCat].sort((a, b) => b[1] - a[1])) line(`\u2022 ${k}: ${n} ${n === 1 ? 'area' : 'aree'}`, { gap: 2 });
     y -= 6; line(`Pagine interessate (aree): ${byPage.join(', ')}`, { gap: 10 });
     line('Come', { size: 12, bold: true });
     line(`Le pagine con aree oscurate sono state ricostruite come immagine a ${st.dpi} dpi: il contenuto sotto le aree è stato eliminato, non coperto; il resto del loro testo è rimasto ricercabile. ${outside.flattened ? 'I campi compilati sono stati resi parte della pagina prima della ricerca. ' : ''}${st.clean ? 'Commenti, note e collegamenti a e-mail, telefono o con dati oscurati sono stati tolti. ' : ''}Allegati e segnalibri non sono stati copiati. ${st.meta ? 'Metadati del documento rimossi (autore, programmi, date).' : 'Metadati del documento conservati.'}`, { gap: 10 });
@@ -14957,7 +15021,7 @@ async function startRedact(stage, files, _tool, auto = null) {
     const tot = boxes.reduce((s, b) => s + b.length, 0);
     if (!tot && !(st.clean && outside.hits.length)) return toast('Nessuna area da oscurare', 'error');
     const checks = [];
-    return busy('Oscuramento in corso…', async () => {
+    return busy('Oscuramento in corso\u2026', async () => {
       const src = await loadLib(doc.bytes);
       const out = await PDFDocument.create();
       const keep = []; for (let i = 0; i < N; i++) if (!boxes[i].length) keep.push(i);
@@ -15038,14 +15102,14 @@ async function startRedact(stage, files, _tool, auto = null) {
       //    campi, collegamenti, metadati, allegati. Nessun dato oscurato deve trovarsi in nessuna di queste parti;
       // 2. le pagine oscurate (immagini) si rileggono con l'OCR, come le leggerebbe una persona.
       let note = 'Controlla il risultato prima di inviarlo: i contenuti sotto le aree sono stati eliminati.', warn = false;
-      const leaks = [], short = t => t.length > 30 ? t.slice(0, 30) + '…' : t;
+      const leaks = [], short = t => t.length > 30 ? t.slice(0, 30) + '\u2026' : t;
       let fileChecked = false;
       if (st.verify) {
         try {
           const vd = await pdfDocument({ data: bytes.slice(), isEvalSupported: false }).promise;
           const look = (where, txt) => { const ks = keyOf(txt); if (!ks) return; for (const [t, kk] of hidden) if (ks.includes(kk) && !leaks.some(l => l.t === t && l.where === where)) leaks.push({ t, where }); };
           for (let p = 1; p <= vd.numPages; p++) {
-            Busy.check(); if (vd.numPages > 20) Busy.set(p / vd.numPages, `Verifica del file: pagina ${p}…`);
+            Busy.check(); if (vd.numPages > 20) Busy.set(p / vd.numPages, `Verifica del file: pagina ${p}\u2026`);
             const pgv = await vd.getPage(p);
             look(`testo di p. ${p}`, (await pgv.getTextContent()).items.map(x => x.str).join(''));
             for (const a of await pgv.getAnnotations()) look(a.subtype === 'Link' ? `collegamento a p. ${p}` : a.subtype === 'Widget' ? `campo a p. ${p}` : `commento a p. ${p}`, [a.titleObj?.str, a.contentsObj?.str, a.fieldValue, a.url, a.unsafeUrl].filter(x => typeof x === 'string').join(' '));
@@ -15061,7 +15125,7 @@ async function startRedact(stage, files, _tool, auto = null) {
           if (typeof Tesseract === 'undefined' && typeof need === 'function') await need('tesseract');
           const w = await getWorker(0);
           for (const [k, c] of checks.entries()) {
-            Busy.check(); Busy.set(k / checks.length, `Verifica: rilettura della pagina ${c.page}…`);
+            Busy.check(); Busy.set(k / checks.length, `Verifica: rilettura della pagina ${c.page}\u2026`);
             const { data } = await w.recognize(new Blob([c.img], { type: 'image/png' })), got = keyOf(data.text || '');
             for (const t of new Set(c.texts)) { const kk = keyOf(t); if (kk.length >= 4 && got.includes(kk)) leaks.push({ t, where: `immagine di p. ${c.page}` }); }
           }
@@ -15095,9 +15159,9 @@ async function startRedact(stage, files, _tool, auto = null) {
   }
 }
 
-/* —— Oscura su più file: stesso modello e stesse parole su ciascun file, ricerca e oscuramento automatici con la verifica
+/* \u2014\u2014 Oscura su più file: stesso modello e stesse parole su ciascun file, ricerca e oscuramento automatici con la verifica
    completa del file singolo, poi un archivio con i file oscurati e un rapporto unico. Ogni file si può riaprire da solo
-   per rivederlo a mano. —— */
+   per rivederlo a mano. \u2014\u2014 */
 async function startRedactMany(stage, files) {
   const st = { model: 'gdpr', color: 'match', clean: true, meta: true, verify: true };
   const rows = files.map(f => ({ f, state: 'wait', res: null, err: null }));
@@ -15105,7 +15169,7 @@ async function startRedactMany(stage, files) {
   const wordsIn = h('textarea', { class: 'input rd-words', rows: 4, placeholder: 'Una per riga: es. il nome di un\'azienda o di un progetto', 'aria-label': 'Parole da oscurare in tutti i file' });
   const draw = () => list.replaceChildren(...rows.map((r, i) => {
     const R = r.res, tone = r.err ? 'danger' : R?.warn ? 'warn' : R && !R.none ? 'ok' : 'muted';
-    const status = r.err ? `Non riuscito: ${r.err}` : r.state === 'run' ? 'in lavorazione…' : !R ? 'in attesa' : R.none ? R.note
+    const status = r.err ? `Non riuscito: ${r.err}` : r.state === 'run' ? 'in lavorazione\u2026' : !R ? 'in attesa' : R.none ? R.note
       : `${plural(R.areas, 'area oscurata', 'aree oscurate')} su ${plural(R.pages, 'pagina', 'pagine')}${R.outside ? ` · ${plural(R.outside, 'dato', 'dati')} fuori dal testo tolti` : ''} · ${R.warn ? 'da controllare' : R.verified ? 'verificato' : 'non verificato'}`;
     return h('div', { class: 'filerow rd-row', dataset: { state: r.err ? 'err' : R?.warn ? 'warn' : R?.none ? 'none' : R ? 'ok' : r.state } },
       h('div', { class: 'fr-info' }, h('div', { class: 'fr-name' }, `${i + 1}. ${r.f.name}`), h('div', { class: 'small', style: { color: `var(--${tone === 'muted' ? 'ink-2' : tone})`, fontWeight: tone === 'muted' ? 400 : 650 } }, status),
@@ -15123,13 +15187,13 @@ async function startRedactMany(stage, files) {
     sec('Opzioni',
       checkbox('Togli commenti e note, e i collegamenti a e-mail, telefono o con dati oscurati', st.clean, v => st.clean = v),
       checkbox('Rimuovi i metadati del documento', st.meta, v => st.meta = v, 'Autore, titolo, software e date di creazione.'),
-      checkbox('Verifica ogni file rileggendolo', st.verify, v => st.verify = v, 'Ogni file prodotto si rilegge per intero (anche con l’OCR): se un dato oscurato si legge ancora, te lo dico.')),
-    h('div', { class: 'hint warn' }, 'Oscuramento definitivo e automatico: controlla l’elenco alla fine. Per scegliere a mano su un file, usa «Rivedi da solo».'),
+      checkbox('Verifica ogni file rileggendolo', st.verify, v => st.verify = v, 'Ogni file prodotto si rilegge per intero (anche con l\u2019OCR): se un dato oscurato si legge ancora, te lo dico.')),
+    h('div', { class: 'hint warn' }, 'Oscuramento definitivo e automatico: controlla l\u2019elenco alla fine. Per scegliere a mano su un file, usa «Rivedi da solo».'),
   ], [runBtn]);
   async function run() {
     const words = wordsIn.value.split(/\n+/).map(x => x.trim()).filter(x => x.length >= 2);
     rows.forEach(r => { r.state = 'wait'; r.res = null; r.err = null; }); draw();
-    await withBusy('Oscuramento dei file…', async () => {
+    await withBusy('Oscuramento dei file\u2026', async () => {
       for (const [i, r] of rows.entries()) {
         Busy.check(); Busy.set(i / rows.length, `File ${i + 1} di ${rows.length}: ${r.f.name}`); r.state = 'run'; draw();
         try { r.res = await startRedact(null, [r.f], null, { st: { ...st, report: true }, words }); }
@@ -15179,7 +15243,7 @@ const Preview = (() => {
   const all = (n, tag) => [...n.getElementsByTagNameNS('*', tag)];
   const attr = (n, a) => n && (n.getAttribute('w:' + a) ?? n.getAttribute(a));
 
-  /* —— PDF: pagine disegnate man mano che si scorre —— */
+  /* \u2014\u2014 PDF: pagine disegnate man mano che si scorre \u2014\u2014 */
   async function pdfView(o, body, status) {
     const d = await pdfDocument({ data: o.bytes.slice(), isEvalSupported: false }).promise;
     status(plural(d.numPages, 'pagina', 'pagine'));
@@ -15206,7 +15270,7 @@ const Preview = (() => {
     return () => { io.disconnect(); d.destroy(); };
   }
 
-  /* —— Word: paragrafi, titoli, grassetti, elenchi, tabelle, immagini —— */
+  /* \u2014\u2014 Word: paragrafi, titoli, grassetti, elenchi, tabelle, immagini \u2014\u2014 */
   async function docxView(o, body, status) {
     const z = await JSZip.loadAsync(o.bytes);
     const docXml = await z.file('word/document.xml')?.async('string');
@@ -15283,7 +15347,7 @@ const Preview = (() => {
     return () => urls.forEach(u => URL.revokeObjectURL(u));
   }
 
-  /* —— Excel: un foglio per scheda, valori come appaiono —— */
+  /* \u2014\u2014 Excel: un foglio per scheda, valori come appaiono \u2014\u2014 */
   async function xlsxView(o, body, status) {
     const z = await JSZip.loadAsync(o.bytes);
     const wb = xmlDoc(await z.file('xl/workbook.xml').async('string'));
@@ -15336,9 +15400,9 @@ const Preview = (() => {
     await showSheet(0);
   }
 
-  /* —— CSV e testo —— */
+  /* \u2014\u2014 CSV e testo \u2014\u2014 */
   function csvView(o, body, status) {
-    const txt = dec(o.bytes).replace(/^﻿/, '');
+    const txt = dec(o.bytes).replace(/^\ufeff/, '');
     const sep = (txt.split('\n')[0].match(/;/g) || []).length >= (txt.split('\n')[0].match(/,/g) || []).length ? ';' : ',';
     const rows = []; let row = [], cell = '', q = false;
     for (let i = 0; i < txt.length && rows.length < 400; i++) {
@@ -15355,7 +15419,7 @@ const Preview = (() => {
     let txt = dec(o.bytes.subarray(0, 400000));
     if (/\.xml$/i.test(o.name) && !/\n\s*</.test(txt.slice(0, 2000))) txt = txt.replace(/>\s*</g, '>\n<');
     body.append(h('pre', { class: 'pvw-text' }, txt));
-    status(fmtSize(o.bytes.length) + (o.bytes.length > 400000 ? ' · anteprima dell’inizio del file' : ''));
+    status(fmtSize(o.bytes.length) + (o.bytes.length > 400000 ? ' · anteprima dell\u2019inizio del file' : ''));
   }
   function imgView(o, body, status) {
     const u = URL.createObjectURL(new Blob([o.bytes], { type: mimeOf(o) }));
@@ -15366,7 +15430,7 @@ const Preview = (() => {
   async function zipView(o, body, status, openChild) {
     const z = await JSZip.loadAsync(o.bytes);
     const files = Object.values(z.files).filter(f => !f.dir);
-    status(plural(files.length, 'file', 'file') + ' nell’archivio');
+    status(plural(files.length, 'file', 'file') + ' nell\u2019archivio');
     const list = h('div', { class: 'pvw-zip' });
     for (const f of files) {
       const size = f._data?.uncompressedSize;
@@ -15377,10 +15441,10 @@ const Preview = (() => {
     body.append(list);
   }
 
-  /* —— finestra —— */
+  /* \u2014\u2014 finestra \u2014\u2014 */
   async function open(o, { onDownload } = {}) {
     const k = kindOf(o.name);
-    const info = h('div', { class: 'muted small pvw-info' }, 'Preparazione dell’anteprima…');
+    const info = h('div', { class: 'muted small pvw-info' }, 'Preparazione dell\u2019anteprima\u2026');
     const body = h('div', { class: 'pvw-body' + (k === 'pdf' ? ' pages' : '') });
     const dl = () => onDownload ? onDownload(o) : download(o.bytes, o.name, mimeOf(o));
     let cleanup = null;
@@ -15388,7 +15452,7 @@ const Preview = (() => {
       h('div', { class: 'pvw-head' },
         h('div', { class: 'pvw-t' }, h('span', { class: 'sec-t' }, 'Anteprima'), h('h3', { title: o.name }, o.name), info),
         h('button', { class: 'btn primary', onclick: dl }, ic('download', 17), h('span', { class: 'pvw-dl' }, 'Scarica')),
-        iconBtn('x', 'Chiudi l’anteprima', () => m.close())),
+        iconBtn('x', 'Chiudi l\u2019anteprima', () => m.close())),
       body,
     ], { width: 980, onClose: () => { try { cleanup && cleanup(); } catch (e) { console.warn(e); } } });
     m.box.classList.add('pvw');
@@ -15417,13 +15481,13 @@ const Preview = (() => {
 
    Spazi:  home        banner orizzontale dopo gli strumenti (728×90, telefono 320×100)
            tool-info   banner tra le domande frequenti e «Altri strumenti» delle pagine strumento
-           tool-side   rettangolo 300×250 sotto l'animazione, accanto al riquadro (schermi ≥ 1200 px)
+           tool-side   rettangolo 300×250 sotto l'animazione, accanto al riquadro (schermi \u2265 1200 px)
            result      scheda sponsor in fondo alla finestra «Il tuo file è pronto»
    Regole: mai durante il lavoro, mai tra il titolo e il riquadro di caricamento, sempre con l'etichetta,
            spazio riservato (la pagina non salta), niente che somigli a un pulsante «Scarica».
    Configurazione (window.OFFICINA_ADS, scritta da build_site.py leggendo site.config.json):
      mode: 'off' | 'sponsor' | 'adsense'  ·  sponsors: [{ where, tools, title, text, cta, url, logo }]
-     adsense: { client: 'ca-pub-…', slots: { home, 'tool-info', 'tool-side' } }
+     adsense: { client: 'ca-pub-\u2026', slots: { home, 'tool-info', 'tool-side' } }
    Con ?anteprima-pubblicita nell'indirizzo gli spazi si vedono vuoti, con le misure, per provarli.
    ===================================================================== */
 const Ads = (() => {
@@ -15535,7 +15599,7 @@ const Counter = (() => {
 })();
 
 /* =====================================================================
-   Promo — accanto al caricamento del file, un brevissimo «video» animato in loop
+   Promo \u2014 accanto al caricamento del file, un brevissimo «video» animato in loop
    che mostra come funziona lo strumento e che risultato aspettarsi.
    Sempre visibile: parte da solo, non si ferma e non si chiude.
 
@@ -15592,7 +15656,7 @@ const Promo = (() => {
   let injected = false;
   const inject = () => { if (injected) return; injected = true; if (document.getElementById('promo-css')) return; document.head.append(h('style', { id: 'promo-css' }, inLegacy(CSS))); };
 
-  /* —— tracce: uno stato che si porta avanti, un fotogramma per ogni .at() —— */
+  /* \u2014\u2014 tracce: uno stato che si porta avanti, un fotogramma per ogni .at() \u2014\u2014 */
   const norm = p => { const o = { ...p }; if (o.s != null) { o.sx = o.sy = o.s; delete o.s; } return o; };
   const a = (init = {}) => {
     let cur = { o: 1, x: 0, y: 0, r: 0, sx: 1, sy: 1, ...norm(init) };
@@ -15630,7 +15694,7 @@ const Promo = (() => {
     return out;
   }
 
-  /* —— pezzi —— */
+  /* \u2014\u2014 pezzi \u2014\u2014 */
   const st = o => Object.entries(o).map(([k, v]) => `${k}:${typeof v === 'number' && !/^--|opacity|z-index/.test(k) ? v + 'px' : v}`).join(';');
   const lines = (n, k = [], ws = [92, 70, 84, 58, 88, 64, 78, 50]) => Array.from({ length: n }, (_, i) => `<b class="${k.includes(i) ? 'k' : ''}" style="width:${ws[i % ws.length]}%"></b>`).join('');
   const doc = (key, pos, { n = 6, head = null, tag = null, tagC = '#E5484D', k = [], inner = '', style = '', cls = '' } = {}) =>
@@ -15644,12 +15708,12 @@ const Promo = (() => {
   const LOUPE = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.6-4.6"/></svg>';
   const ROT = (c, s = 12) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg>`;
   const SIGN = (c = '#1E3A8A') => `<svg width="34" height="14" viewBox="0 0 34 14" fill="none" stroke="${c}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10c3-6 5-8 6-6s-2 8 1 7 4-7 6-6-1 6 2 5 3-4 5-4 2 3 4 3 3-2 6-3"/></svg>`;
-  const row = (key, cells, cols, { head = false, style = '' } = {}) => `<div data-a="${key}" class="pv-row${head ? ' h' : ''}" style="position:relative;grid-template-columns:${cols};${style}">${cells.map((c, i) => `<span class="${i && /^[−\-+]?[\d.,/%]+( €)?$/.test(c) ? 'n' : ''}">${c}</span>`).join('')}</div>`;
+  const row = (key, cells, cols, { head = false, style = '' } = {}) => `<div data-a="${key}" class="pv-row${head ? ' h' : ''}" style="position:relative;grid-template-columns:${cols};${style}">${cells.map((c, i) => `<span class="${i && /^[\u2212\-+]?[\d.,/%]+( \u20ac)?$/.test(c) ? 'n' : ''}">${c}</span>`).join('')}</div>`;
   const PDF = '#E5484D';
   /* il finale comune: spunta e pulsante di download (premuto a metà del risultato) */
   const finale = (tr, okPos, dlPos, label = 'Scarica', tOk = 3.9) => { tr.ok = a({ o: 0 }).pop(tOk); tr.dl = a({ o: 0 }).show(tOk + .3, .35, { y: 8 }).click(5.3); return ok('ok', okPos) + dl('dl', dlPos, label); };
 
-  /* —— le scene: () => { html, tr: {chiave: traccia}, cap: [prima, seconda], capAt } —— */
+  /* \u2014\u2014 le scene: () => { html, tr: {chiave: traccia}, cap: [prima, seconda], capAt } \u2014\u2014 */
   const S = {
     flow() {
       const tr = {};
@@ -15671,10 +15735,10 @@ const Promo = (() => {
            <div style="position:relative;height:3px;flex:none"><b style="width:76%"></b><i data-a="rd" style="left:0;top:-2px;width:76%;height:7px;border-radius:1.5px;background:#111;transform-origin:left"></i></div>
            <b style="width:58%"></b>
            ${['v1', 'v2', 'v3', 'v4'].map(k => `<em data-a="${k}" class="pv-tag" style="background:var(--accent);right:4px;bottom:5px">${k}</em>`).join('')}</div>` +
-        [['✎', 'Modifica', '#F2711C'], [ROT('#fff', 9), 'Ruota', '#3E63DD'], ['■', 'Oscura', '#475467']].map(([n, l, c], i) =>
+        [['\u270e', 'Modifica', '#F2711C'], [ROT('#fff', 9), 'Ruota', '#3E63DD'], ['\u25a0', 'Oscura', '#475467']].map(([n, l, c], i) =>
           `<div data-a="t${i}" class="pv-chip" style="left:182px;top:${22 + i * 44}px;width:104px"><i style="background:${c};font-size:9px">${n}</i>${l}<span data-a="k${i}" style="right:8px;top:6.5px;width:14px;height:14px;border-radius:50%;background:#16A34A;display:grid;place-items:center">${CHK('#fff', 8)}</span></div>`).join('') +
         cursor('cur') + finale(tr, { left: 132, top: 38 }, { left: 52, top: 140 }, 'Scarica v4', 3.85);
-      return { html, tr, cap: ['Carica il file e <em>scegli cosa farci</em>…', '…uno strumento dopo l’altro, <em>sullo stesso documento</em>'], capAt: 3.6 };
+      return { html, tr, cap: ['Carica il file e <em>scegli cosa farci</em>\u2026', '\u2026uno strumento dopo l\u2019altro, <em>sullo stesso documento</em>'], capAt: 3.6 };
     },
     unisci() {
       const tr = {};
@@ -15685,9 +15749,9 @@ const Promo = (() => {
       const html = D.map(([c, x, y], i) => doc('p' + i, { left: x, top: y, width: 50, height: 64 }, { n: 5, head: c, tag: 'PDF', style: 'transform-origin:center' })).join('') +
         `<div data-a="m" class="pv-doc pv-pile" style="left:112px;top:50px;width:52px;height:68px;gap:3px">
            ${['#7C5CFC', '#1E88E5', '#F2711C'].map(c => `<i class="hd" style="background:${c};width:46%;height:4px;margin:2px 0 0"></i><b style="width:84%"></b><b style="width:66%"></b>`).join('')}<em class="pv-tag" style="background:${PDF}">PDF</em></div>` +
-        `<div data-a="c" class="pv-chip" style="left:186px;top:72px"><i style="background:var(--hue)">3→1</i>un solo file</div>` +
+        `<div data-a="c" class="pv-chip" style="left:186px;top:72px"><i style="background:var(--hue)">3\u21921</i>un solo file</div>` +
         finale(tr, { left: 158, top: 36 }, { left: 186, top: 142 });
-      return { html, tr, cap: ['Trascina più PDF, anche foto…', '…e ottieni <em>un unico PDF</em>, nell’ordine che vuoi'], capAt: 3.3 };
+      return { html, tr, cap: ['Trascina più PDF, anche foto\u2026', '\u2026e ottieni <em>un unico PDF</em>, nell\u2019ordine che vuoi'], capAt: 3.3 };
     },
     immagini() {
       const tr = {};
@@ -15704,7 +15768,7 @@ const Promo = (() => {
         photo('i1', { left: 40, top: 96, width: 44, height: 58 }, 'linear-gradient(160deg,#FDBA74,#DB2777)', '<div style="position:absolute;left:12px;top:14px;width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.75)"></div><div style="position:absolute;left:6px;top:36px;width:32px;height:26px;border-radius:14px 14px 0 0;background:rgba(255,255,255,.6)"></div>', 'HEIC') +
         `<div data-a="c" class="pv-chip" style="left:150px;top:118px"><i style="background:${PDF}">PDF</i>2 pagine</div>` +
         finale(tr, { left: 266, top: 14 }, { left: 220, top: 146 });
-      return { html, tr, cap: ['Foto, scansioni, HEIC dal telefono…', '…diventano <em>un PDF ordinato</em>, una pagina per immagine'], capAt: 3.3 };
+      return { html, tr, cap: ['Foto, scansioni, HEIC dal telefono\u2026', '\u2026diventano <em>un PDF ordinato</em>, una pagina per immagine'], capAt: 3.3 };
     },
     dividi() {
       const tr = {};
@@ -15718,7 +15782,7 @@ const Promo = (() => {
         `<div data-a="c" class="pv-chip" style="left:112px;top:8px"><i style="background:var(--hue)">÷</i>Ogni pagina</div>` +
         X.map((x, i) => doc('p' + i, { left: x, top: 46, width: 50, height: 66 }, { n: 5, tag: (i + 1) + '.pdf', tagC: 'var(--hue)', style: 'transform-origin:center' })).join('') +
         cursor('cur') + finale(tr, { left: 268, top: 14 }, { left: 116, top: 140 }, 'Scarica i 3 file');
-      return { html, tr, cap: ['Un PDF con tante pagine…', '…diviso in <em>file separati</em>: per pagine, intervalli o ogni N'], capAt: 3.2 };
+      return { html, tr, cap: ['Un PDF con tante pagine\u2026', '\u2026diviso in <em>file separati</em>: per pagine, intervalli o ogni N'], capAt: 3.2 };
     },
     comprimi() {
       const tr = {};
@@ -15732,7 +15796,7 @@ const Promo = (() => {
         `<i data-a="bt" style="left:78px;top:16px;width:104px;height:8px;border-radius:4px;background:var(--hue);box-shadow:0 3px 8px color-mix(in srgb,var(--hue) 45%,transparent)"></i>` +
         `<i data-a="bb" style="left:78px;top:142px;width:104px;height:8px;border-radius:4px;background:var(--hue);box-shadow:0 -3px 8px color-mix(in srgb,var(--hue) 45%,transparent)"></i>` +
         `<div data-a="z1" class="pv-chip" style="left:190px;top:64px"><i style="background:${PDF}">MB</i>8,4 MB</div>` +
-        `<div data-a="z2" class="pv-chip" style="left:190px;top:64px"><i style="background:#16A34A">MB</i>1,2 MB <span class="g">−86%</span></div>` +
+        `<div data-a="z2" class="pv-chip" style="left:190px;top:64px"><i style="background:#16A34A">MB</i>1,2 MB <span class="g">\u221286%</span></div>` +
         finale(tr, { left: 266, top: 14 }, { left: 206, top: 142 });
       return { html, tr, cap: ['PDF troppo pesante per la PEC?', '<em>Fino a 10 volte più leggero</em>, con la qualità che scegli'], capAt: 3.2 };
     },
@@ -15753,14 +15817,14 @@ const Promo = (() => {
              <i data-a="box" style="left:-4px;top:-3px;width:118px;height:18px;border:1.5px solid var(--hue);border-radius:4px;background:color-mix(in srgb,var(--hue) 6%,#fff)"></i>
              <span class="ab" style="left:0;top:0;font:700 9px/12px var(--font);color:#3A3D46">Totale:</span>
              <i data-a="sel" style="left:35px;top:0;width:52px;height:12px;background:color-mix(in srgb,#3B82F6 30%,transparent);transform-origin:left"></i>
-             <span data-a="old" style="left:36px;top:0;font:700 9px/12px var(--font);color:#3A3D46;white-space:nowrap">1.200,00 €</span>
-             <span data-a="nw" style="left:36px;top:0;height:12px;overflow:hidden;font:600 9px/12px var(--font);color:var(--hue);white-space:nowrap">1.450,00 €</span>
-             <span data-a="nb" style="left:36px;top:0;font:900 9px/12px var(--font);color:var(--hue);white-space:nowrap">1.450,00 €</span>
+             <span data-a="old" style="left:36px;top:0;font:700 9px/12px var(--font);color:#3A3D46;white-space:nowrap">1.200,00 \u20ac</span>
+             <span data-a="nw" style="left:36px;top:0;height:12px;overflow:hidden;font:600 9px/12px var(--font);color:var(--hue);white-space:nowrap">1.450,00 \u20ac</span>
+             <span data-a="nb" style="left:36px;top:0;font:900 9px/12px var(--font);color:var(--hue);white-space:nowrap">1.450,00 \u20ac</span>
              <i data-a="car" style="left:36px;top:0;width:1.5px;height:12px;background:#17181C"></i>
            </div>${lines(7, [], [76, 88, 60, 82, 70, 86, 54])}</div>` +
         `<div data-a="tb" style="left:104px;top:24px;display:flex;gap:3px;padding:3px;background:#fff;border-radius:8px;box-shadow:0 6px 14px rgba(0,0,0,.16)"><b data-a="bB" style="position:relative;display:grid;place-items:center;width:20px;height:18px;border-radius:5px;background:color-mix(in srgb,var(--hue) 14%,#fff);font:900 10px var(--font);color:#222">B</b>${['<i>I</i>', '<u>U</u>', '<span style="color:#E5484D">A</span>'].map(x => `<div style="width:20px;height:18px;display:grid;place-items:center;font:700 10px var(--font);color:#222">${x}</div>`).join('')}</div>` +
         cursor('cur') + finale(tr, { left: 228, top: 14 }, { left: 228, top: 142 }, 'Salva PDF');
-      return { html, tr, cap: ['Clicca su un testo del PDF…', '…e <em>riscrivilo come in Word</em>: stile, colore, paragrafi'], capAt: 3.4 };
+      return { html, tr, cap: ['Clicca su un testo del PDF\u2026', '\u2026e <em>riscrivilo come in Word</em>: stile, colore, paragrafi'], capAt: 3.4 };
     },
     ruota() {
       const tr = {};
@@ -15790,7 +15854,7 @@ const Promo = (() => {
       const html = pg('p3', X[0], 3) + pg('p1', X[1], 1) + pg('p2', X[2], 2) +
         `<div data-a="ph" style="left:${X[3]}px;top:46px;width:50px;height:66px;border-radius:6px;border:1.5px dashed color-mix(in srgb,var(--hue) 70%,#fff);display:grid;place-items:center;color:var(--hue);font:800 18px var(--font)">+</div>` +
         pg('p4', X[3], 4, true) + ok('ok', { left: 262, top: 14 }) + cursor('cur');
-      return { html, tr, cap: ['Trascina le pagine nell’ordine giusto…', '…<em>duplica, elimina</em> o aggiungi pagine bianche'], capAt: 3.4 };
+      return { html, tr, cap: ['Trascina le pagine nell\u2019ordine giusto\u2026', '\u2026<em>duplica, elimina</em> o aggiungi pagine bianche'], capAt: 3.4 };
     },
     numeri() {
       const tr = {};
@@ -15806,7 +15870,7 @@ const Promo = (() => {
         `<div data-a="c1" class="pv-chip" style="left:84px;top:130px"><i style="background:var(--hue)">#</i>Pagina N di T · al centro</div>` +
         `<div data-a="c2" class="pv-chip" style="left:84px;top:130px"><i style="background:var(--hue)">#</i>Pagina N di T · a destra</div>` +
         ok('ok', { left: 288, top: 4 }) + cursor('cur');
-      return { html, tr, cap: ['Numeri, intestazioni e piè di pagina…', '…con <em>anteprima dal vivo</em> su ogni pagina'], capAt: 3.4 };
+      return { html, tr, cap: ['Numeri, intestazioni e piè di pagina\u2026', '\u2026con <em>anteprima dal vivo</em> su ogni pagina'], capAt: 3.4 };
     },
     ocr() {
       const tr = {};
@@ -15826,7 +15890,7 @@ const Promo = (() => {
         `<i data-a="bm" style="left:30px;top:10px;width:144px;height:3px;border-radius:2px;background:var(--hue);box-shadow:0 0 14px 4px color-mix(in srgb,var(--hue) 55%,transparent)"></i>` +
         `<div data-a="c1" class="pv-chip" style="left:178px;top:50px"><i style="background:var(--hue)">Aa</i>Testo copiabile</div>` +
         `<div data-a="c2" class="pv-chip" style="left:178px;top:88px"><i style="background:#3B82F6">${LOUPE}</i>Ricercabile</div>` + ok('ok', { left: 268, top: 14 });
-      return { html, tr, cap: ['Una scansione o una foto…', '…diventa un PDF <em>ricercabile e copiabile</em>'], capAt: 3.3 };
+      return { html, tr, cap: ['Una scansione o una foto\u2026', '\u2026diventa un PDF <em>ricercabile e copiabile</em>'], capAt: 3.3 };
     },
     word() {
       const tr = {};
@@ -15843,7 +15907,7 @@ const Promo = (() => {
            <div style="position:relative;height:3px;flex:none"><span data-a="ty" style="left:0;top:-3px;height:9px;overflow:hidden;font:700 6.5px/9px var(--font);color:#2B579A;white-space:nowrap">Rev. 2 · ok</span></div>
            <div style="flex:none;align-self:flex-end;margin-top:2px">${SIGN()}</div><em class="pv-tag" style="background:#2B579A">DOCX</em></div>` +
         finale(tr, { left: 256, top: 10 }, { left: 190, top: 146 }, 'Word');
-      return { html, tr, cap: ['PDF e scansioni…', '…in <em>Word modificabile</em>, con loghi e firme al loro posto'], capAt: 3.1 };
+      return { html, tr, cap: ['PDF e scansioni\u2026', '\u2026in <em>Word modificabile</em>, con loghi e firme al loro posto'], capAt: 3.1 };
     },
     pdfa() {
       const tr = {};
@@ -15918,7 +15982,7 @@ const Promo = (() => {
         doc('p', { left: 214, top: 6, width: 50, height: 66 }, { n: 6, tag: 'PDF' }) +
         `<div data-a="sh" class="pv-sheet" style="left:132px;top:80px;width:176px">${R.map((r, i) => row('g' + i, r, '70px 53px 53px', { head: !i })).join('')}</div>` +
         finale(tr, { left: 276, top: 6 }, { left: 132, top: 150 }, 'PDF + Excel', 3.9);
-      return { html, tr, cap: ['Il bilancio XBRL della Camera di commercio…', 'in <em>PDF leggibile</em> e in <em>Excel</em>: voce, anno, anno prima'], capAt: 2.8 };
+      return { html, tr, cap: ['Il bilancio XBRL della Camera di commercio\u2026', 'in <em>PDF leggibile</em> e in <em>Excel</em>: voce, anno, anno prima'], capAt: 2.8 };
     },
     excel() {
       const tr = {};
@@ -15937,7 +16001,7 @@ const Promo = (() => {
            <i data-a="cell" style="left:64px;top:60px;width:50px;height:15px;border:2px solid #1D6F42;border-radius:1px"></i></div>` +
         `<div data-a="fx" class="pv-chip" style="left:142px;top:112px;font:700 10px/1 ui-monospace,monospace"><i style="background:#1D6F42;font-family:var(--font)">fx</i>=B2-B3-B4</div>` +
         dl('dl', { left: 226, top: 146 }, 'Excel');
-      return { html, tr, cap: ['Tabelle in PDF, anche scansionate…', '…in <em>Excel con numeri veri</em>, bordi e colonne come nel PDF'], capAt: 3.3 };
+      return { html, tr, cap: ['Tabelle in PDF, anche scansionate\u2026', '\u2026in <em>Excel con numeri veri</em>, bordi e colonne come nel PDF'], capAt: 3.3 };
     },
     ricevute() {
       const tr = {};
@@ -15953,9 +16017,9 @@ const Promo = (() => {
         chip('k', { left: 26, top: 96 }, 'UTEC.P12', '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><circle cx="8" cy="15" r="4.5"/><path d="M11.5 12L20 3.5M17 6.5l2.5 2.5"/></svg>', '#475467') +
         `<div data-a="lk" style="left:122px;top:62px;width:40px;height:44px"><svg width="40" height="44" viewBox="0 0 40 44" style="overflow:visible"><path data-a="sh" d="M11 20v-7a9 9 0 0 1 18 0v7" fill="none" stroke="var(--hue)" stroke-width="4" stroke-linecap="round" style="transform-origin:29px 20px"/><rect x="5" y="19" width="30" height="23" rx="6" fill="var(--hue)"/><circle cx="20" cy="30" r="3.4" fill="#fff"/></svg></div>` +
         `<div data-a="p" class="pv-doc" style="left:114px;top:12px;width:92px;height:118px;padding:12px 9px;gap:5px"><i class="hd"></i>${lines(3)}<div style="position:relative;height:16px;flex:none;margin:3px 0"><div data-a="es" style="inset:0;border-radius:5px;background:#DCFCE7;color:#15803D;font:900 7.5px/16px var(--font);padding:0 5px;transform-origin:left;white-space:nowrap">ESITO: ACCOLTA</div></div>${lines(3)}<em class="pv-tag" style="background:${PDF}">PDF</em></div>` +
-        `<div data-a="v" class="pv-chip" style="left:84px;top:142px"><i style="background:#16A34A">${CHK()}</i>Firma dell’Agenzia verificata</div>` + ok('ok', { left: 196, top: 4 });
+        `<div data-a="v" class="pv-chip" style="left:84px;top:142px"><i style="background:#16A34A">${CHK()}</i>Firma dell\u2019Agenzia verificata</div>` + ok('ok', { left: 196, top: 4 });
       tr.ok = a({ o: 0 }).pop(3.9);
-      return { html, tr, cap: ['Le ricevute Entratel (.rcc)…', '…in <em>PDF stampabile</em>, con la firma dell’Agenzia verificata'], capAt: 2.6 };
+      return { html, tr, cap: ['Le ricevute Entratel (.rcc)\u2026', '\u2026in <em>PDF stampabile</em>, con la firma dell\u2019Agenzia verificata'], capAt: 2.6 };
     },
     oscura() {
       const tr = {};
@@ -15973,9 +16037,9 @@ const Promo = (() => {
           ${ln('C.F. RSSMRA80A01H501U', 'b1', 23, 79)}<b style="width:80%"></b>
           ${ln('mario.rossi@pec.it', 'b2', -1, 89)}<b style="width:64%"></b></div>` +
         `<div data-a="au" class="pv-chip" style="left:176px;top:6px"><i style="background:var(--hue)">${LOUPE}</i>Trova C.F. ed email</div>` +
-        `<div data-a="sr" class="pv-chip" style="left:150px;top:142px"><i style="background:var(--hue)">${LOUPE}</i>«IT60…» · <span class="g">0 risultati</span></div>` +
+        `<div data-a="sr" class="pv-chip" style="left:150px;top:142px"><i style="background:var(--hue)">${LOUPE}</i>«IT60\u2026» · <span class="g">0 risultati</span></div>` +
         ok('ok', { left: 232, top: 62 }) + cursor('cur');
-      return { html, tr, cap: ['IBAN, codici fiscali, email…', '…<em>oscurati per sempre</em>: il testo sotto non c’è più'], capAt: 3.3 };
+      return { html, tr, cap: ['IBAN, codici fiscali, email\u2026', '\u2026<em>oscurati per sempre</em>: il testo sotto non c\u2019è più'], capAt: 3.3 };
     },
     fatture() {
       const tr = {};
@@ -15996,11 +16060,11 @@ const Promo = (() => {
         inv('p0') + inv('p1') +
         `<div data-a="x" class="pv-chip" style="left:204px;top:116px"><i style="background:#1D6F42">XLS</i>Prestazioni</div>` +
         finale(tr, { left: 284, top: 8 }, { left: 30, top: 142 }, 'Scarica i PDF (ZIP)', 4.0);
-      return { html, tr, cap: ['XML, P7M o ZIP, anche a centinaia…', '…in <em>PDF leggibili</em> e nell’<em>Excel</em> delle prestazioni'], capAt: 2.9 };
+      return { html, tr, cap: ['XML, P7M o ZIP, anche a centinaia\u2026', '\u2026in <em>PDF leggibili</em> e nell\u2019<em>Excel</em> delle prestazioni'], capAt: 2.9 };
     },
   };
 
-  /* —— in pausa quando la scheda non si vede (risparmio di CPU): si fermano e ripartono insieme —— */
+  /* \u2014\u2014 in pausa quando la scheda non si vede (risparmio di CPU): si fermano e ripartono insieme \u2014\u2014 */
   const io = typeof IntersectionObserver !== 'undefined' ? new IntersectionObserver(es => es.forEach(e => { for (const an of e.target.__pvAnims || []) e.isIntersecting ? an.play() : an.pause(); })) : null;
   const reduce = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
   const POSTER = 5.0; // fotogramma fermo per chi preferisce meno movimento
@@ -16034,7 +16098,7 @@ const Promo = (() => {
 })();
 
 /* =====================================================================
-   Loader — durante l'attesa, una piccola animazione in loop dedicata allo strumento
+   Loader \u2014 durante l'attesa, una piccola animazione in loop dedicata allo strumento
    (la stessa mano del «video» accanto al caricamento: pagine bianche, colore dello strumento,
    gesti semplici). Solo trasformazioni e opacità: restano fluide anche quando il lavoro tiene
    impegnato il processore. Chi preferisce meno movimento vede un fotogramma fermo.
@@ -16217,7 +16281,7 @@ const Loader = (() => {
 @keyframes xbB{0%,10%{transform:scaleY(0)}35%,88%{transform:scaleY(1)}100%{transform:scaleY(0)}}`,
     },
     fatture: {
-      html: `${['XML', 'P7M', 'ZIP'].map((t, i) => `<i class="ft-f" style="left:${24 + i * 30}px;top:8px;animation-delay:${(i * .2).toFixed(1)}s">${tag(t, ['#0B7285', '#0F766E', '#475467'][i], 'position:static')}</i>`).join('')}<i class="ld-pg np ft-inv" style="left:118px;top:24px;width:66px;height:86px"><i class="md-l" style="left:9px;top:12px;width:30px"></i><i class="md-l" style="left:9px;top:22px;width:44px"></i><i class="md-l" style="left:9px;top:32px;width:38px"></i><i class="ft-tot">1.220,00 €</i></i>`,
+      html: `${['XML', 'P7M', 'ZIP'].map((t, i) => `<i class="ft-f" style="left:${24 + i * 30}px;top:8px;animation-delay:${(i * .2).toFixed(1)}s">${tag(t, ['#0B7285', '#0F766E', '#475467'][i], 'position:static')}</i>`).join('')}<i class="ld-pg np ft-inv" style="left:118px;top:24px;width:66px;height:86px"><i class="md-l" style="left:9px;top:12px;width:30px"></i><i class="md-l" style="left:9px;top:22px;width:44px"></i><i class="md-l" style="left:9px;top:32px;width:38px"></i><i class="ft-tot">1.220,00 \u20ac</i></i>`,
       css: `.ft-f{animation-name:ftF}@keyframes ftF{0%{transform:translate(0,0);opacity:0}10%{opacity:1}45%,100%{transform:translate(90px,60px) scale(.5);opacity:0}}
 .ft-inv{animation-name:ftI}@keyframes ftI{0%,35%{transform:scale(.9);opacity:.35}50%,90%{transform:none;opacity:1}100%{opacity:.35}}
 .md-l{height:3px;border-radius:2px;background:#D7D9DF}
@@ -16297,7 +16361,7 @@ const Loader = (() => {
 .an-ln path{stroke-dasharray:1;stroke-dashoffset:1;animation:anL ${D}s infinite ease-in-out}@keyframes anL{0%,35%{stroke-dashoffset:1}65%,88%{stroke-dashoffset:0}100%{stroke-dashoffset:0;opacity:0}}`,
     },
     estrai: {
-      html: `${pg('', 'left:24px;top:22px;width:58px;height:80px')}<i class="vf-lens" style="left:34px;top:34px"></i>${['€ 1.220,00', 'IT60 X054…', '12/03/2026'].map((t, i) => `<i class="ld-chip es-c" style="left:108px;top:${26 + i * 28}px;animation-delay:${(.3 + i * .35).toFixed(2)}s">${t}</i>`).join('')}`,
+      html: `${pg('', 'left:24px;top:22px;width:58px;height:80px')}<i class="vf-lens" style="left:34px;top:34px"></i>${['\u20ac 1.220,00', 'IT60 X054\u2026', '12/03/2026'].map((t, i) => `<i class="ld-chip es-c" style="left:108px;top:${26 + i * 28}px;animation-delay:${(.3 + i * .35).toFixed(2)}s">${t}</i>`).join('')}`,
       css: `.vf-lens{width:28px;height:28px;border-radius:50%;border:4px solid var(--hue);background:rgba(255,255,255,.35);animation-name:esL}
 .vf-lens::after{content:"";position:absolute;width:4px;height:12px;border-radius:2px;background:var(--hue);left:25px;top:22px;transform:rotate(-45deg)}
 @keyframes esL{0%{transform:none}33%{transform:translate(10px,20px)}66%{transform:translate(2px,36px)}100%{transform:none}}
@@ -16350,10 +16414,10 @@ const Loader = (() => {
 })();
 
 /* =====================================================================
-   Flow — il «documento attivo».
+   Flow \u2014 il «documento attivo».
    Carichi un file (dalla home o da uno strumento) e resta aperto mentre passi da uno
    strumento all'altro, uno alla volta: modifichi il testo, poi ruoti una pagina, oscuri
-   un dato, aggiungi una pagina bianca… Al cambio di strumento le modifiche fatte vengono
+   un dato, aggiungi una pagina bianca\u2026 Al cambio di strumento le modifiche fatte vengono
    applicate da sole e diventano una nuova versione (con cronologia per tornare indietro).
    ===================================================================== */
 const Flow = (() => {
@@ -16413,7 +16477,7 @@ const Flow = (() => {
   const KIND_COLOR = { fattura: '#0B7285', pdf: '#E0453A', img: '#DB2777', xbrl: '#4F46E5', rcc: '#B45309', p7m: '#0F766E', zip: '#475467', other: '#6F727C' };
   const takesPdf = id => TOOLS[id] && TOOLS[id].pdfIn !== false && !['xbrl', 'ricevute', 'fatture'].includes(id);
 
-  /* —— documento attivo e versioni —— */
+  /* \u2014\u2014 documento attivo e versioni \u2014\u2014 */
   const cur = () => S ? S.versions[S.cur] : null;
   const fileOf = () => { const v = cur(); if (!v) return null; return new File([v.bytes], v.name, { type: 'application/pdf' }); };
   const sessionFiles = () => { const arr = [fileOf()]; arr._fromSession = true; return arr; };
@@ -16439,7 +16503,7 @@ const Flow = (() => {
   function end() { S = null; track = null; changed(); }
   const many = () => S && S.versions.length > 1;
 
-  /* —— stato dello strumento aperto: cosa è cambiato rispetto all'ultima versione —— */
+  /* \u2014\u2014 stato dello strumento aperto: cosa è cambiato rispetto all'ultima versione \u2014\u2014 */
   function onOpen(id) { track = null; openGen = GEN; fromSession = false; }
   // ogni strumento che modifica il documento registra una «firma» del suo stato
   // opts.save/opts.restore: lo stato dello strumento si salva da solo e, alla ripresa, si rimette com'era
@@ -16537,7 +16601,7 @@ const Flow = (() => {
       else { skipGuard = true; nav(id); }
     } finally { going = false; }
   }
-  // prima di cambiare pagina (indietro del browser, Home, logo…): le modifiche in sospeso si applicano
+  // prima di cambiare pagina (indietro del browser, Home, logo\u2026): le modifiche in sospeso si applicano
   let skipGuard = false;
   async function beforeRoute() {
     if (skipGuard || pendingHandoff) { skipGuard = false; return true; }
@@ -16569,7 +16633,7 @@ const Flow = (() => {
   }
   async function closeDoc() { if (!(await confirmReplace())) return false; end(); return true; }
 
-  /* —— download —— */
+  /* \u2014\u2014 download \u2014\u2014 */
   async function downloadCurrent() {
     if (CURRENT_TOOL && dirty()) { const ok = await applyPending(null); if (!ok) return; }
     const v = cur(); if (!v) return;
@@ -16577,12 +16641,12 @@ const Flow = (() => {
   }
   const versionName = v => S.versions[0] === v ? v.name : `${stripExt(v.name)}-v${S.versions.indexOf(v) + 1}.pdf`;
 
-  /* —— azioni rapide sulla pagina, da qualunque strumento —— */
+  /* \u2014\u2014 azioni rapide sulla pagina, da qualunque strumento \u2014\u2014 */
   const curPage = () => { const V = typeof Viewer !== 'undefined' ? Viewer.current : null; return V && V.el?.isConnected ? V.page : 1; };
   async function pageAction(kind, n) {
     if (!S) return;
     if (CURRENT_TOOL) { const ok = await applyPending(null); if (!ok) return; }
-    const res = await withBusy('Aggiornamento del documento…', async () => {
+    const res = await withBusy('Aggiornamento del documento\u2026', async () => {
       const src = await loadLib(cur().bytes);
       const N = src.getPageCount(); const i = clamp(n, 1, N) - 1;
       let label, show = i + 1;
@@ -16627,7 +16691,7 @@ const Flow = (() => {
   let wantGen = -1;
   const takeWantPage = () => { if (GEN !== wantGen) return null; const p = wantPage; wantPage = null; return p; };
 
-  /* —— barra del documento (in ogni strumento PDF) —— */
+  /* \u2014\u2014 barra del documento (in ogni strumento PDF) \u2014\u2014 */
   function bar(id) {
     if (!S || !takesPdf(id)) return null;
     const el = h('div', { class: 'docbar' });
@@ -16694,7 +16758,7 @@ const Flow = (() => {
     ].filter(Boolean)), 30);
   }
 
-  /* —— risultato: cosa dice la finestra —— */
+  /* \u2014\u2014 risultato: cosa dice la finestra \u2014\u2014 */
   function resultNote(pushed) {
     if (!pushed || !S) return null;
     const n = S.versions.length;
@@ -16716,12 +16780,12 @@ const Flow = (() => {
         const chip = t => h('button', { class: 'chip', style: { '--hue': TOOLS[t].hue }, onclick: () => { closeModal(); go(t); } }, ic(TOOLS[t].icon, 14), TOOLS[t].short);
         const rest = all.filter(t => !first.includes(t));
         const box = h('div', { class: 'chips' }, first.map(chip));
-        if (rest.length) box.append(h('button', { class: 'chip more', onclick: e => { e.currentTarget.replaceWith(...rest.map(chip)); } }, `Altri ${rest.length}…`));
+        if (rest.length) box.append(h('button', { class: 'chip more', onclick: e => { e.currentTarget.replaceWith(...rest.map(chip)); } }, `Altri ${rest.length}\u2026`));
         return box;
       })());
   }
 
-  /* —— home: carica e scegli —— */
+  /* \u2014\u2014 home: carica e scegli \u2014\u2014 */
   function suggest(files) {
     const ks = files.map(kindOf), has = k => ks.includes(k);
     const pdfs = ks.filter(k => k === 'pdf' || k === 'p7m').length, imgs = ks.filter(k => k === 'img').length;
@@ -16785,7 +16849,7 @@ const Flow = (() => {
               h('span', { class: 'wb-k' }, 'Documento aperto'),
               h('h2', { title: v.name }, v.name),
               h('p', { class: 'muted small' }, [v.pages ? plural(v.pages, 'pagina', 'pagine') : null, fmtSize(v.bytes.length), S.versions.length > 1 ? `versione ${S.cur + 1} (${v.label})` : null].filter(Boolean).join(' · ')),
-              h('p', { class: 'wb-hint' }, 'Scegli cosa fare. Puoi passare da uno strumento all’altro quando vuoi: il documento resta aperto e le modifiche si sommano.'),
+              h('p', { class: 'wb-hint' }, 'Scegli cosa fare. Puoi passare da uno strumento all\u2019altro quando vuoi: il documento resta aperto e le modifiche si sommano.'),
               h('div', { class: 'row wb-docacts' },
                 h('button', { class: 'btn sm', onclick: downloadCurrent }, ic('download', 15), 'Scarica'),
                 h('button', { class: 'btn sm ghost', onclick: () => input.click() }, ic('upload', 15), 'Apri un altro file'),
@@ -16801,7 +16865,7 @@ const Flow = (() => {
               nodes.push(h('div', { class: 'home-quick' },
                 h('div', { class: 'hq-label' }, 'Usati di recente'),
                 ...quick.slice(0, 8).map(id => h('button', { class: 'chip', style: { '--hue': TOOLS[id].hue }, onclick: () => go(id) }, ic(TOOLS[id].icon, 14), TOOLS[id].short)),
-                h('button', { class: 'chip more', onclick: () => Cmd.show() }, ic('search', 13), 'Cerca…')));
+                h('button', { class: 'chip more', onclick: () => Cmd.show() }, ic('search', 13), 'Cerca\u2026')));
             }
             nodes.push(...grouped(id => go(id), [...allowed]));
             return nodes;
@@ -16826,7 +16890,7 @@ const Flow = (() => {
       const dz = h('div', { class: 'wb-drop', onclick: () => input.click() },
         h('div', { class: 'dz-ic' }, ic('upload', 30)),
         h('div', {}, h('h2', { class: 'dz-t' }, h('span', { class: 'dz-mouse' }, 'Trascina qui il tuo file'), h('span', { class: 'dz-touch' }, 'Apri un documento')),
-          h('p', {}, 'PDF, foto, bilanci XBRL, file firmati .p7m. Poi scegli cosa farci, uno strumento alla volta.', IS_TOUCH ? null : h('span', { class: 'dz-kbd' }, ' Premi ', h('kbd', {}, /Mac|iPhone|iPad/.test(navigator.platform || '') ? '⌘ K' : 'Ctrl K'), ' per cercare uno strumento.'))),
+          h('p', {}, 'PDF, foto, bilanci XBRL, file firmati .p7m. Poi scegli cosa farci, uno strumento alla volta.', IS_TOUCH ? null : h('span', { class: 'dz-kbd' }, ' Premi ', h('kbd', {}, /Mac|iPhone|iPad/.test(navigator.platform || '') ? '\u2318 K' : 'Ctrl K'), ' per cercare uno strumento.'))),
         h('button', { type: 'button', class: 'btn primary dz-pick' }, ic('file', 18), 'Scegli il file'),
         cameraButton(f => addFiles(f), { label: 'Fotografa un documento' }),
         typeof Cloud !== 'undefined' ? h('button', { class: 'btn sm ghost dz-cloud cloud-btn', title: 'Apri dal cloud', onclick: async e => { e.stopPropagation(); const f = await Cloud.pick({ multiple: true }); if (f?.length) addFiles(f); } }, ic('cloud', 15), 'Apri dal cloud') : null,
@@ -16841,7 +16905,7 @@ const Flow = (() => {
       const favs = (typeof Favs !== 'undefined' ? Favs.list() : []).filter(id => TOOLS[id]);
       if (!favs.length) return null;
       return h('section', { class: 'home-favs', 'aria-labelledby': 'hf-h' },
-        h('div', { class: 'hf-head' }, h('h2', { id: 'hf-h' }, ic('star', 14), 'I tuoi preferiti'), h('span', { class: 'hf-sub' }, plural(favs.length, 'strumento', 'strumenti') + ' · la stellina nell’elenco li toglie')),
+        h('div', { class: 'hf-head' }, h('h2', { id: 'hf-h' }, ic('star', 14), 'I tuoi preferiti'), h('span', { class: 'hf-sub' }, plural(favs.length, 'strumento', 'strumenti') + ' · la stellina nell\u2019elenco li toglie')),
         h('div', { class: 'hf-l' }, favs.map(id => {
           const t = TOOLS[id];
           const a = h('a', { class: 'hf-t', href: urlFor(id), draggable: 'false', dataset: { id }, style: { '--hue': t.hue }, title: t.desc,
@@ -16851,7 +16915,7 @@ const Flow = (() => {
           return a;
         })));
     }
-    /* —— riconoscimento al caricamento: cosa ho notato e cosa conviene fare —— */
+    /* \u2014\u2014 riconoscimento al caricamento: cosa ho notato e cosa conviene fare \u2014\u2014 */
     let insOff = null;
     function insightBox(v) {
       insOff?.(); insOff = null;
@@ -16862,7 +16926,7 @@ const Flow = (() => {
         const adv = DocInsight.advise(f), sum = DocInsight.summary(f);
         box2.replaceChildren(
           h('div', { class: 'wb-ins-h' }, f.done ? ic('check', 15, 2.6) : h('span', { class: 'jp-spin' }),
-            h('b', {}, f.done ? (adv.length ? 'Cosa ho notato' : 'Nessun intervento necessario') : 'Analisi del documento…'),
+            h('b', {}, f.done ? (adv.length ? 'Cosa ho notato' : 'Nessun intervento necessario') : 'Analisi del documento\u2026'),
             sum ? h('span', { class: 'muted small' }, sum) : null),
           ...adv.slice(0, 6).map(a => h('div', { class: 'wb-ins-row', style: { '--hue': TOOLS[a.tool].hue } },
             h('span', { class: 't-ic' }, ic(TOOLS[a.tool].icon, 17)),
@@ -16906,13 +16970,13 @@ const Flow = (() => {
 const Projects = (() => {
   const ST = 'progetti', BL = 'blobs', MAX_RESULTS = 40, MAX_AGE_OPEN = 30 * 86400e3;
   let cur = null;                 // il progetto aperto in questa scheda (solo i dati, i file sono nell'archivio)
-  const keyOf = new WeakMap();    // contenuto già salvato → chiave nell'archivio (le versioni non si salvano due volte)
+  const keyOf = new WeakMap();    // contenuto già salvato \u2192 chiave nell'archivio (le versioni non si salvano due volte)
   const newId = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const listeners = new Set();
   const changed = () => listeners.forEach(f => { try { f(); } catch { } });
   let warnedSpace = false;
 
-  /* —— file nell'archivio —— */
+  /* \u2014\u2014 file nell'archivio \u2014\u2014 */
   async function putBlob(bytes, type = 'application/octet-stream') {
     let k = keyOf.get(bytes); if (k) return k;
     k = newId('b'); await Store.put(BL, new Blob([bytes], { type }), k); keyOf.set(bytes, k); return k;
@@ -16939,7 +17003,7 @@ const Projects = (() => {
     if (est.usage / est.quota > 0.85) { warnedSpace = true; toastActions('Lo spazio per i progetti sta finendo: elimina quelli che non ti servono più', [['Apri i progetti', () => nav('progetti')]], 10000); }
   }
 
-  /* —— il progetto aperto —— */
+  /* \u2014\u2014 il progetto aperto \u2014\u2014 */
   function create(name) {
     cur = { id: newId('p'), name: stripExt(name || 'Progetto').slice(0, 80) || 'Progetto', created: Date.now(), updated: Date.now(), open: true, cur: 0, versions: [], files: [], results: [], draft: null, lastTool: null, thumb: null };
     Store.persist();
@@ -17018,7 +17082,7 @@ const Projects = (() => {
     } catch (e) { console.warn('miniatura', e); }
   }
 
-  /* —— avvio: salvataggio automatico e passaggio dalla vecchia «ripresa» —— */
+  /* \u2014\u2014 avvio: salvataggio automatico e passaggio dalla vecchia «ripresa» \u2014\u2014 */
   let started = false;
   async function start() {
     if (started || typeof Flow === 'undefined') return; started = true;
@@ -17039,12 +17103,12 @@ const Projects = (() => {
     setTimeout(gc, 4000);
   }
 
-  /* —— aprire un progetto —— */
+  /* \u2014\u2014 aprire un progetto \u2014\u2014 */
   const list = async () => (await Store.all(ST).catch(() => [])).sort((a, b) => b.updated - a.updated);
   async function openProject(id, { version = null, go = true } = {}) {
     if (Flow.active() && cur?.id !== id && !(await Flow.closeDoc())) return false;
     const p = await Store.get(ST, id); if (!p) { toast('Progetto non trovato', 'error'); return false; }
-    const r = await withBusy('Apertura del progetto…', async () => {
+    const r = await withBusy('Apertura del progetto\u2026', async () => {
       const versions = [];
       for (const [i, v] of p.versions.entries()) { Busy.set(i / Math.max(1, p.versions.length + p.files.length)); const b = await getBytes(v.key); if (b) versions.push({ bytes: b, name: v.name, label: v.label, tool: v.tool, at: v.at }); }
       const files = [];
@@ -17071,7 +17135,7 @@ const Projects = (() => {
   async function rename(id, name) { const p = cur?.id === id ? cur : await Store.get(ST, id); if (!p || !name) return; p.name = name.slice(0, 80); await write(p); }
   async function forget(id) { const p = cur?.id === id ? cur : await Store.get(ST, id); if (!p) return; p.open = false; if (cur?.id === id) { cur = null; lastSig = ''; } await write(p); }
 
-  /* —— in home: «Riprendi sessione» e i progetti recenti —— */
+  /* \u2014\u2014 in home: «Riprendi sessione» e i progetti recenti \u2014\u2014 */
   const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'poco fa' : m < 60 ? `${m} min fa` : m < 1440 ? `${Math.round(m / 60)} ore fa` : m < 2880 ? 'ieri' : new Date(t).toLocaleDateString('it-IT'); };
   const counts = p => [p.files.length ? plural(p.files.length, 'file', 'file') : null, p.versions.length > 1 ? plural(p.versions.length, 'versione', 'versioni') : p.versions.length ? '1 documento' : null,
     p.results.length ? plural(p.results.length, 'risultato', 'risultati') : null].filter(Boolean).join(' · ');
@@ -17099,7 +17163,7 @@ const Projects = (() => {
     return box;
   }
 
-  /* —— la pagina dei progetti —— */
+  /* \u2014\u2014 la pagina dei progetti \u2014\u2014 */
   function render(body) {
     const st = { q: '', open: null };
     const search = h('input', { class: 'input pj-q', type: 'search', placeholder: 'Cerca un progetto o un file', oninput: () => { st.q = search.value.trim().toLowerCase(); draw(); } });
@@ -17113,7 +17177,7 @@ const Projects = (() => {
       const b = await getBytes(k); if (!b) return;
       const f = new File([b], name, { type: type || (/\.pdf$/i.test(name) ? 'application/pdf' : '') });
       const choose = Object.entries(TOOLS).filter(([id, t]) => t.pdfIn !== false && (isPdf(f) || /image/.test(t.accept || '')) && t.chain !== false);
-      const m = modal([h('h3', {}, `Apri «${name}» con…`), h('div', { class: 'chips', style: { marginTop: '10px' } }, choose.map(([id, t]) => h('button', { class: 'chip', style: { '--hue': t.hue }, onclick: () => { m.close(); handoff(id, f); } }, ic(t.icon, 14), t.short)))], { width: 520 });
+      const m = modal([h('h3', {}, `Apri «${name}» con\u2026`), h('div', { class: 'chips', style: { marginTop: '10px' } }, choose.map(([id, t]) => h('button', { class: 'chip', style: { '--hue': t.hue }, onclick: () => { m.close(); handoff(id, f); } }, ic(t.icon, 14), t.short)))], { width: 520 });
     };
     function card(p) {
       const isCur = cur?.id === p.id;
@@ -17140,10 +17204,10 @@ const Projects = (() => {
       const vers = p.versions.map((v, i) => ({ v, i })).reverse().map(({ v, i }) => row('layers', `v${i + 1} · ${v.label}`, `${new Date(v.at).toLocaleString('it-IT')} · ${fmtSize(v.size)}${i === p.cur ? ' · in uso' : ''}`, [
         h('button', { class: 'btn sm pj-restore', onclick: () => openProject(p.id, { version: i }) }, i === p.cur ? 'Apri' : 'Riprendi questa'),
         iconBtn('eye', 'Anteprima', () => pvBlob(v.key, v.name)), iconBtn('download', 'Scarica', () => dlBlob(v.key, i ? `${stripExt(v.name)}-v${i + 1}.pdf` : v.name, 'application/pdf'))]));
-      const files = p.files.map(f => row('file', f.name, `${fmtSize(f.size)} · caricato ${ago(f.at)}`, [h('button', { class: 'btn sm', onclick: () => openIn(f.key, f.name, f.type) }, 'Apri con…'), iconBtn('download', 'Scarica', () => dlBlob(f.key, f.name, f.type))]));
+      const files = p.files.map(f => row('file', f.name, `${fmtSize(f.size)} · caricato ${ago(f.at)}`, [h('button', { class: 'btn sm', onclick: () => openIn(f.key, f.name, f.type) }, 'Apri con\u2026'), iconBtn('download', 'Scarica', () => dlBlob(f.key, f.name, f.type))]));
       const res = p.results.slice().reverse().map(r => row('check', r.name, `${fmtSize(r.size)} · ${r.tool && TOOLS[r.tool] ? TOOLS[r.tool].short + ' · ' : ''}${ago(r.at)}`, [
         typeof Preview !== 'undefined' && Preview.can({ name: r.name, bytes: new Uint8Array(1) }) ? iconBtn('eye', 'Anteprima', () => pvBlob(r.key, r.name)) : null,
-        /\.pdf$/i.test(r.name) ? h('button', { class: 'btn sm', onclick: () => openIn(r.key, r.name, r.type) }, 'Apri con…') : null,
+        /\.pdf$/i.test(r.name) ? h('button', { class: 'btn sm', onclick: () => openIn(r.key, r.name, r.type) }, 'Apri con\u2026') : null,
         typeof Cloud !== 'undefined' ? iconBtn('cloud', 'Salva sul cloud', async () => { const b = await getBytes(r.key); if (b) Cloud.saveOutputs([{ name: r.name, bytes: b, type: r.type }]); }, 'icon-btn cloud-btn') : null,
         iconBtn('download', 'Scarica', () => dlBlob(r.key, r.name, r.type))]));
       return h('div', { class: 'pj-content' },
@@ -17203,9 +17267,9 @@ const PadesSign = (() => {
     if (!p12) throw codedError(/mac|password|invalid/i.test(err?.message || '') ? 'Password del certificato non corretta.' : 'Il file del certificato non è leggibile (serve un .p12 o .pfx).', 'CERT');
     const keys = [], certs = [];
     for (const sc of p12.safeContents) for (const bag of sc.safeBags) { if (bag.key) keys.push(bag.key); if (bag.cert) certs.push(bag.cert); }
-    if (!keys.length) throw new Error('Nel certificato non c’è la chiave privata: serve il file .p12/.pfx completo.');
+    if (!keys.length) throw new Error('Nel certificato non c\u2019è la chiave privata: serve il file .p12/.pfx completo.');
     const key = keys[0], cert = certs.find(c => c.publicKey?.n && c.publicKey.n.equals(key.n)) || certs[0];
-    if (!cert) throw new Error('Nel file non c’è il certificato del firmatario.');
+    if (!cert) throw new Error('Nel file non c\u2019è il certificato del firmatario.');
     const cn = cert.subject.getField('CN')?.value || cert.subject.attributes.map(a => a.value).join(', ');
     const now = new Date();
     return { key, cert, chain: certs.filter(c => c !== cert), name: cn, expired: cert.validity.notAfter < now, notAfter: cert.validity.notAfter };
@@ -17264,12 +17328,12 @@ const Ricette = (() => {
   const listeners = new Set();
   const changed = () => listeners.forEach(f => { try { f(); } catch { } });
   const newId = () => 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-  /* —— i passaggi possibili —— */
+  /* \u2014\u2014 i passaggi possibili \u2014\u2014 */
   const BOLLO = 'Imposta di bollo assolta in modo virtuale ai sensi del D.M. 17 giugno 2014 - euro 2,00';
   const S = {
     compress: { label: 'Comprimi', icon: 'compress', group: 'Peso e formato', def: { mode: 'media', mb: 5 }, desc: p => p.mode === 'target' ? `sotto ${p.mb} MB` : { leggera: 'leggera, qualità alta', media: 'media', forte: 'forte, file piccolissimi' }[p.mode] },
     merge: { label: 'Unisci in un solo PDF', icon: 'merge', group: 'Pagine', many: true, def: { order: 'nome', name: '{ricetta} {data}' }, desc: p => `in ordine ${p.order === 'nome' ? 'di nome' : 'di caricamento'} · «${p.name}»` },
-    stamp: { label: 'Timbro o dicitura (marca da bollo)', icon: 'seal', group: 'Aggiungi', def: { text: BOLLO, pos: 'tr', pages: 'first', size: 8, box: true }, desc: p => `«${p.text.slice(0, 40)}${p.text.length > 40 ? '…' : ''}» · ${POS[p.pos]} · ${PG[p.pages]}` },
+    stamp: { label: 'Timbro o dicitura (marca da bollo)', icon: 'seal', group: 'Aggiungi', def: { text: BOLLO, pos: 'tr', pages: 'first', size: 8, box: true }, desc: p => `«${p.text.slice(0, 40)}${p.text.length > 40 ? '\u2026' : ''}» · ${POS[p.pos]} · ${PG[p.pages]}` },
     numbers: { label: 'Numeri di pagina', icon: 'hash', group: 'Aggiungi', def: { format: 'Pagina {n} di {N}', pos: 'bc', size: 9 }, desc: p => `«${p.format}» · ${POS[p.pos]}` },
     watermark: { label: 'Filigrana', icon: 'type', group: 'Aggiungi', def: { text: 'COPIA', opacity: 15 }, desc: p => `«${p.text}» al ${p.opacity}%` },
     orient: { label: 'Raddrizza le pagine', icon: 'rotate', group: 'Pagine', def: {}, desc: () => 'capovolte o di lato' },
@@ -17303,9 +17367,9 @@ const Ricette = (() => {
   const get = id => list().find(r => r.id === id);
   function save(r) { const a = list().filter(x => x.id !== r.id); const rec = { ...r, id: r.id || newId(), at: r.at || Date.now(), upd: Date.now() }; a.unshift(rec); store(a.slice(0, 60)); return rec; }
   function remove(id) { store(list().filter(r => r.id !== id)); Store.del('ripresa', 'dir:' + id).catch(() => {}); }
-  const stepsText = r => r.steps.map(s => S[s.id]?.label || s.id).join(' → ');
+  const stepsText = r => r.steps.map(s => S[s.id]?.label || s.id).join(' \u2192 ');
 
-  /* —— esecuzione —— */
+  /* \u2014\u2014 esecuzione \u2014\u2014 */
   const pad = n => String(n).padStart(2, '0');
   function fill(pattern, { nome = '', ricetta = '', n = 1, contenuto = '' } = {}) {
     const d = new Date(), mesi = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
@@ -17411,7 +17475,7 @@ const Ricette = (() => {
     return docs.map(d => { let n = AutoName.clean ? AutoName.clean(d.name) : d.name, k = 2; while (used.has(n.toLowerCase())) n = `${d.name} (${k++})`; used.add(n.toLowerCase()); return { name: n + '.pdf', bytes: d.bytes, info: d.did.join(' · ') || 'nessuna modifica necessaria' }; });
   }
 
-  /* —— cartelle (File System Access, dove il browser lo permette) —— */
+  /* \u2014\u2014 cartelle (File System Access, dove il browser lo permette) \u2014\u2014 */
   const canDir = () => typeof window.showDirectoryPicker === 'function' && !IS_ARTIFACT && !IS_IOS;
   const ACCEPT = /\.(pdf|p7m|jpe?g|png|heic|heif|tiff?|webp)$/i;
   async function readDir(dir, depth = 0, base = '') {
@@ -17431,7 +17495,7 @@ const Ricette = (() => {
   const savedDir = id => Store.get('ripresa', 'dir:' + id).catch(() => null);
   const keepDir = (id, dir) => Store.put('ripresa', dir, 'dir:' + id).catch(() => {});
 
-  /* —— prima di eseguire: password e certificato (mai salvati) —— */
+  /* \u2014\u2014 prima di eseguire: password e certificato (mai salvati) \u2014\u2014 */
   function askSecrets(r) {
     const needPw = r.steps.some(s => s.id === 'protect'), needCert = r.steps.some(s => s.id === 'sign');
     if (!needPw && !needCert) return Promise.resolve({});
@@ -17467,7 +17531,7 @@ const Ricette = (() => {
     const sec = await askSecrets(r); if (!sec) return;
     const notes = [];
     CURRENT_INPUT = [...files];
-    const outs = await withBusy(`Ricetta «${r.name}»…`, () => run(r, files, { ...sec, notes }), { job: true, cancellable: true, subject: `${r.name} · ${plural(files.length, 'file', 'file')}`, bytes: files.reduce((a, f) => a + f.size, 0) });
+    const outs = await withBusy(`Ricetta «${r.name}»\u2026`, () => run(r, files, { ...sec, notes }), { job: true, cancellable: true, subject: `${r.name} · ${plural(files.length, 'file', 'file')}`, bytes: files.reduce((a, f) => a + f.size, 0) });
     if (!outs) return;
     const all = list(); const rec = all.find(x => x.id === r.id); if (rec) { rec.runs = (rec.runs || 0) + 1; rec.last = Date.now(); store(all); }
     let note = notes.join(' ');
@@ -17478,7 +17542,7 @@ const Ricette = (() => {
     showResult(outs, { title: outs.length > 1 ? `Ricetta «${r.name}»: file pronti` : `Ricetta «${r.name}»: file pronto`, zipName: fill(r.name) + '.zip', note: note || undefined, noNext: outs.length > 1 });
   }
 
-  /* —— editor —— */
+  /* \u2014\u2014 editor \u2014\u2014 */
   function editor(r0, onSaved) {
     const r = r0 ? JSON.parse(JSON.stringify(r0)) : { name: '', steps: [] };
     r.steps = r.steps.filter(s => S[s.id]).map(s => ({ id: s.id, p: { ...S[s.id].def, ...(s.p || {}) } }));
@@ -17494,12 +17558,12 @@ const Ricette = (() => {
         case 'compress': return [field('Quanto', sel({ leggera: 'Leggera (qualità alta)', media: 'Media', forte: 'Forte', target: 'Sotto un peso massimo' }, p.mode, v => { p.mode = v; draw(); })), p.mode === 'target' ? field('MB', num(p.mb, set('mb'), 0.2, 500, 0.5)) : null];
         case 'merge': return [field('Ordine', sel({ nome: 'Per nome del file', arrivo: 'Come caricati' }, p.order, set('order'))), field('Nome del file unito', txt(p.name, set('name'), '{ricetta} {data}'))];
         case 'stamp': return [h('label', { class: 'rc-f wide' }, h('span', {}, 'Testo (anche su più righe)'), h('textarea', { class: 'input', rows: 2, oninput: e => { p.text = e.target.value; } }, p.text)),
-          h('div', { class: 'rc-presets' }, h('span', { class: 'muted small' }, 'Pronti:'), ...[['Marca da bollo virtuale', BOLLO], ['Copia conforme', 'Copia conforme all’originale'], ['Pagato', 'PAGATO il {data}'], ['Ricevuto', 'Ricevuto il {data}']].map(([l, t]) => h('button', { class: 'chip', onclick: () => { p.text = t; draw(); } }, l))),
+          h('div', { class: 'rc-presets' }, h('span', { class: 'muted small' }, 'Pronti:'), ...[['Marca da bollo virtuale', BOLLO], ['Copia conforme', 'Copia conforme all\u2019originale'], ['Pagato', 'PAGATO il {data}'], ['Ricevuto', 'Ricevuto il {data}']].map(([l, t]) => h('button', { class: 'chip', onclick: () => { p.text = t; draw(); } }, l))),
           field('Posizione', sel(POS, p.pos, set('pos'))), field('Pagine', sel(PG, p.pages, set('pages'))), field('Corpo', num(p.size, set('size'), 5, 30)), h('label', { class: 'rc-f chk' }, h('input', { type: 'checkbox', checked: p.box, onchange: e => { p.box = e.target.checked; } }), h('span', {}, 'Con riquadro'))];
         case 'numbers': return [field('Formato', txt(p.format, set('format'), 'Pagina {n} di {N}')), field('Posizione', sel(POS, p.pos, set('pos'))), field('Corpo', num(p.size, set('size'), 5, 24))];
         case 'watermark': return [field('Testo', txt(p.text, set('text'), 'COPIA')), field('Intensità %', num(p.opacity, set('opacity'), 5, 60))];
         case 'pdfa': return [field('Livello', sel({ 1: 'PDF/A-1b (PEC, PA)', 2: 'PDF/A-2b' }, String(p.part), v => { p.part = +v; }))];
-        case 'sign': return [field('Motivo', txt(p.reason, set('reason'))), h('label', { class: 'rc-f chk' }, h('input', { type: 'checkbox', checked: p.visible, onchange: e => { p.visible = e.target.checked; } }), h('span', {}, 'Riquadro «Firmato digitalmente da…» sull’ultima pagina'))];
+        case 'sign': return [field('Motivo', txt(p.reason, set('reason'))), h('label', { class: 'rc-f chk' }, h('input', { type: 'checkbox', checked: p.visible, onchange: e => { p.visible = e.target.checked; } }), h('span', {}, 'Riquadro «Firmato digitalmente da\u2026» sull\u2019ultima pagina'))];
         case 'name': return [field('Nome', txt(p.pattern, set('pattern'), '{nome}')), h('span', { class: 'muted small rc-help' }, 'Puoi usare {nome}, {data}, {mese}, {anno}, {n}, {contenuto} (letto dal documento).')];
         default: return [];
       }
@@ -17509,8 +17573,8 @@ const Ricette = (() => {
       stepsEl.replaceChildren(...(r.steps.length ? r.steps.map((s, i) => h('div', { class: 'rc-step' },
         h('div', { class: 'rc-sh' }, h('span', { class: 'as-n' }, i + 1), h('span', { class: 'as-si' }, ic(S[s.id].icon, 16)), h('b', {}, S[s.id].label),
           h('span', { class: 'rc-sa' }, iconBtn('chevron', 'Sposta su', () => { if (i) { [r.steps[i - 1], r.steps[i]] = [r.steps[i], r.steps[i - 1]]; draw(); } }, 'icon-btn rc-up'), iconBtn('chevron', 'Sposta giù', () => { if (i < r.steps.length - 1) { [r.steps[i + 1], r.steps[i]] = [r.steps[i], r.steps[i + 1]]; draw(); } }, 'icon-btn rc-down'), iconBtn('x', 'Togli il passaggio', () => { r.steps.splice(i, 1); draw(); }))),
-        h('div', { class: 'rc-params' }, params(s)))) : [h('div', { class: 'muted small rc-empty' }, 'Aggiungi i passaggi nell’ordine in cui vanno fatti.')]));
-      warn.textContent = r.steps.findIndex(s => s.id === 'sign') >= 0 && r.steps.slice(r.steps.findIndex(s => s.id === 'sign') + 1).some(s => s.id !== 'name') ? 'La firma deve essere l’ultimo passaggio: quelli dopo la renderebbero non valida.' : '';
+        h('div', { class: 'rc-params' }, params(s)))) : [h('div', { class: 'muted small rc-empty' }, 'Aggiungi i passaggi nell\u2019ordine in cui vanno fatti.')]));
+      warn.textContent = r.steps.findIndex(s => s.id === 'sign') >= 0 && r.steps.slice(r.steps.findIndex(s => s.id === 'sign') + 1).some(s => s.id !== 'name') ? 'La firma deve essere l\u2019ultimo passaggio: quelli dopo la renderebbero non valida.' : '';
     }
     const warn = h('div', { class: 'hint warn rc-warn' });
     const groups = [...new Set(Object.values(S).map(s => s.group))];
@@ -17521,7 +17585,7 @@ const Ricette = (() => {
     draw();
   }
 
-  /* —— la pagina —— */
+  /* \u2014\u2014 la pagina \u2014\u2014 */
   function render(body) {
     const filesIn = h('input', { type: 'file', multiple: true, hidden: true, accept: '.pdf,.p7m,' + IMG_ACCEPT });
     const dirIn = h('input', { type: 'file', multiple: true, hidden: true, webkitdirectory: '', directory: '' });
@@ -17532,7 +17596,7 @@ const Ricette = (() => {
         try { if (!dir) dir = await window.showDirectoryPicker({ id: 'officina-ricette', mode: 'readwrite' }); } catch (e) { if (e.name !== 'AbortError') Errors.show(e); return; }
         if (!(await permit(dir))) return toast('Senza il permesso sulla cartella non posso leggere i file', 'error');
         keepDir(r.id, dir);
-        const files = await withBusy('Lettura della cartella…', () => readDir(dir));
+        const files = await withBusy('Lettura della cartella\u2026', () => readDir(dir));
         if (!files) return;
         if (!files.length) return toast(`Nella cartella «${dir.name}» non ci sono PDF o immagini`, 'error');
         return execute(r, files, { dir, toDir: true });
@@ -17563,7 +17627,7 @@ const Ricette = (() => {
       const dirs = await Promise.all(all.map(r => canDir() ? savedDir(r.id) : null));
       listEl.replaceChildren(...(all.length ? all.map((r, i) => dropRun(r, h('div', { class: 'rc-card', dataset: { id: r.id } },
         h('div', { class: 'rc-drop', 'aria-hidden': 'true' }, ic('upload', 22), h('b', {}, `Rilascia per eseguire «${r.name}»`)),
-        h('div', { class: 'rc-ch' }, h('span', { class: 'rc-ic' }, ic('recipe', 20)), h('div', { class: 'rc-ct' }, h('b', {}, r.name), h('span', { class: 'muted small' }, r.runs ? `Eseguita ${plural(r.runs, 'volta', 'volte')}${r.last ? ' · l’ultima il ' + new Date(r.last).toLocaleDateString('it-IT') : ''}` : 'Mai eseguita'))),
+        h('div', { class: 'rc-ch' }, h('span', { class: 'rc-ic' }, ic('recipe', 20)), h('div', { class: 'rc-ct' }, h('b', {}, r.name), h('span', { class: 'muted small' }, r.runs ? `Eseguita ${plural(r.runs, 'volta', 'volte')}${r.last ? ' · l\u2019ultima il ' + new Date(r.last).toLocaleDateString('it-IT') : ''}` : 'Mai eseguita'))),
         h('div', { class: 'rc-chips' }, r.steps.map((s, k) => h('span', { class: 'rc-chip' }, h('i', {}, k + 1), ic(S[s.id]?.icon || 'file', 13), S[s.id]?.label || s.id))),
         h('div', { class: 'rc-acts' },
           dirs[i] ? h('button', { class: 'btn primary sm rc-again', title: 'Rilegge la cartella e salva i risultati in una sottocartella', onclick: () => chooseDir(r, true) }, ic('folder', 15), `Esegui su «${dirs[i].name}»`) : null,
@@ -17573,8 +17637,8 @@ const Ricette = (() => {
           typeof Cloud !== 'undefined' ? h('button', { class: 'btn sm rc-cloud cloud-btn', onclick: async () => { const f = await Cloud.pick({ multiple: true }); if (f?.length) execute(r, f); } }, ic('cloud', 15), 'Dal cloud') : null,
           h('span', { style: { flex: 1 } }),
           iconBtn('edit', 'Modifica', () => editor(r, draw)), iconBtn('copy', 'Duplica', () => { save({ ...r, id: null, name: r.name + ' (copia)', runs: 0, last: null }); }), iconBtn('trash', 'Elimina', () => { remove(r.id); toast(`Ricetta «${r.name}» eliminata`); }))))) :
-        [h('div', { class: 'act-empty' }, ic('recipe', 26), h('b', {}, 'Ancora nessuna ricetta'), h('span', { class: 'muted small' }, 'Una ricetta è una sequenza di passaggi che fai spesso: la salvi una volta e poi la rilanci su file o su un’intera cartella con un clic.'))]));
-      tpl.replaceChildren(h('div', { class: 'sec-t' }, 'Parti da un modello'), h('div', { class: 'chips' }, TEMPLATES.map(t => h('button', { class: 'chip rc-t', onclick: () => editor({ ...JSON.parse(JSON.stringify(t)), id: null }, draw) }, h('span', { class: 'rc-t-h' }, ic('recipe', 15), h('b', {}, t.name), h('span', { class: 'rc-t-use' }, 'Usa', ic('arrow', 13))), h('span', { class: 'muted small rc-t-s' }, t.steps.map(s => S[s.id].label.split(' (')[0]).join(' → '))))));
+        [h('div', { class: 'act-empty' }, ic('recipe', 26), h('b', {}, 'Ancora nessuna ricetta'), h('span', { class: 'muted small' }, 'Una ricetta è una sequenza di passaggi che fai spesso: la salvi una volta e poi la rilanci su file o su un\u2019intera cartella con un clic.'))]));
+      tpl.replaceChildren(h('div', { class: 'sec-t' }, 'Parti da un modello'), h('div', { class: 'chips' }, TEMPLATES.map(t => h('button', { class: 'chip rc-t', onclick: () => editor({ ...JSON.parse(JSON.stringify(t)), id: null }, draw) }, h('span', { class: 'rc-t-h' }, ic('recipe', 15), h('b', {}, t.name), h('span', { class: 'rc-t-use' }, 'Usa', ic('arrow', 13))), h('span', { class: 'muted small rc-t-s' }, t.steps.map(s => S[s.id].label.split(' (')[0]).join(' \u2192 '))))));
     }
     // mentre si trascinano file sulla pagina, le ricette si evidenziano; con una sola ricetta va bene rilasciarli ovunque
     let dragDepth = 0;
@@ -17595,7 +17659,7 @@ const Ricette = (() => {
     draw();
     listeners.add(draw); onLeave(() => listeners.delete(draw));
   }
-  PAGES.ricette = { title: 'Ricette', short: 'Ricette', icon: 'recipe', hue: '#7C3AED', desc: 'Le tue sequenze di passaggi (comprimi, unisci, marca da bollo, firma…): salvale una volta, rilanciale su file o cartelle con un clic.', render };
+  PAGES.ricette = { title: 'Ricette', short: 'Ricette', icon: 'recipe', hue: '#7C3AED', desc: 'Le tue sequenze di passaggi (comprimi, unisci, marca da bollo, firma\u2026): salvale una volta, rilanciale su file o cartelle con un clic.', render };
   return { list, get, save, remove, run, execute, editor, stepsText, STEPS: S, TEMPLATES, fill };
 })();
 
@@ -17625,9 +17689,9 @@ const Ricette = (() => {
 const Cloud = (() => {
   const P = {
     gdrive: { name: 'Google Drive', color: '#1A73E8', keys: [['clientId', 'ID client OAuth (Google Cloud)'], ['apiKey', 'Chiave API (Picker)'], ['appId', 'Numero del progetto (App ID)']],
-      help: 'Google Cloud Console › API e servizi: abilita Google Drive API e Google Picker API, crea un «ID client OAuth» di tipo applicazione web con l’origine JavaScript qui sotto e una chiave API. Il numero del progetto serve perché file360 possa leggere i file che scegli.' },
-    dropbox: { name: 'Dropbox', color: '#0061FE', keys: [['appKey', 'App key']], help: 'Dropbox App Console: crea un’app «Scoped access» con i permessi files.content.read e files.content.write e aggiungi l’indirizzo di ritorno qui sotto (Redirect URI).' },
-    onedrive: { name: 'OneDrive', color: '#0078D4', keys: [['clientId', 'ID applicazione (client)']], help: 'Portale Azure › Registrazioni app: account personali e aziendali, piattaforma «Applicazione a pagina singola» con l’indirizzo di ritorno qui sotto, permesso Files.ReadWrite.' },
+      help: 'Google Cloud Console \u203a API e servizi: abilita Google Drive API e Google Picker API, crea un «ID client OAuth» di tipo applicazione web con l\u2019origine JavaScript qui sotto e una chiave API. Il numero del progetto serve perché file360 possa leggere i file che scegli.' },
+    dropbox: { name: 'Dropbox', color: '#0061FE', keys: [['appKey', 'App key']], help: 'Dropbox App Console: crea un\u2019app «Scoped access» con i permessi files.content.read e files.content.write e aggiungi l\u2019indirizzo di ritorno qui sotto (Redirect URI).' },
+    onedrive: { name: 'OneDrive', color: '#0078D4', keys: [['clientId', 'ID applicazione (client)']], help: 'Portale Azure \u203a Registrazioni app: account personali e aziendali, piattaforma «Applicazione a pagina singola» con l\u2019indirizzo di ritorno qui sotto, permesso Files.ReadWrite.' },
   };
   const CFG = 'officina.cloud.config', LAST = 'officina.cloud.last';
   const lsGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
@@ -17654,7 +17718,7 @@ const Cloud = (() => {
   }
   const redirectUri = () => location.origin + (IS_SITE ? new URL(SITE_BASE).pathname : location.pathname);
 
-  /* —— accesso —— */
+  /* \u2014\u2014 accesso \u2014\u2014 */
   const TK = id => 'officina.cloud.tok.' + id;
   const token = id => { try { const t = JSON.parse(sessionStorage.getItem(TK(id))); return t && t.exp > Date.now() + 60e3 ? t.access : null; } catch { return null; } };
   const keepToken = (id, access, sec) => { try { sessionStorage.setItem(TK(id), JSON.stringify({ access, exp: Date.now() + (sec || 3600) * 1000 })); } catch { } };
@@ -17716,9 +17780,9 @@ const Cloud = (() => {
     if (!r.ok) { let m = ''; try { m = (await r.clone().json()).error_summary || (await r.json()).error?.message || ''; } catch { } throw new Error(`${P[id].name}: richiesta non riuscita (${r.status}${m ? ' · ' + m : ''})`); }
     return r;
   }
-  const asciiJson = o => JSON.stringify(o).replace(/[\u007f-￿]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+  const asciiJson = o => JSON.stringify(o).replace(/[\u007f-\uffff]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 
-  /* —— cartelle e file (Dropbox, OneDrive) —— */
+  /* \u2014\u2014 cartelle e file (Dropbox, OneDrive) \u2014\u2014 */
   async function listFolder(id, folder) {
     if (id === 'dropbox') {
       let r = await (await call(id, 'https://api.dropboxapi.com/2/files/list_folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: folder?.path || '', limit: 500 }) })).json();
@@ -17760,7 +17824,7 @@ const Cloud = (() => {
     });
   }
 
-  /* —— navigatore di cartelle (Dropbox, OneDrive) —— */
+  /* \u2014\u2014 navigatore di cartelle (Dropbox, OneDrive) \u2014\u2014 */
   function browse(id, { mode = 'open', multiple = true, accept = null } = {}) {
     return new Promise(res => {
       let done = false, path = [{ id: null, path: '', name: P[id].name }], items = [], sel = new Set();
@@ -17768,13 +17832,13 @@ const Cloud = (() => {
       const crumbs = h('div', { class: 'cl-crumbs' }), listEl = h('div', { class: 'cl-list' }), foot = h('div', { class: 'cl-foot' });
       const okType = n => !accept || accept.test(n);
       async function load() {
-        listEl.replaceChildren(h('div', { class: 'cl-wait' }, h('span', { class: 'jp-spin' }), 'Lettura della cartella…'));
+        listEl.replaceChildren(h('div', { class: 'cl-wait' }, h('span', { class: 'jp-spin' }), 'Lettura della cartella\u2026'));
         try { items = (await listFolder(id, path[path.length - 1])).sort((a, b) => (b.folder - a.folder) || a.name.localeCompare(b.name, 'it', { numeric: true })); }
         catch (e) { listEl.replaceChildren(h('div', { class: 'err-text' }, Errors.explain(e).text)); return; }
         sel.clear(); draw();
       }
       function draw() {
-        crumbs.replaceChildren(...path.flatMap((f, i) => [i ? h('span', { class: 'muted' }, '›') : null, h('button', { class: 'linkish', onclick: () => { path = path.slice(0, i + 1); load(); } }, f.name)]).filter(Boolean));
+        crumbs.replaceChildren(...path.flatMap((f, i) => [i ? h('span', { class: 'muted' }, '\u203a') : null, h('button', { class: 'linkish', onclick: () => { path = path.slice(0, i + 1); load(); } }, f.name)]).filter(Boolean));
         const shown = items.filter(x => x.folder || (mode === 'open' && okType(x.name)));
         listEl.replaceChildren(...(shown.length ? shown.map(x => h('div', { class: 'cl-item' + (sel.has(x.id) ? ' on' : '') + (x.folder ? ' dir' : ''), role: 'button', tabindex: 0,
           onclick: () => { if (x.folder) { path.push(x); load(); return; } if (!multiple) sel.clear(); sel.has(x.id) ? sel.delete(x.id) : sel.add(x.id); draw(); } },
@@ -17789,12 +17853,12 @@ const Cloud = (() => {
     });
   }
 
-  /* —— impostazioni (chiavi delle app) —— */
+  /* \u2014\u2014 impostazioni (chiavi delle app) \u2014\u2014 */
   function settings() {
     const cfg = lsGet(CFG, {}), base = window.OFFICINA_CLOUD || {};
     const inputs = {};
     const m = modal([h('h3', {}, 'Servizi cloud: chiavi delle applicazioni'),
-      h('p', { class: 'muted small' }, 'Per collegare un servizio serve un’applicazione registrata presso di esso (gratuita). Le chiavi restano in questo browser. Indirizzo da registrare come origine e ritorno: ', h('code', { class: 'cl-uri' }, redirectUri())),
+      h('p', { class: 'muted small' }, 'Per collegare un servizio serve un\u2019applicazione registrata presso di esso (gratuita). Le chiavi restano in questo browser. Indirizzo da registrare come origine e ritorno: ', h('code', { class: 'cl-uri' }, redirectUri())),
       !secure() ? h('div', { class: 'hint warn' }, 'Questa pagina è aperta da un file sul disco: i servizi cloud accettano solo indirizzi https (o localhost). Pubblica file360 su un sito o aprila da un server locale.') : null,
       ...Object.entries(P).map(([id, p]) => h('div', { class: 'cl-set' }, h('b', { style: { color: p.color } }, p.name), h('p', { class: 'muted small' }, p.help),
         ...p.keys.map(([k, l]) => h('label', { class: 'field' }, l, inputs[id + '.' + k] = h('input', { class: 'input', value: cfg[id]?.[k] || '', placeholder: base[id]?.[k] ? 'impostata dal sito' : '' }))))),
@@ -17802,7 +17866,7 @@ const Cloud = (() => {
         h('button', { class: 'btn primary', onclick: () => { const out = {}; for (const [key, el] of Object.entries(inputs)) { const [id, k] = key.split('.'); if (el.value.trim()) (out[id] ||= {})[k] = el.value.trim(); } lsSet(CFG, out); m.close(); refresh(); toast('Impostazioni salvate'); } }, 'Salva'))], { width: 600 });
   }
 
-  /* —— scelta del servizio —— */
+  /* \u2014\u2014 scelta del servizio \u2014\u2014 */
   function chooser(title, sub) {
     const ok = ready();
     if (!ok.length) { toast('Nessun servizio cloud disponibile', 'error'); return Promise.resolve(null); }
@@ -17824,7 +17888,7 @@ const Cloud = (() => {
     try {
       const items = id === 'gdrive' ? await googlePick({ multiple }) : await browse(id, { mode: 'open', multiple, accept });
       if (!items?.length) return null;
-      return await withBusy(`Download da ${P[id].name}…`, async () => { const out = []; for (const [i, it] of items.entries()) { Busy.set(i / items.length, it.name); out.push(await download(id, it)); } return out; });
+      return await withBusy(`Download da ${P[id].name}\u2026`, async () => { const out = []; for (const [i, it] of items.entries()) { Busy.set(i / items.length, it.name); out.push(await download(id, it)); } return out; });
     } catch (e) { if (!e?.cancel) Errors.show(e); return null; }
   }
   // salva: carica i file nella cartella scelta (si ricorda l'ultima)
@@ -17836,13 +17900,13 @@ const Cloud = (() => {
       if (last) {
         folder = await new Promise(res => { let d = false; const fin = v => { if (d) return; d = true; m.close(); res(v); };
           const m = modal([h('h3', {}, `Salva su ${P[id].name}`), h('p', {}, 'Dove vuoi salvare?'), h('div', { class: 'row', style: { gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' } },
-            h('button', { class: 'btn', onclick: () => fin('choose') }, 'Scegli un’altra cartella'), h('button', { class: 'btn primary cl-last', onclick: () => fin(last) }, ic('folder', 15), `In «${last.name}»`))], { width: 460, onClose: () => fin(null) }); });
+            h('button', { class: 'btn', onclick: () => fin('choose') }, 'Scegli un\u2019altra cartella'), h('button', { class: 'btn primary cl-last', onclick: () => fin(last) }, ic('folder', 15), `In «${last.name}»`))], { width: 460, onClose: () => fin(null) }); });
         if (!folder) return false;
       }
       if (!folder || folder === 'choose') folder = id === 'gdrive' ? (await googlePick({ folders: true }))?.[0] : await browse(id, { mode: 'save' });
       if (!folder) return false;
       const all = lsGet(LAST, {}); all[id] = { id: folder.id || null, path: folder.path || '', name: folder.name }; lsSet(LAST, all);
-      const ok = await withBusy(`Salvataggio su ${P[id].name}…`, async () => { for (const [i, o] of outputs.entries()) { Busy.set(i / outputs.length, o.name); await upload(id, folder, o.name, o.bytes, o.type || (/\.pdf$/i.test(o.name) ? 'application/pdf' : 'application/octet-stream')); } return true; });
+      const ok = await withBusy(`Salvataggio su ${P[id].name}\u2026`, async () => { for (const [i, o] of outputs.entries()) { Busy.set(i / outputs.length, o.name); await upload(id, folder, o.name, o.bytes, o.type || (/\.pdf$/i.test(o.name) ? 'application/pdf' : 'application/octet-stream')); } return true; });
       if (ok) toast(`${plural(outputs.length, 'file salvato', 'file salvati')} su ${P[id].name} in «${folder.name}»`);
       return !!ok;
     } catch (e) { if (!e?.cancel) Errors.show(e); return false; }
@@ -17858,9 +17922,9 @@ Cloud.init();
    ===================================================================== */
 const Activity = (() => {
   const MAX = 2000, ST = 'attivita';
-  const open = new Map();   // lavoro → voce in corso
+  const open = new Map();   // lavoro \u2192 voce in corso
   const files = list => (list || []).filter(Boolean).map(f => ({ name: f.name || 'file', size: f.size ?? f.bytes?.length ?? 0 }));
-  const toolOf = (tool, title) => tool && TOOLS[tool] ? TOOLS[tool].title : title ? title.replace(/…$/, '') : 'file360';
+  const toolOf = (tool, title) => tool && TOOLS[tool] ? TOOLS[tool].title : title ? title.replace(/\u2026$/, '') : 'file360';
   let lastMark = { gen: -1, at: Date.now() };
   // inizio di un'attesa (anche breve): la durata di un risultato senza lavoro si conta da qui
   const mark = () => { lastMark = { gen: GEN, at: Date.now() }; };
@@ -17882,7 +17946,7 @@ const Activity = (() => {
     if (e.id != null) { try { await Store.put(ST, e); } catch { } changed(); }
   }
   async function record({ tool, title, inputs, outputs = [], outcome, ms, error = null, tech = null, at = Date.now() }) {
-    const e = { at, tool: tool || null, toolName: toolOf(tool, title), op: title && !/in corso|^(lettura|apertura|preparazione|al lavoro)/i.test(title) ? title.replace(/…$/, '') : '', inputs: files(inputs), outputs: outputs.map(o => ({ name: o.name, size: o.bytes?.length ?? o.size ?? 0, sha256: null })), outcome, ms: Math.max(0, Math.round(ms || 0)), error, tech };
+    const e = { at, tool: tool || null, toolName: toolOf(tool, title), op: title && !/in corso|^(lettura|apertura|preparazione|al lavoro)/i.test(title) ? title.replace(/\u2026$/, '') : '', inputs: files(inputs), outputs: outputs.map(o => ({ name: o.name, size: o.bytes?.length ?? o.size ?? 0, sha256: null })), outcome, ms: Math.max(0, Math.round(ms || 0)), error, tech };
     await save(e);
     if (outputs.length) hashOutputs(e, outputs);
     return e;
@@ -17910,18 +17974,18 @@ const Activity = (() => {
   const changed = () => listeners.forEach(f => { try { f(); } catch { } });
   const list = async () => (await Store.all(ST).catch(() => [])).sort((a, b) => b.at - a.at);
 
-  /* —— esportazione —— */
+  /* \u2014\u2014 esportazione \u2014\u2014 */
   const when = t => new Date(t).toLocaleString('it-IT', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const iso = t => { const d = new Date(t), z = -d.getTimezoneOffset(), p = n => String(Math.abs(n)).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}${z >= 0 ? '+' : '-'}${p(Math.floor(Math.abs(z) / 60))}:${p(Math.abs(z) % 60)}`; };
   function csv(rows) {
     const q = v => { const s = String(v ?? ''); return /[;"\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     const head = ['data_ora', 'strumento', 'operazione', 'file_input', 'byte_input', 'file_output', 'byte_output', 'sha256_output', 'esito', 'durata_secondi', 'errore'];
     const lines = rows.map(e => [iso(e.at), e.toolName, e.op, e.inputs.map(f => f.name).join(' | '), e.inputs.map(f => f.size).join(' | '), e.outputs.map(f => f.name).join(' | '), e.outputs.map(f => f.size).join(' | '), e.outputs.map(f => f.sha256 || '').join(' | '), e.outcome, (e.ms / 1000).toFixed(1).replace('.', ','), e.error || ''].map(q).join(';'));
-    return '﻿' + [head.join(';'), ...lines].join('\r\n');
+    return '\ufeff' + [head.join(';'), ...lines].join('\r\n');
   }
   const json = rows => JSON.stringify({ generato: iso(Date.now()), applicazione: 'file360', voci: rows.map(e => ({ data_ora: iso(e.at), strumento: e.toolName, operazione: e.op || null, input: e.inputs, output: e.outputs, esito: e.outcome, durata_ms: e.ms, errore: e.error || null })) }, null, 2);
 
-  /* —— la pagina —— */
+  /* \u2014\u2014 la pagina \u2014\u2014 */
   const OUT = { completato: ['Completato', 'ok'], errore: ['Errore', 'err'], annullato: ['Annullato', 'mute'] };
   function render(body) {
     const st = { q: '', out: 'tutti', rows: [] };
@@ -17940,7 +18004,7 @@ const Activity = (() => {
     const listEl = h('div', { class: 'act-list' });
     const sum = h('div', { class: 'act-sum muted small' });
     const fl = (arr, sha) => arr.length ? h('div', { class: 'act-files' }, arr.map(f => h('div', { class: 'act-file' }, h('span', { class: 'act-fn', title: f.name }, f.name), h('span', { class: 'muted' }, fmtSize(f.size)),
-      sha && f.sha256 ? h('button', { class: 'act-sha', title: 'SHA-256: ' + f.sha256 + ' — clicca per copiarlo', onclick: () => copyText(f.sha256) }, 'SHA-256 ' + f.sha256.slice(0, 12) + '…') : null))) : h('span', { class: 'muted' }, '—');
+      sha && f.sha256 ? h('button', { class: 'act-sha', title: 'SHA-256: ' + f.sha256 + ' \u2014 clicca per copiarlo', onclick: () => copyText(f.sha256) }, 'SHA-256 ' + f.sha256.slice(0, 12) + '\u2026') : null))) : h('span', { class: 'muted' }, '\u2014');
     function draw() {
       const rows = shown();
       sum.textContent = st.rows.length ? `${plural(rows.length, 'attività', 'attività')}${rows.length !== st.rows.length ? ` su ${st.rows.length}` : ''} · il registro resta solo in questo browser` : '';
@@ -17953,8 +18017,8 @@ const Activity = (() => {
             h('span', { class: 'act-tool' }, t ? ic(t.icon, 15) : null, h('span', {}, e.toolName, e.op && e.op !== e.toolName ? h('small', { class: 'muted' }, e.op) : null)),
             fl(e.inputs), fl(e.outputs, true),
             h('span', { class: 'act-out ' + oc }, ol, e.error ? h('details', {}, h('summary', {}, 'perché'), h('p', {}, e.error), e.tech ? h('pre', {}, e.tech) : null) : null),
-            h('span', { class: 'act-ms' }, e.ms ? fmtDur(e.ms) : '—'));
-        }), ...(rows.length > 500 ? [h('div', { class: 'muted small', style: { padding: '10px' } }, `Mostrate le 500 più recenti: l’esportazione le comprende tutte (${rows.length}).`)] : []));
+            h('span', { class: 'act-ms' }, e.ms ? fmtDur(e.ms) : '\u2014'));
+        }), ...(rows.length > 500 ? [h('div', { class: 'muted small', style: { padding: '10px' } }, `Mostrate le 500 più recenti: l\u2019esportazione le comprende tutte (${rows.length}).`)] : []));
     }
     async function load() { st.rows = await list(); draw(); bar.querySelectorAll('.act-csv, .act-json, .act-clear').forEach(b => { b.disabled = !st.rows.length; }); }
     body.replaceChildren(h('div', { class: 'act' }, bar, sum, listEl));
@@ -17970,13 +18034,13 @@ const Activity = (() => {
    avanzamento leggibile, apertura dei file dal sistema (quando file360 è installata come app).
    ===================================================================== */
 const UX = (() => {
-  const isMac = /Mac|iPhone|iPad/.test(navigator.userAgentData?.platform || navigator.platform || ''), MOD = isMac ? '⌘' : 'Ctrl';
+  const isMac = /Mac|iPhone|iPad/.test(navigator.userAgentData?.platform || navigator.platform || ''), MOD = isMac ? '\u2318' : 'Ctrl';
   const typing = e => { const t = e.target, tag = (t && t.tagName || '').toLowerCase(); return tag === 'input' || tag === 'textarea' || tag === 'select' || t?.isContentEditable; };
   /* ---------- elenco delle scorciatoie (tasto ?) ---------- */
   const KEYS = [
     ['Ovunque', [['Cerca uno strumento o descrivi cosa devi fare', [MOD, 'K']], ['Cerca (rapido)', ['/']], ['Queste scorciatoie', ['?']], ['Torna alla home', ['G', 'H']], ['Progetti · Ricette · Attività', ['G', 'P / R / A']], ['Tema chiaro o scuro', ['G', 'T']]]],
-    ['Con un documento aperto', [['Esegui lo strumento (il pulsante principale)', [MOD, 'Invio']], ['Scarica la versione attuale', [MOD, 'S']], ['Annulla l’ultima modifica applicata (versione precedente)', [MOD, 'Z']], ['Ripristina', [MOD, '⇧', 'Z']], ['Versioni del documento', ['G', 'V']]]],
-    ['Nelle finestre', [['Chiudi', ['Esc']], ['Pulsante successivo / precedente', ['Tab', '⇧ Tab']]]],
+    ['Con un documento aperto', [['Esegui lo strumento (il pulsante principale)', [MOD, 'Invio']], ['Scarica la versione attuale', [MOD, 'S']], ['Annulla l\u2019ultima modifica applicata (versione precedente)', [MOD, 'Z']], ['Ripristina', [MOD, '\u21e7', 'Z']], ['Versioni del documento', ['G', 'V']]]],
+    ['Nelle finestre', [['Chiudi', ['Esc']], ['Pulsante successivo / precedente', ['Tab', '\u21e7 Tab']]]],
     ['In «Modifica»', [['Grassetto · corsivo · sottolineato', [MOD, 'B / I / U']], ['Trova e sostituisci', [MOD, 'F']], ['Modifica testo · casella di testo', ['M', 'T']]]],
   ];
   let helpOpen = null;

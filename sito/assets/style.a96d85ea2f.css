@@ -453,7 +453,7 @@ select.fi{padding:0 2px;appearance:auto}
 .fo-text{white-space:pre;line-height:1.2;min-width:4px;outline:1px dashed transparent;outline-offset:2px;cursor:text;touch-action:auto;padding:0;margin:0}
 .fo-text:hover{outline-color:rgba(37,99,235,.45)}
 .fo-text:focus,.fo.sel{outline:1.5px solid var(--sel);outline-offset:2px}
-.fo-text:empty::before{content:'Scrivi…';color:rgba(17,17,17,.35)}
+.fo-text:empty::before{content:'Scrivi\002026';color:rgba(17,17,17,.35)}
 .fo-check,.fo-cross,.fo-dot,.fo-sign{cursor:move}
 .fo svg,.fo img{display:block;width:100%;height:100%;pointer-events:none;user-select:none}
 .fo-h{position:absolute;right:-6px;bottom:-6px;width:12px;height:12px;box-sizing:border-box;background:#fff;border:2px solid var(--sel);border-radius:var(--r-xs);cursor:nwse-resize;display:none}
@@ -513,7 +513,7 @@ body.has-fsheet .v-scroll{padding-bottom:45vh}
 
 /* correzioni OCR */
 .fixlog summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px}
-.fixlog summary::before{content:'▸';font-size:12px;transition:transform .15s}
+.fixlog summary::before{content:'\0025b8';font-size:12px;transition:transform .15s}
 .fixlog[open] summary::before{transform:rotate(90deg)}
 .fixlist{max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:var(--r-sm);padding:6px 10px;margin:6px 0 12px;font-size:13px}
 .fixrow{display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px dashed var(--line)}
@@ -815,7 +815,7 @@ body.has-fsheet .v-scroll{padding-bottom:45vh}
 }
 .foot{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
 .foot-logo{line-height:0}
-/* contrasto dei pulsanti principali (testo bianco ≥ 4,5:1) */
+/* contrasto dei pulsanti principali (testo bianco \002265 4,5:1) */
 :root{--accent-fill:#C9392E;--accent-fill-2:#B0302A}
 .btn.primary{background:var(--accent-fill);border-color:var(--accent-fill)}
 .btn.primary:hover{background:var(--accent-fill-2);border-color:var(--accent-fill-2)}
@@ -833,7 +833,7 @@ body.has-fsheet .v-scroll{padding-bottom:45vh}
   .toast.act .toast-m{flex-basis:calc(100% - 30px)}
   .dz-note{max-width:34ch;margin-inline:auto;text-align:left;align-items:flex-start}
 }
-/* —— Fatture elettroniche —— */
+/* \002014\002014 Fatture elettroniche \002014\002014 */
 .ft-main{display:flex;flex-direction:column;gap:14px;position:relative}
 .ft-main.over{outline:2px dashed color-mix(in srgb,var(--hue) 60%,transparent);outline-offset:-10px;background:color-mix(in srgb,var(--hue) 5%,var(--bg))}
 .ft-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
@@ -924,7 +924,7 @@ body.has-fsheet .v-scroll{padding-bottom:45vh}
 .tool-card.dropping .t-drop svg{animation:dropBob .9s ease-in-out infinite}
 @keyframes dropBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
 @media (max-width:640px){.tool-card .t-drop{flex-direction:row;gap:8px}.tool-card .t-drop span{display:none}}
-/* —— Oscura: risultati da confermare, colore per area, dati sensibili —— */
+/* \002014\002014 Oscura: risultati da confermare, colore per area, dati sensibili \002014\002014 */
 .rcand{position:absolute;border:1.5px dashed var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent);border-radius:var(--r-xs);pointer-events:none;animation:rcand 1.4s ease-in-out infinite}
 @keyframes rcand{50%{background:color-mix(in srgb,var(--accent) 30%,transparent)}}
 .rbox.light:not(.final){background:rgba(255,255,255,.7);outline-color:var(--accent)}
@@ -1041,8 +1041,8 @@ a.tool-card{color:inherit;text-decoration:none;cursor:pointer;-webkit-user-drag:
 .review-how{margin:10px 0 2px;padding-left:18px;display:grid;gap:6px;color:var(--ink-2);line-height:1.45}
 details.adv{border-top:1px solid var(--line);margin-top:6px;padding-top:8px}
 details.adv > summary{cursor:pointer;font-weight:700;font-size:13px;color:var(--muted);padding:4px 0;list-style:none}
-details.adv > summary::before{content:"▸ ";}
-details.adv[open] > summary::before{content:"▾ ";}
+details.adv > summary::before{content:"\0025b8 ";}
+details.adv[open] > summary::before{content:"\0025be ";}
 .save-ch{display:grid;gap:8px}
 .save-o{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);cursor:pointer;background:var(--surface)}
 .save-o.on{border-color:var(--hue,var(--accent));box-shadow:0 0 0 1px var(--hue,var(--accent)) inset}
@@ -1223,7 +1223,7 @@ details.adv[open] > summary::before{content:"▾ ";}
 .fs-crop{display:block;width:100%;max-height:110px;object-fit:contain;border-radius:var(--r-sm);border:1px solid var(--line);background:#fff;margin:6px 0 8px}
 .fs-crop[hidden]{display:none}
 .group-h{font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit;margin:0;display:inline-flex;align-items:center;gap:8px}
-/* più file insieme (OCR, Word…): avanzamento per file */
+/* più file insieme (OCR, Word\002026): avanzamento per file */
 .filerow .fr-prog{height:4px;border-radius:var(--r-xs);background:var(--surface-3);margin-top:7px;overflow:hidden;max-width:320px;display:none}
 .filerow.busy .fr-prog,.filerow.done .fr-prog{display:block}
 .filerow .fr-prog i{display:block;height:100%;width:0;background:var(--hue,var(--accent));transition:width .3s}
@@ -1279,7 +1279,7 @@ body.is-busy .scrim.busy .ld *,body.is-busy .scrim.busy .bar i,body.is-busy .scr
 .spec-note.ok{color:var(--ok);background:var(--ok-soft);font-weight:600}
 .spec-note .jp-spin{width:12px;height:12px;flex:none;border-radius:50%;border:2px solid var(--surface-3);border-top-color:var(--accent);animation:spin .8s linear infinite}
 .side-foot .spec-note{margin-bottom:10px}
-.card.pre-read .thumb::after{content:'✓ letta';position:absolute;top:8px;right:8px;padding:2px 8px;border-radius:var(--r-full);background:var(--ok);color:#fff;font-size:11px;font-weight:700}
+.card.pre-read .thumb::after{content:'\002713 letta';position:absolute;top:8px;right:8px;padding:2px 8px;border-radius:var(--r-full);background:var(--ok);color:#fff;font-size:11px;font-weight:700}
 .card .thumb{position:relative}
 /* riconoscimento al caricamento */
 .wb-ins{display:flex;flex-direction:column;gap:6px;margin:14px 0 4px;padding:12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
@@ -1901,7 +1901,7 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
 /* =====================================================================
    Revisione «a misura di utente»: preferiti, il tuo lavoro, pagine, suggerimenti
    ===================================================================== */
-/* —— stellina dei preferiti nell'angolo di ogni scheda —— */
+/* \002014\002014 stellina dei preferiti nell'angolo di ogni scheda \002014\002014 */
 .card-w{position:relative;display:flex;min-width:0}
 .card-w > .tool-card,.card-w > .wb-tool{flex:1;min-width:0}
 .fav-star{position:absolute;top:8px;right:8px;z-index:4;width:34px;height:34px;display:grid;place-items:center;border:0;border-radius:var(--r-sm);background:transparent;color:color-mix(in srgb,var(--muted) 70%,var(--line-2));cursor:pointer;transition:color .15s,background .15s,translate .18s,opacity .15s,scale .15s}
@@ -1939,7 +1939,7 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
 .fav-hint b{color:var(--ink-2)}
 .home-quick .chip-star{font-style:normal;color:var(--gold);font-size:12px;margin-left:-2px}
 
-/* —— «Il tuo lavoro» in home —— */
+/* \002014\002014 «Il tuo lavoro» in home \002014\002014 */
 .work-row{margin-top:28px}
 .wr-h{display:flex;align-items:baseline;gap:10px;margin-bottom:10px;flex-wrap:wrap}
 .wr-h h2{margin:0;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
@@ -1959,7 +1959,7 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
 :root[data-theme="dark"] :is(.wk-ic,.wk-n,.tw-btn .ic,.tw-btn.on){color:color-mix(in srgb,var(--hue) 62%,#fff)}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) :is(.wk-ic,.wk-n,.tw-btn .ic,.tw-btn.on){color:color-mix(in srgb,var(--hue) 62%,#fff)}}
 
-/* —— Progetti, Ricette, Attività in alto, sempre visibili —— */
+/* \002014\002014 Progetti, Ricette, Attività in alto, sempre visibili \002014\002014 */
 .top-work{display:flex;gap:2px;align-items:center;padding:3px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
 .tw-btn{display:inline-flex;align-items:center;gap:7px;border:0;background:none;padding:6px 11px;border-radius:var(--r-sm);font-size:14px;font-weight:600;color:var(--ink-2);white-space:nowrap}
 .tw-btn .ic{color:var(--hue)}
@@ -1971,21 +1971,21 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
 @media (max-width:400px){.topbar .privacy{display:none}}
 .rail-sep.fav{width:auto;height:auto;background:none;margin:8px 0 2px;color:var(--gold);display:flex;line-height:0}
 
-/* —— pagine del lavoro: stesso respiro della home —— */
+/* \002014\002014 pagine del lavoro: stesso respiro della home \002014\002014 */
 .page-body{margin:0 auto;padding:22px 28px 40px;width:100%;max-width:1240px}
 @media (max-width:640px){.page-body{padding:14px max(16px,env(safe-area-inset-right,0px)) 28px max(16px,env(safe-area-inset-left,0px))}}
 .pj-grid > .act-empty{grid-column:1/-1}
 .pj-grid > .act-empty,.rc-list > .act-empty{border:1.5px dashed var(--line-2);border-radius:var(--r);background:var(--surface);padding:40px 20px}
 .act-empty span{max-width:52ch}
 
-/* —— ritorno: chi usa già l'app vede subito il lavoro, non la presentazione —— */
+/* \002014\002014 ritorno: chi usa già l'app vede subito il lavoro, non la presentazione \002014\002014 */
 .home.back{padding-top:30px}
 .home.back .hero h1{font-size:clamp(24px,2.4vw,30px);margin-bottom:0}
 .home.back .hero p{display:none}
 .home.back .hero-mark,.home.back .hero-mark svg{width:42px;height:42px}
 @media (min-width:641px){.home.back .hero{grid-template-columns:auto minmax(0,1fr);align-items:center}.home.back .hero-mark{grid-row:auto;margin:0}}
 
-/* —— suggerimento rapido (sostituisce l'attesa del title del browser) —— */
+/* \002014\002014 suggerimento rapido (sostituisce l'attesa del title del browser) \002014\002014 */
 .tip{position:fixed;z-index:1000;pointer-events:none;background:var(--ink);color:var(--surface);font-size:12px;font-weight:600;line-height:1.3;padding:5px 9px;border-radius:var(--r-xs);opacity:0;translate:0 -3px;transition:opacity .12s,translate .12s;max-width:260px;box-shadow:var(--shadow)}
 .tip.on{opacity:1;translate:none}
 .card-w .tool-card .t-go,.card-w .wb-tool .wb-go{display:none}
@@ -2065,7 +2065,7 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
 .seg.seg-wrap button{white-space:nowrap}
 
 }
-/* GENERATO da tools/gen_hue.py — non modificare a mano */
+/* GENERATO da tools/gen_hue.py \002014 non modificare a mano */
 .rail-btn.on{background:var(--hue-soft);color:var(--hue-ink)}
 .btn.primary{background:var(--accent-fill)}
 .tool-card .t-ic{background:var(--hue-soft);color:var(--hue-ink)}
@@ -2119,7 +2119,7 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
 .tw-btn.on{background:var(--hue-soft);color:var(--hue-ink)}
 
 /* =====================================================================
-   file360 — Design system (base «Banco di lavoro», tema «Orbita» nella sezione 22)
+   file360 \002014 Design system (base «Banco di lavoro», tema «Orbita» nella sezione 22)
    Carta appena lilla, inchiostro notte, un solo accento (ultravioletto) per l'azione principale.
    La tinta di ogni strumento vive solo nella sua icona, sempre alla stessa luminosità.
 
@@ -2197,7 +2197,7 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
 @supports (transition-timing-function:linear(0,1)){:root{
   --e-spring:linear(0,.009,.035 2.1%,.141 4.4%,.723 12.9%,.938 16.7%,1.017 19.4%,1.077 22.4%,1.101 24.3%,1.115 26.4%,1.119 28.7%,1.114 31.2%,1.062 39.6%,1.024 45.6%,1.003 51.9%,.994 59.3%,1);
 }}
-/* tema scuro: disegnato, non invertito — superfici che si schiariscono salendo, accento più chiaro per il testo, pieno più profondo per i pulsanti */
+/* tema scuro: disegnato, non invertito \002014 superfici che si schiariscono salendo, accento più chiaro per il testo, pieno più profondo per i pulsanti */
 :root[data-theme="dark"]{
   --n-0:oklch(.205 .007 270); --n-50:oklch(.165 .006 270); --n-100:oklch(.245 .008 270); --n-150:oklch(.295 .009 270);
   --n-200:oklch(.3 .008 270); --n-300:oklch(.38 .009 270); --n-400:oklch(.55 .01 270);
@@ -2276,7 +2276,7 @@ kbd,.kbd{font:600 12px/16px var(--mono);padding:1px 5px;border-radius:var(--r-xs
 .sr-only{position:absolute!important;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 
 /* ---------- 3. Componenti ---------- */
-/* — pulsanti: primario · secondario (base) · fantasma · pericolo · icona — */
+/* \002014 pulsanti: primario · secondario (base) · fantasma · pericolo · icona \002014 */
 .btn{font:var(--t-label);min-height:40px;padding:0 var(--s-4);gap:var(--s-2);border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--surface);color:var(--ink);
   box-shadow:var(--shadow-xs),var(--edge);transition:background var(--d-1) var(--e-out),border-color var(--d-1) var(--e-out),box-shadow var(--d-2) var(--e-out),transform var(--d-1) var(--e-out),color var(--d-1);
   -webkit-tap-highlight-color:transparent;user-select:none;text-decoration:none}
@@ -2305,7 +2305,7 @@ kbd,.kbd{font:600 12px/16px var(--mono);padding:1px 5px;border-radius:var(--r-xs
 .icon-btn:active{transform:scale(.92)}
 .linkish{color:var(--accent)}
 
-/* — campi — */
+/* \002014 campi \002014 */
 .input,.select,textarea.input{min-height:40px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--surface);font:500 14px/20px var(--font);box-shadow:inset 0 1px 2px rgb(var(--sh-ink)/.04);transition:border-color var(--d-1),box-shadow var(--d-2) var(--e-out)}
 .input:hover,.select:hover{border-color:var(--line-3)}
 .input:focus,.select:focus,textarea.input:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in oklch,var(--focus) 22%,transparent);outline:0}
@@ -2316,12 +2316,12 @@ kbd,.kbd{font:600 12px/16px var(--mono);padding:1px 5px;border-radius:var(--r-xs
 label.field{font:600 13px/20px var(--font);color:var(--ink-2)}
 .check{font:500 14px/20px var(--font)}
 .check input{width:18px;height:18px;margin-top:1px}
-/* — segmenti — */
+/* \002014 segmenti \002014 */
 .seg{background:var(--surface-2);border-radius:var(--r-sm);padding:3px;gap:2px;box-shadow:inset 0 1px 2px rgb(var(--sh-ink)/.05)}
 .seg button{min-height:32px;border-radius:var(--r-xs);font:600 13px/16px var(--font);color:var(--muted);transition:background var(--d-2) var(--e-out),color var(--d-1),box-shadow var(--d-2)}
 .seg button:hover{color:var(--ink)}
 .seg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-sm),var(--edge)}
-/* — etichette a pillola — */
+/* \002014 etichette a pillola \002014 */
 .chip{min-height:32px;padding:0 var(--s-3);border-radius:var(--r-full);border:1px solid var(--line-2);background:var(--surface);font:600 13px/16px var(--font);color:var(--ink-2);box-shadow:var(--shadow-xs);transition:background var(--d-1),border-color var(--d-1),transform var(--d-1) var(--e-out),color var(--d-1)}
 .chip:hover{border-color:var(--line-3);background:var(--surface-2);color:var(--ink)}
 .chip:active{transform:scale(.96)}
@@ -2329,13 +2329,13 @@ label.field{font:600 13px/20px var(--font);color:var(--ink-2)}
 .chip .ic{color:var(--hue-ink)}
 .chip.on .ic{color:inherit}
 .chip.more{border-style:dashed;color:var(--muted);box-shadow:none}
-/* — avvisi nel flusso — */
+/* \002014 avvisi nel flusso \002014 */
 .hint{border-radius:var(--r-sm);font:var(--t-small)}
 .hint.ok{background:var(--ok-soft);color:var(--ok);border:1px solid var(--ok-line)}
 .hint.warn{background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn-line)}
-/* — suggerimento — */
+/* \002014 suggerimento \002014 */
 .tip{background:var(--n-900);color:var(--n-0);font:600 12px/16px var(--font);padding:6px 9px;border-radius:var(--r-sm);box-shadow:var(--shadow);transition:opacity var(--d-1),transform var(--d-2) var(--e-out)}
-/* — notifiche — */
+/* \002014 notifiche \002014 */
 .toasts{gap:var(--s-2)}
 .toast{background:var(--n-900);color:var(--n-0);border-radius:var(--r);padding:10px 14px;font:600 14px/20px var(--font);box-shadow:var(--shadow-lg);animation:ds-toast var(--d-3) var(--e-spring) both;max-width:min(560px,calc(100vw - 24px))}
 .toast .ic{color:var(--ok-line)}
@@ -2347,7 +2347,7 @@ label.field{font:600 13px/20px var(--font);color:var(--ink-2)}
 .toast .toast-x:hover{opacity:1;background:rgb(255 255 255/.14)}
 :root[data-theme="dark"] .toast:not(.error){background:var(--n-150);color:var(--ink);border:1px solid var(--line-2)}
 @keyframes ds-toast{from{opacity:0;transform:translateY(12px) scale(.96)}}
-/* — finestre — */
+/* \002014 finestre \002014 */
 /* niente sfocatura dietro le finestre: costa fino a 3 fotogrammi su 4 sui computer senza grafica dedicata (misurato); basta un velo più denso */
 .scrim{background:color-mix(in oklch,var(--n-900) 52%,transparent);backdrop-filter:none;-webkit-backdrop-filter:none;animation:ds-fade var(--d-2) var(--e-out) both}
 :root[data-theme="dark"] .scrim{background:rgb(0 0 0/.66)}
@@ -2357,11 +2357,11 @@ label.field{font:600 13px/20px var(--font);color:var(--ink-2)}
 .modal > p{font:var(--t-small);font-size:14px;color:var(--ink-2)}
 @keyframes ds-fade{from{opacity:0}}
 @keyframes ds-pop{from{opacity:0;transform:translateY(10px) scale(.97)}}
-/* — scheletri — */
+/* \002014 scheletri \002014 */
 .sk{position:relative;overflow:hidden;background:var(--surface-2);border-radius:var(--r-xs);color:transparent!important}
 .sk::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 20%,color-mix(in oklch,var(--surface) 70%,transparent) 50%,transparent 80%);transform:translateX(-100%);animation:ds-shimmer 1.4s var(--e-inout) infinite}
 @keyframes ds-shimmer{to{transform:translateX(100%)}}
-/* — stato vuoto — */
+/* \002014 stato vuoto \002014 */
 .empty{display:grid;justify-items:center;gap:var(--s-2);padding:var(--s-10) var(--s-6);text-align:center;border:1px dashed var(--line-2);border-radius:var(--r-lg);background:color-mix(in oklch,var(--surface) 60%,transparent)}
 .empty .empty-art{width:120px;height:88px;margin-bottom:var(--s-2);color:var(--muted)}
 .empty b{font:var(--t-title)}
@@ -2425,7 +2425,7 @@ label.field{font:600 13px/20px var(--font);color:var(--ink-2)}
 .home.back .hero h1{font:var(--t-heading);letter-spacing:var(--tr-tight);margin:0}
 .hero .hero-trust{display:inline-flex;align-items:center;gap:6px;margin-top:var(--s-3);font:600 13px/20px var(--font);color:var(--ok)}
 
-/* il banco: un solo protagonista — il riquadro dove lasciare il file */
+/* il banco: un solo protagonista \002014 il riquadro dove lasciare il file */
 .wb{border:0;background:none;box-shadow:none;padding:0;border-radius:0;margin:0}
 .wb-start{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--s-4);align-items:stretch}
 .wb-start.with-pv{grid-template-columns:minmax(0,1.55fr) minmax(280px,1fr)}
@@ -2444,7 +2444,7 @@ label.field{font:600 13px/20px var(--font);color:var(--ink-2)}
 .wb-drop .dz-kbd{display:none}
 .wb-start .pv{align-self:stretch}
 
-/* «Cosa devi fare?» — i compiti più comuni con le parole di chi li fa, più la ricerca */
+/* «Cosa devi fare?» \002014 i compiti più comuni con le parole di chi li fa, più la ricerca */
 .intents{margin-top:var(--s-8)}
 .intents-h{display:flex;align-items:center;gap:var(--s-4);margin-bottom:var(--s-3);flex-wrap:wrap}
 .intents-h h2,.sec-h{font:700 12px/16px var(--font);letter-spacing:var(--tr-caps);text-transform:uppercase;color:var(--muted);margin:0}
@@ -2851,7 +2851,7 @@ details.adv[open] > summary .adv-sum{display:none}
 @media (max-width:640px){.tool-resume{padding:var(--s-3) var(--s-3) 0}}
 /* telefono: piede del risultato in una riga (versione nel pulsante) */
 @media (max-width:640px){.res-foot{flex-wrap:nowrap;gap:var(--s-2)}.res-ver > .muted{display:none}.res-foot > .muted{display:none}.res-foot .btn{min-width:0}}
-/* 20. revisione 5 — barre di comandi al telefono: ogni icona ha la sua parola sotto */
+/* 20. revisione 5 \002014 barre di comandi al telefono: ogni icona ha la sua parola sotto */
 .tbtn .lbl-s{display:none}
 @media (max-width:980px){
   .tbtn:not(.only){flex-direction:column;height:auto;min-height:48px;min-width:52px;padding:4px var(--s-2);gap:2px;justify-content:center}
@@ -2894,7 +2894,7 @@ details.adv[open] > summary .adv-sum{display:none}
 .toast.err-toast > .toast-b{order:3}
 .toast.err-toast > .toast-b:first-of-type{margin-left:24px}
 @media (max-width:359px){.v-tools .v-tools-in{grid-template-columns:repeat(4,1fr)}}
-/* Migliora › ritaglio a mano: lati trascinabili, lente sugli angoli, prese comode al tocco */
+/* Migliora \00203a ritaglio a mano: lati trascinabili, lente sugli angoli, prese comode al tocco */
 .mg-h{z-index:2}
 .mg-h::after,.mg-s::after{content:"";position:absolute;inset:-12px}
 .mg-h.drag{transform:scale(1.15)}
@@ -2943,7 +2943,7 @@ details.adv[open] > summary .adv-sum{display:none}
   .pl-body > .icon-btn{display:none}
   .pl-head .pl-z{display:none}
 }
-/* revisione 8: anteprima grande al telefono — il dito scorre in verticale e cambia pagina in orizzontale; frecce sempre visibili */
+/* revisione 8: anteprima grande al telefono \002014 il dito scorre in verticale e cambia pagina in orizzontale; frecce sempre visibili */
 .scrim .pl-view{touch-action:pan-y pinch-zoom}
 .scrim .pl-view.zoomed{touch-action:pan-x pan-y pinch-zoom}
 @media (pointer:coarse),(hover:none){.card-look{width:44px;height:44px}.card-look::after{inset:0}}
@@ -3039,7 +3039,7 @@ details.adv[open] > summary .adv-sum{display:none}
 /* =====================================================================
    23. file360 · home rinnovata e menu a comparsa
    ===================================================================== */
-/* niente più barra laterale fissa: il menu ☰ apre la colonna scura */
+/* niente più barra laterale fissa: il menu \002630 apre la colonna scura */
 .rail{display:none!important}
 .body{grid-template-columns:minmax(0,1fr)!important}
 .menu-btn{flex:none}
@@ -3209,7 +3209,7 @@ details.adv[open] > summary .adv-sum{display:none}
 .brand .logo svg{width:46px;height:46px;overflow:visible;filter:drop-shadow(0 4px 10px color-mix(in srgb,var(--accent) 28%,transparent))}
 .wordmark{font-size:22px;line-height:1}
 @media (max-width:640px){.brand .logo,.brand .logo svg{width:40px;height:40px}.wordmark{font-size:22px}}
-/* telefono: Progetti, Ricette e Attività sono nel menu ☰; in alto restano menu, marchio, ricerca e tema */
+/* telefono: Progetti, Ricette e Attività sono nel menu \002630; in alto restano menu, marchio, ricerca e tema */
 @media (max-width:560px){.top-work{display:none!important}.topbar{gap:var(--s-1)}}
 
 /* =====================================================================
@@ -3444,7 +3444,7 @@ details.adv[open] > summary .adv-sum{display:none}
 /* Dividi per documento: i tagli tra le pagine e i nomi dei file */
 .cards .card.auto-pick{cursor:pointer}
 .cards .card.cut{box-shadow:-5px 0 0 -1px var(--accent),var(--sh-1,0 1px 2px rgba(0,0,0,.06))}
-.cards .card.cut::before{content:"✂";position:absolute;left:-14px;top:50%;transform:translateY(-50%);width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:12px;z-index:2}
+.cards .card.cut::before{content:"\002702";position:absolute;left:-14px;top:50%;transform:translateY(-50%);width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:12px;z-index:2}
 .split-names{display:flex;flex-direction:column;gap:6px;margin-top:6px}
 .split-name{display:grid;grid-template-columns:10px auto 1fr;align-items:center;gap:8px}
 .split-name .sn-tag{width:10px;height:10px;border-radius:var(--r-xs)}
@@ -3458,7 +3458,7 @@ details.adv[open] > summary .adv-sum{display:none}
 .qr-img.ph{display:grid;place-items:center;color:var(--muted);background:var(--surface-2,var(--bg))}
 .qr-info{display:flex;flex-direction:column;gap:6px;min-width:200px;flex:1}
 .qr-info b{font:700 18px/1.3 var(--font)}
-.qr-info strong{font:700 22px/1.2 var(--font-display,var(--font));font-variant-numeric:tabular-nums}
+.qr-info strong{font:700 22px/1.2 var(--font-display);font-variant-numeric:tabular-nums}
 .qr-err{display:flex;flex-direction:column;gap:6px;max-width:640px;width:100%}
 .qr-list{display:flex;flex-direction:column;gap:6px;max-width:640px;width:100%}
 .qr-item{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 14px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);text-align:left;font:500 14px/1.3 var(--font);cursor:pointer}
@@ -3501,7 +3501,7 @@ details.adv[open] > summary .adv-sum{display:none}
 .wc-ta{min-height:220px;font:400 16px/1.6 var(--font);resize:vertical}
 .wc-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .wc-card{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface)}
-.wc-card b{font:700 28px/1.1 var(--font-display,var(--font));font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.wc-card b{font:700 28px/1.1 var(--font-display);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 .wc-card span{font:600 13px/1.3 var(--font)}
 .wc-card small{font:500 12px/1.3 var(--font);color:var(--muted)}
 .wc-limit{display:flex;flex-direction:column;gap:6px;font:600 13px/1.3 var(--font)}
@@ -3552,7 +3552,7 @@ html[data-anim=off] .tool-card.dropping .t-drop svg{animation:none!important}
 /* primo avvio: professione e animazioni */
 .ob-modal{padding:0!important;overflow:hidden}
 .ob{display:flex;flex-direction:column;gap:18px;padding:28px}
-.ob-head h2{margin:6px 0 6px;font:700 28px/1.15 var(--font-display,var(--font));letter-spacing:-.03em}
+.ob-head h2{margin:6px 0 6px;font:700 28px/1.15 var(--font-display);letter-spacing:-.03em}
 .ob-head p{margin:0;max-width:56ch}
 .ob-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 .ob-p{display:flex;align-items:center;gap:10px;min-height:52px;padding:8px 12px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 14px/1.25 var(--font);text-align:left;cursor:pointer;transition:border-color var(--d-2),box-shadow var(--d-2),transform var(--d-2)}
@@ -3707,7 +3707,7 @@ html:not([data-cloud="on"]) .cloud-btn{display:none !important}
 .pa-pg figcaption b{color:var(--ink);font-weight:600}
 .pa-more{grid-column:1/-1;text-align:center}
 
-/* telefono, documento aperto: una sola barra sopra il documento (schede degli strumenti, Scarica, menu «⋯»).
+/* telefono, documento aperto: una sola barra sopra il documento (schede degli strumenti, Scarica, menu «\0022ef»).
    L'intestazione dello strumento resta per i lettori di schermo (h1) ma non occupa spazio: lo strumento attivo è
    già evidenziato nelle schede. Obiettivo misurato da un test: il documento occupa almeno il 65% dell'altezza. */
 .db-more{display:none}
@@ -3730,7 +3730,7 @@ html:not([data-cloud="on"]) .cloud-btn{display:none !important}
   .tool:has(.docbar) .side-foot .btn.big{min-height:48px}
 }
 .pm-list{display:grid;gap:var(--s-2)}.pm-list .pm-a{width:100%}
-/* finestra di ricerca: il campo attivo ha un segno di focus visibile (linea sotto l’intestazione) */
+/* finestra di ricerca: il campo attivo ha un segno di focus visibile (linea sotto l\002019intestazione) */
 .cmd-head:has(.cmd-input:focus-visible){box-shadow:inset 0 -2px 0 var(--focus)}
 
 /* Modifica: la dimensione del carattere dice la sua unità */
@@ -4258,4 +4258,68 @@ html:not([data-cloud="on"]) .cloud-btn{display:none !important}
   .pd-foot{padding:var(--s-3) var(--s-4) calc(var(--s-3) + env(safe-area-inset-bottom,0px))}
   .pd-foot .btn{flex:1 1 0}
 }
+/* incassi e pagamenti veri: stato delle fatture e testo del sollecito */
+.in-st{display:inline-block;padding:1px 8px;border-radius:999px;background:var(--surface-2);color:var(--ink-2);font:600 12px/18px var(--font);white-space:nowrap}
+.in-st.ok{background:var(--ok-soft);color:var(--ok)}.in-st.warn{background:var(--warn-soft);color:var(--warn)}.in-st.bad{background:var(--danger-soft);color:var(--danger)}
+.in-sol{width:100%;font:400 13px/19px var(--font);resize:vertical}
+.in-tw .vd-t th.num,.in-tw .vd-t td.num{padding-right:var(--s-4)}
+/* Verifica di autenticità */
+.au-chip{display:inline-block;padding:1px 8px;border-radius:999px;background:var(--surface-2);color:var(--ink-2);font:600 12px/18px var(--font);white-space:nowrap}
+.au-chip.ok{background:var(--ok-soft);color:var(--ok)}.au-chip.warn{background:var(--warn-soft);color:var(--warn)}.au-chip.bad{background:var(--danger-soft);color:var(--danger)}
+.au-esito{display:flex;gap:var(--s-3);align-items:flex-start;padding:var(--s-4);border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface)}
+.au-esito h2{margin:0 0 4px;font:700 22px/28px var(--font-display)}
+.au-esito p{margin:0 0 var(--s-2);color:var(--ink-2)}
+.au-esito .au-ico{flex:none;display:grid;place-items:center;width:52px;height:52px;border-radius:999px;background:var(--surface-2);color:var(--ink-2)}
+.au-esito.ok{border-color:color-mix(in srgb,var(--ok) 40%,var(--line))}.au-esito.ok .au-ico{background:var(--ok-soft);color:var(--ok)}
+.au-esito.warn{border-color:color-mix(in srgb,var(--warn) 45%,var(--line))}.au-esito.warn .au-ico{background:var(--warn-soft);color:var(--warn)}
+.au-esito.bad{border-color:color-mix(in srgb,var(--danger) 45%,var(--line))}.au-esito.bad .au-ico{background:var(--danger-soft);color:var(--danger)}
+.au-num{display:flex;flex-wrap:wrap;gap:6px}
+.au-segni,.au-vita,.au-diff,.au-files{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:var(--s-2)}
+.au-segni li{padding:var(--s-2) var(--s-3);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:var(--r-sm);background:var(--surface)}
+.au-segni li.bad{border-left-color:var(--danger)}.au-segni li.warn{border-left-color:var(--warn)}.au-segni li.ok{border-left-color:var(--ok)}
+.au-segni p{margin:4px 0 0;color:var(--ink-2)}
+.au-sb{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s-2);width:100%;padding:0;border:0;background:none;color:var(--ink);font:400 14px/20px var(--font);text-align:left;cursor:pointer}
+.au-vita{position:relative;padding-left:var(--s-4)}
+.au-vita::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.au-vita li{position:relative}
+.au-vita li::before{content:"";position:absolute;left:calc(-1 * var(--s-4) + 1px);top:5px;width:10px;height:10px;border-radius:999px;background:var(--surface);border:2px solid var(--accent)}
+.au-vita li.bad::before{border-color:var(--danger);background:var(--danger-soft)}
+.au-vt{display:flex;flex-wrap:wrap;gap:var(--s-2);align-items:baseline}
+.au-vt span{color:var(--muted);font-size:13px}
+.au-prog{padding:0 6px;border-radius:var(--r-sm);background:var(--surface-2)}
+.au-vacts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.au-diff li{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font:400 14px/20px var(--font)}
+.au-pp{color:var(--muted);font-size:12px;min-width:34px}
+.au-add{padding:0 4px;border-radius:var(--r-xs);background:var(--ok-soft);color:var(--ok)}
+.au-del{padding:0 4px;border-radius:var(--r-xs);background:var(--danger-soft);color:var(--danger);text-decoration:line-through}
+.au-pages{display:flex;flex-direction:column;gap:var(--s-4);align-items:center}
+.au-pg{display:flex;flex-direction:column;gap:var(--s-2);max-width:100%}
+.au-pgh{display:flex;gap:var(--s-2);align-items:center}
+.au-pgw{position:relative;box-shadow:var(--shadow-sm);border-radius:var(--r-sm);overflow:hidden;max-width:100%}
+.au-pgw canvas{display:block;max-width:100%;height:auto}
+.au-mark{position:absolute;padding:0;border:2px solid var(--warn);border-radius:var(--r-xs);background:color-mix(in srgb,var(--warn) 14%,transparent);cursor:pointer}
+.au-mark.bad{border-color:var(--danger);background:color-mix(in srgb,var(--danger) 14%,transparent)}
+.au-mark.on{outline:3px solid color-mix(in srgb,var(--accent) 60%,transparent);outline-offset:2px}
+.au-zoom{padding:var(--s-3);border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:var(--r-sm);background:var(--surface)}
+.au-zoom.bad{border-left-color:var(--danger)}.au-zoom p{margin:6px 0 0}
+.au-zt{margin-top:6px;padding:6px 8px;border-radius:var(--r-sm);background:var(--surface-2);font:500 15px/20px var(--mono);overflow-wrap:anywhere}
+.au-fb{display:flex;justify-content:space-between;align-items:center;gap:var(--s-2);width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface);color:var(--ink);font:400 13px/18px var(--font);text-align:left;cursor:pointer}
+.au-fb.on{border-color:var(--accent);background:var(--accent-soft)}
+.au-fb b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.au-mark.info{border-color:var(--accent);border-style:dashed;background:color-mix(in srgb,var(--accent) 8%,transparent)}
+/* Analisi di un contratto ricevuto */
+.lc-kpis .vd-kpi b{font-size:18px;line-height:24px}
+.lc-q{margin:6px 0 0;padding:6px 10px;border-left:3px solid var(--line);background:var(--surface-2);border-radius:0 var(--r-sm) var(--r-sm) 0;font:italic 400 13px/19px var(--font);color:var(--ink-2)}
+.lc-norma{color:var(--muted)}
+.lc-testo{display:flex;flex-direction:column;gap:var(--s-3);padding:var(--s-4);border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);max-height:70vh;overflow:auto}
+.lc-art h4{margin:0 0 4px;font:600 14px/20px var(--font)}
+.lc-art p{margin:0;font:400 14px/22px var(--font);color:var(--ink-2)}
+.lc-m{padding:1px 2px;border-radius:var(--r-xs);background:var(--surface-2);color:var(--ink);cursor:pointer}
+.lc-m.bad{background:var(--danger-soft);box-shadow:inset 0 -2px 0 var(--danger)}.lc-m.warn{background:var(--warn-soft);box-shadow:inset 0 -2px 0 var(--warn)}.lc-m.info{background:var(--accent-soft);box-shadow:inset 0 -2px 0 var(--accent)}
+.lc-m.on{outline:2px solid var(--accent);outline-offset:1px}
+.lc-paste{width:100%;font:400 14px/21px var(--font);resize:vertical}
+.lc-ruolo{flex-wrap:wrap}
+.lc-date{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.lc-date li{display:flex;flex-direction:column;padding:6px 8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface);font:400 13px/18px var(--font)}
+.lc-date li.warn{border-left:4px solid var(--warn)}
 

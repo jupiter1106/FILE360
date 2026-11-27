@@ -1116,7 +1116,7 @@ const DocRead = (() => {
           const rec = await ocrRecognizePage(await getWorker(), doc.pdfjs, p, { dpi, auto: true, fix: true, langs: new Set(['ita']) });
           const k = vp.width / (rec.r.canvas.width || vp.width * dpi / 72);
           const read = (rec.data.lines || []).flatMap(l => (l.words || []).filter(w => (w.text || '').trim() && w.bbox && (w.confidence ?? 100) >= 30)
-            .map(w => ({ str: w.text, x0: w.bbox.x0 * k, x1: w.bbox.x1 * k, y0: w.bbox.y0 * k, y1: w.bbox.y1 * k })));
+            .map(w => ({ str: correggiOcrCodici(w.text), x0: w.bbox.x0 * k, x1: w.bbox.x1 * k, y0: w.bbox.y0 * k, y1: w.bbox.y1 * k })));
           items = mixed ? [...items, ...read.filter(w => !PageText.covered(items, w.x0, w.y0, w.x1, w.y1))] : read;
           rec.r.canvas.width = 0; rec.prep?.release?.(); ocr = true;
         } catch (e) { console.warn(e); }

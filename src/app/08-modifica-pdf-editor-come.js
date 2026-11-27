@@ -20,20 +20,15 @@ async function startEdit(stage, files) {
   let mode = 'edittext', selId = null, editing = null, activeId = null;
   const colors = { text: '#111111', rect: '#E0453A', hl: '#FFD43B', pen: '#1D4ED8' };
   const st = { f: 'std:helv', sz: 12, b: false, i: false, u: false, s: false, stroke: 2, fill: false, realRemove: false, align: 'left' };
-  let lastSnap = '[]'; const hist = [], fut = [];
+  // annulla, ripeti e ripristina tutto: il meccanismo comune agli strumenti che modificano. Qui il passo si registra DOPO
+  // la modifica (commit); i tasti li gestisce lo strumento (mentre scrivi in una casella valgono quelli del testo)
   const snap = () => JSON.stringify(items);
-  function commit() { const s = snap(); if (s === lastSnap) return; hist.push(lastSnap); if (hist.length > 100) hist.shift(); lastSnap = s; fut.length = 0; syncUi(); schedulePreview(viewer.page - 1); }
-  function restore(s) { const arr = JSON.parse(s); arr.forEach((a, i) => items[i] = a); lastSnap = s; selId = null; syncUi(); render(); drawProps(); schedulePreview(viewer.page - 1); }
-  function undo() { finishEdit(); if (!hist.length) return; fut.push(lastSnap); restore(hist.pop()); }
-  function redo() { finishEdit(); if (!fut.length) return; hist.push(lastSnap); restore(fut.pop()); }
-  // il documento com'era all'apertura (nessuna modifica): anche questo si annulla con Ctrl+Z
-  const ORIG = JSON.stringify(Array.from({ length: N }, () => []));
-  async function restoreAll() {
-    finishEdit(); if (lastSnap === ORIG) return toast('Il documento è già com’era all’apertura');
-    if (typeof confirmDlg === 'undefined') Later.all();
-    if (!(await confirmDlg('Tolgo tutte le modifiche e torno al documento com’era all’apertura? Puoi rimetterle con Annulla (Ctrl+Z).', { ok: 'Ripristina tutto' }))) return;
-    hist.push(lastSnap); fut.length = 0; restore(ORIG); toast('Documento ripristinato com’era all’apertura');
-  }
+  const applica = arr => { arr.forEach((a, i) => { items[i] = a; }); selId = null; syncUi(); render(); drawProps(); schedulePreview(viewer.page - 1); };
+  const storia = storiaModifiche({ get: () => items, set: applica, cosa: 'documento', tasti: false });
+  function commit() { if (storia.registra()) { syncUi(); schedulePreview(viewer.page - 1); } }
+  function undo() { finishEdit(); storia.undo(); }
+  function redo() { finishEdit(); storia.redo(); }
+  async function restoreAll() { finishEdit(); await storia.tutto(); }
   // mentre scrivi in una casella: Ctrl+Z annulla le lettere scritte; se nella casella non hai ancora cambiato nulla, annulla l'azione precedente
   const undoNow = () => { if (editing && editing.el.innerText !== editing.t0) return document.execCommand('undo'); undo(); };
   const find = id => { for (let i = 0; i < N; i++) { const it = items[i].find(x => x.id === id); if (it) return { it, pi: i }; } return null; };
@@ -1266,7 +1261,7 @@ async function startEdit(stage, files) {
     tog.va_sup.classList.toggle('on', ps.every(x => x.va === 'sup')); tog.va_sub.classList.toggle('on', ps.every(x => x.va === 'sub'));
     const al = it?.type === 'text' ? it.align || 'left' : st.align;
     for (const [k, b] of Object.entries(alBtn)) b.classList.toggle('on', k === al);
-    undoBtn.disabled = !editing && !hist.length; resetAllBtn.disabled = !editing && lastSnap === ORIG; redoBtn.disabled = !editing && !fut.length;
+    undoBtn.disabled = !editing && !storia.passi; resetAllBtn.disabled = !editing && !storia.modificato; redoBtn.disabled = !editing && !storia.avanti;
   }
   function pageFontsList(pi) {
     const used = new Set();
@@ -2247,7 +2242,7 @@ async function startEdit(stage, files) {
     if (map[k]) setMode(map[k]);
   };
   document.addEventListener('keydown', keyh);
-  const unload = e => { if (hist.length) { e.preventDefault(); e.returnValue = ''; } };
+  const unload = e => { if (storia.passi) { e.preventDefault(); e.returnValue = ''; } };
   window.addEventListener('beforeunload', unload);
   onLeave(() => { document.removeEventListener('keydown', keyh); window.removeEventListener('beforeunload', unload); viewer.destroy(); clearTimeout(pvTimer); });
 
@@ -2291,7 +2286,7 @@ async function startEdit(stage, files) {
   requestAnimationFrame(() => viewer.render());
   setTimeout(() => ocrAll(), 250);
   setTimeout(() => getUsage(), 800);
-  Flow.trackTool(() => { try { if (editing) finishEdit(); } catch { } return snap(); }, { save: () => snap(), restore: s => { hist.push(lastSnap); restore(s); } });
+  Flow.trackTool(() => { try { if (editing) finishEdit(); } catch { } return snap(); }, { save: () => snap(), restore: s => { applica(JSON.parse(s)); storia.registra(); } });
 
   /* ---------- scrittura nel PDF ---------- */
   function piecesOf(it) {

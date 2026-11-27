@@ -260,3 +260,17 @@ Il primo giro del banco (prima della mappa stradale) aveva dato 4,55 e ha trovat
 - **IVA per trimestre.** È una stima (IVA delle vendite meno IVA degli acquisti caricati): non conosce detraibilità, scissione dei pagamenti, inversione contabile, acconti e crediti precedenti. Fa fede la liquidazione.
 - **Prodotti senza codice.** Si raggruppano per descrizione, senza mesi, anni, date e numeri d'ordine. Descrizioni molto diverse dello stesso servizio restano separate.
 - **Stima.** È statistica (tendenza e stagionalità), non una previsione certa; lo strumento lo scrive.
+
+## Incassi e pagamenti veri (strumento a parte)
+
+L'estratto conto abbinato alle fatture (`src/incassi.js`, caricato all'apertura dello strumento). Si caricano insieme fatture (XML, P7M, ZIP, PDF) ed estratto conto (CSV dell'home banking con data/descrizione/importo o dare/avere, oppure PDF anche scansionato, letto con `BankRead` e l'OCR).
+
+Abbinamento, in quest'ordine:
+1. un movimento, una fattura: stesso importo dovuto (o una rata scritta in fattura) più nome della controparte, numero della fattura o vicinanza alla scadenza; un importo che nessun'altra fattura ha basta da solo;
+2. un bonifico per più fatture della stessa controparte, anche al netto di una nota di credito: tra le combinazioni con la somma giusta vince quella con più numeri citati nella causale, poi quella con le fatture più vecchie;
+3. una fattura pagata in più volte (movimenti con il nome che insieme fanno l'importo);
+4. acconti con nome e numero; 5. acconti senza numero con la parola «acconto», quando la controparte ha una sola fattura aperta che può contenerli (o una sola che scade a ridosso).
+
+Del nome contano solo le parole che distinguono (una parola presente nel nome di più di due controparti non conta). Oltre 14 mesi dalla data della fattura si abbina solo se la causale la cita. Dovuto: rate scritte in fattura, altrimenti totale meno ritenuta, meno IVA in split payment; per le integrazioni di fatture estere (TD17-19) l'imponibile. Stati: saldata, in parte, scaduta, da saldare, dopo l'estratto, da verificare (integrazioni estere senza scadenza).
+
+Prova: `test/fixtures/estratto-conto.csv` e `incassi-attese.json` generati da `test/bench/make_vendite.py` con la sorte di ogni fattura (pagata alla scadenza con causali diverse, solo il nome, due rate, insieme alla successiva, in ritardo, mai pagata, pagamento dopo la fine dell'estratto). Banco `test/bench/incassi_autentica_bench.js`: 100% delle 743 fatture con la sorte giusta.
