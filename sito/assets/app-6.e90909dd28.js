@@ -41,7 +41,7 @@ const Later = {
   all() { while (this.next()); },
   // i blocchi fino a quello che definisce «name» (l'ordine conta: i blocchi dopo possono usare quelli prima); il resto a breve
   // moduli di un solo strumento in un blocco a parte (data-lib): si eseguono quando lo strumento si apre, dopo gli altri blocchi
-  LIBS: { startVendite: 'vendite', Vendite: 'vendite', Mappa: 'vendite', startContratto: 'contratti', Contratti: 'contratti', startRilevaAI: 'rilevaai', RilevaAI: 'rilevaai', startIncassi: 'incassi', Incassi: 'incassi', startAutentica: 'autentica', Autentica: 'autentica', startLeggiContratto: 'leggicontratto', Clausole: 'leggicontratto' },
+  LIBS: { startVendite: 'vendite', Vendite: 'vendite', Mappa: 'vendite', startContratto: 'contratti', Contratti: 'contratti', startRilevaAI: 'rilevaai', RilevaAI: 'rilevaai', startIncassi: 'incassi', Incassi: 'incassi', startAutentica: 'autentica', Autentica: 'autentica', startLeggiContratto: 'leggicontratto', Clausole: 'leggicontratto', startPassa: 'passa', Passa: 'passa', PassaSessione: 'passa' },
   // esegue il blocco dello strumento se non è ancora stato eseguito (si può chiamare quante volte si vuole)
   serve(name) { if (this.LIBS[name]) this.lib(this.LIBS[name]); },   // il blocco si esegue una volta sola (poi non c'è più)
   lib(nome) { const el = document.querySelector(`script[type="text/x-officina-later"][data-lib="${nome}"]`); if (!el) return; this.all(); this._run(el, false); },
@@ -1204,6 +1204,14 @@ function showResult(outputs, opts = {}) {
   if (J && J.bg && !Jobs.light && !opts._fromJob && !(J.gen === GEN && typeof Flow !== 'undefined' && Flow.isCapturing && Flow.isCapturing())) { J.result = { outputs, opts }; return; }
   return showResultNow(outputs, opts);
 }
+// con un telefono (o un computer) collegato in «Passa file», il risultato si manda all'altro dispositivo con un tocco
+function passaBtn(outs, size) {
+  const can = typeof PassaSessione !== 'undefined' ? PassaSessione.canale : null; if (!can) return null;
+  const altro = can.nomeAltro || 'telefono';
+  return h('button', { class: 'btn ' + size + ' res-passa', title: 'Manda a ' + altro, 'aria-label': 'Manda a ' + altro, onclick: e => {
+    can.invia(outs.map(o => new File([o.bytes], o.name, { type: o.type || 'application/pdf' }))); toast(`Mandato a ${altro}: arriva identico`); e.currentTarget.disabled = true; } },
+    ic('phone', size === 'big' ? 18 : 16), size === 'big' ? 'Manda a ' + altro : null);
+}
 function showResultNow(outputs, { note, title, zipName, extra, primary = null, version = null, noNext = false, reloadAfter = false, _fromJob = false } = {}) {
   // documento attivo: un PDF prodotto diventa la nuova versione; durante il cambio di strumento niente finestra
   const fr = typeof Flow !== 'undefined' && !_fromJob ? Flow.onResult(outputs, { primary: version ?? primary }) : { captured: false, pushed: false };
@@ -1228,6 +1236,7 @@ function showResultNow(outputs, { note, title, zipName, extra, primary = null, v
     h('span', { class: 'muted' }, ic(/\.txt$/.test(o.name) ? 'type' : /\.docx$/.test(o.name) ? 'textedit' : 'file', 22)),
     h('div', { class: 'rn' }, (() => { const b = h('b', { title: o.name }, o.name), was = h('span', { class: 'rn-was muted small' }); nameEls.push([o, b, was]); editableName(o, b, refreshNames); return h('div', { class: 'rn-name' }, b, was); })(), h('span', { class: 'muted small' }, fmtSize(o.bytes.length) + (o.info ? ' · ' + o.info : ''))),
     canShareFiles() ? h('button', { class: 'btn sm', title: 'Condividi', 'aria-label': 'Condividi', onclick: () => shareFile(o.bytes, o.name, o.type || 'application/pdf') }, ic('share', 16)) : null,
+    passaBtn([o], 'sm'),
     multi ? cmpBtn(o, false) : null,
     typeof Preview !== 'undefined' && Preview.can(o) ? h('button', { class: 'btn sm res-pv', title: 'Anteprima', 'aria-label': 'Anteprima di ' + o.name, onclick: () => Preview.open(o) }, ic('eye', 16), h('span', { class: 'res-pv-l' }, 'Anteprima')) : null,
     h('button', { class: 'btn sm res-dl', onclick: () => download(o.bytes, o.name, o.type || 'application/pdf') }, ic('download', 16), 'Scarica'))));
@@ -1239,7 +1248,7 @@ function showResultNow(outputs, { note, title, zipName, extra, primary = null, v
     ? h('button', { class: 'btn primary big', 'data-autofocus': '', onclick: async () => download(await zipOutputs(outputs), zipName || 'file.zip', 'application/zip') }, ic('zip', 18), `Scarica tutto (ZIP, ${outputs.length} file)`)
     : h('button', { class: 'btn primary big res-main', 'data-autofocus': '', onclick: () => download(o0.bytes, o0.name, o0.type || 'application/pdf') }, ic('download', 18), primary != null ? (/\.docx$/i.test(o0.name) ? 'Scarica il documento Word' : /\.pdf$/i.test(o0.name) ? 'Scarica il PDF' : 'Scarica il file') : 'Scarica il file');
   const wordOut = primary != null && !/\.docx$/i.test(o0.name) ? outputs.find(o => /\.docx$/i.test(o.name)) : null;
-  const share = !multi && canShareFiles() ? h('button', { class: 'btn big res-share', onclick: () => shareFile(o0.bytes, o0.name, o0.type || 'application/pdf') }, ic('share', 18), 'Condividi') : null;
+  const share = !multi && canShareFiles() ? h('button', { class: 'btn big res-share', onclick: () => shareFile(o0.bytes, o0.name, o0.type || 'application/pdf') }, ic('share', 18), 'Condividi') : passaBtn(outputs, 'big');
   // azioni secondarie, tutte sulla stessa riga: guardare, confrontare, altri formati, cloud
   const more = [
     !multi && typeof Preview !== 'undefined' && Preview.can(o0) ? h('button', { class: 'btn res-preview', onclick: () => Preview.open(o0) }, ic('eye', 16), 'Anteprima') : null,
@@ -3739,6 +3748,18 @@ const SEO = (() => {
         ['I dati vengono inviati da qualche parte?', 'No: tutto avviene nel browser. La bozza resta solo su questo dispositivo, oppure la salvi tu in un file.'],
       ],
     },
+    passa: {
+      slug: 'passa-file', title: 'Passa file dal telefono al computer e viceversa: diretto, cifrato, senza cloud',
+      desc: 'Passa foto, documenti e file di ogni dimensione tra telefono e computer inquadrando un QR: collegamento diretto sulla tua rete, cifrato, senza app, account, cloud né cavi. Funziona tra iPhone, Android, Windows e Mac. Ogni file arriva con l\u2019impronta verificata.',
+      h1: 'Passa file tra telefono e computer', h2: 'Come passare un file dal telefono al computer senza cavo né cloud', rel: ["immagini", "migliora", "comprimi"],
+      steps: ['Sul computer apri «Passa file»: compare un QR.', 'Inquadralo con la fotocamera del telefono: si apre file360 e i due dispositivi si collegano direttamente. La prima volta il telefono ti chiede di mandarti un link di abbinamento.', 'Fotografa un documento o scegli i file: arrivano sull\u2019altro dispositivo, identici, pronti da aprire in file360 o da salvare.'],
+      faq: [
+        ['I file passano da un server?', 'No: viaggiano direttamente tra i due dispositivi sulla tua rete, cifrati. Non c\u2019è nessun server di mezzo, nemmeno per mettere in contatto i dispositivi: le informazioni per collegarsi stanno nel QR.'],
+        ['Serve la stessa rete?', 'Sì: telefono e computer devono essere sulla stessa rete, per esempio la Wi-Fi di casa o dell\u2019ufficio (il computer può essere collegato col cavo allo stesso router). Senza Wi-Fi puoi attivare l\u2019hotspot del telefono e collegarci il computer. In 4G/5G il collegamento diretto non è possibile.'],
+        ['Perché la prima volta serve un link?', 'Il computer deve conoscere il telefono per essere sicuro di parlare proprio con lui: la prima volta il telefono ti fa mandare a te stesso un link (o un\u2019immagine) da aprire sul computer. Il link contiene solo l\u2019identità pubblica del telefono, non apre niente da solo. Dalla volta dopo basta inquadrare il QR.'],
+        ['C\u2019è un limite di dimensione?', 'No: i file si mandano a pezzi e si ricompongono, anche di molti gigabyte; ogni file arriva con la sua impronta SHA-256 controllata dalle due parti.'],
+      ],
+    },
     leggicontratto: {
       slug: 'analisi-contratto-clausole', title: 'Analisi di un contratto ricevuto: clausole vessatorie e illegittime prima di firmare',
       desc: 'Carica il contratto da firmare (PDF anche scansionato, Word o testo): deposito oltre tre mensilità, durata sotto il minimo, foro sbagliato, recesso escluso, spese straordinarie all\u2019inquilino, rinnovo tacito, penali, modifiche unilaterali, clausole senza doppia firma. Frase esatta, norma e modifica da chiedere. Senza upload.',
@@ -3883,6 +3904,8 @@ const TOOLS = {
   contratto: { title: 'Contratto di affitto e comodato', short: 'Contratto affitto', icon: 'lease', hue: '#B45309', accept: '.pdf,.json,application/pdf,application/json', multiple: false, anyFile: true, noFile: 'Compila un nuovo contratto', noFileIcon: 'lease', noFileFirst: true, pickLabel: 'Apri una visura o una bozza',
               dzTitle: 'Il contratto pronto in pochi minuti', dzText: 'Hai la visura catastale in PDF o una bozza salvata (.json)? Trascinala qui: immobile e proprietari si compilano da soli.',
               desc: 'Contratto di locazione 4+4, 3+2 concordato, transitorio, per studenti, a uso negozio o ufficio, foresteria, box auto, affitto di terreni agricoli e comodato gratuito: compili i dati nella colonna, il contratto si scrive da solo con le clausole che scegli e ogni articolo si può modificare. PDF e Word, più il promemoria di registrazione e imposte.', start: (...a) => { Later.serve('startContratto'); return startContratto(...a); } },
+  passa:    { title: 'Passa file tra telefono e computer', short: 'Passa file', icon: 'phone', hue: '#0EA5E9', accept: '', multiple: true, anyFile: true, pdfIn: false, resume: () => true,
+              desc: 'Inquadra il QR con il telefono: foto, documenti e file di ogni dimensione passano diretti tra telefono e computer, cifrati, senza cloud né account.', start: (...a) => { Later.serve('startPassa'); return startPassa(...a); } },
   leggicontratto: { title: 'Analisi di un contratto ricevuto', short: 'Analizza contratto', icon: 'contractcheck', hue: '#7C3AED', accept: '.pdf,.docx,.odt,.txt,application/pdf,text/plain,image/*', multiple: false, anyFile: true, noFile: 'Incolla il testo', noFileIcon: 'textedit',
               dzTitle: 'Trascina qui il contratto da firmare', dzText: 'PDF (anche scansionato), Word o foto delle pagine: le clausole a rischio con la norma e la modifica da chiedere. Il file resta sul tuo dispositivo.',
               desc: 'Il contratto che ti hanno mandato da firmare: clausole nulle, contestabili o onerose (deposito, durata, foro, recesso, spese, rinnovo tacito, penali, modifiche unilaterali, doppia firma), con la frase esatta, la norma e la richiesta di modifica già scritta.', start: (...a) => { Later.serve('startLeggiContratto'); return startLeggiContratto(...a); } },
@@ -3929,7 +3952,7 @@ const TOOLS = {
 // descrizioni brevi per le schede compatte
 const SHORT_DESC = {
   estrattoconto: 'Movimenti del conto in Excel, con verifica dei saldi', f24: 'F24, CU, 730, Redditi, IRAP, IVA in Excel', visure: 'Visure camerali e catastali in dati', laboratorio: 'Referti in tabella, valori fuori intervallo evidenziati',
-  incassi: 'Quali fatture sono state davvero pagate', autentica: 'Il PDF è stato modificato?', leggicontratto: 'Clausole a rischio prima di firmare', vendite: 'Mappa dei clienti e statistiche dalle fatture', contratto: 'Locazione e comodato guidati', rilevaai: 'Prove di testo AI e passaggi copiati', qrsepa: 'Il QR per pagare con bonifico', conforme: 'Dicitura di conformità, poi la firma', misure: 'Distanze e superfici in scala', conta: 'Parole, caratteri, cartelle', tesi: 'Modello Word e controllo del PDF', vettoriale: 'Timbri e loghi in SVG e PNG trasparente',
+  incassi: 'Quali fatture sono state davvero pagate', autentica: 'Il PDF è stato modificato?', passa: 'Dal telefono al computer, diretto e cifrato', leggicontratto: 'Clausole a rischio prima di firmare', vendite: 'Mappa dei clienti e statistiche dalle fatture', contratto: 'Locazione e comodato guidati', rilevaai: 'Prove di testo AI e passaggi copiati', qrsepa: 'Il QR per pagare con bonifico', conforme: 'Dicitura di conformità, poi la firma', misure: 'Distanze e superfici in scala', conta: 'Parole, caratteri, cartelle', tesi: 'Modello Word e controllo del PDF', vettoriale: 'Timbri e loghi in SVG e PNG trasparente',
   tavola: 'A0/A1 su fogli A4 o A3', officepdf: 'Word, Excel, PowerPoint e testi in PDF', filigrana: 'Scritta o logo su tutte le pagine', pdftesto: 'Testo e pagina web dal PDF', annota: 'Evidenzia, note e commenti', pdfppt: 'Una diapositiva per pagina',
   unisci: 'Più PDF e immagini in un solo documento', immagini: 'Foto e scansioni in un PDF ordinato', dividi: 'Separa pagine o intervalli in più file',
   comprimi: 'Riduci il peso mantenendo la qualità', modifica: 'Riscrivi il testo, aggiungi immagini e firme', ruota: 'Raddrizza pagine singole o tutte',
@@ -3948,7 +3971,7 @@ const SHORT_DESC = {
 };
 const FISCAL_GROUP = 'Fisco e firme digitali';
 const GROUPS = [
-  ['Fai tutto tu', ['assistente']],
+  ['Fai tutto tu', ['assistente', 'passa']],
   ['Modifica e proteggi', ['modifica', 'annota', 'moduli', 'oscura', 'numeri', 'filigrana', 'proteggi']],
   ['Pagine', ['ordina', 'ruota', 'unisci', 'dividi', 'impagina']],
   ['Converti e ottimizza', ['word', 'excel', 'officepdf', 'ocr', 'migliora', 'pdfa', 'verificapdfa', 'comprimi', 'immagini', 'immaginipdf', 'vettoriale']],
@@ -4014,7 +4037,11 @@ const PATH_MODE = IS_SITE;
 const pagePath = id => id && TOOLS[id] ? SEO.slug(id) + '/' : '';
 function urlFor(id) { return PATH_MODE ? new URL(pagePath(id), SITE_BASE).pathname : '#' + (id || ''); }
 const canonicalFor = id => (window.OFFICINA_SITE || location.origin + '/') + pagePath(id);
+// i link di «Passa file» (QR del computer, abbinamento del telefono) portano i dati dopo «#»: si conservano qui prima che
+// l'indirizzo venga riscritto, e non arrivano mai al server
+let PASSA_INGRESSO = '';
 function routeId() {
+  if (/^#(c|abbina)=/.test(location.hash)) { PASSA_INGRESSO = location.hash; return 'passa'; }
   if (location.hash.length > 1) return decodeURIComponent(location.hash.slice(1));
   if (!PATH_MODE) return '';
   const rel = decodeURIComponent(location.pathname).slice(new URL(SITE_BASE).pathname.length).replace(/(index\.html)?$/, '').replace(/\/+$/, '');
@@ -4366,10 +4393,16 @@ function homeIntents() {
       h('span', { class: 'g-t' }, h('b', {}, 'Non so cosa mi serve: guidami'), h('span', {}, 'Dimmi a cosa serve il file: guardo il documento e faccio io i passaggi giusti')),
       h('span', { class: 'g-go', 'aria-hidden': 'true' }, ic('arrow', 18)));
     dropOpens(a, 'assistente'); return a; })();
+  // «Passa file»: la scheda in evidenza accanto all'aiuto
+  const passa = TOOLS.passa ? h('a', { class: 'intent pa-home', href: urlFor('passa'), draggable: 'false', dataset: { id: 'passa' },
+      onclick: e => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button) return; e.preventDefault(); Flow.go('passa'); } },
+      h('span', { class: 'led', 'aria-hidden': 'true' }), h('span', { class: 't-ic', 'aria-hidden': 'true' }, ic('phone', 20)),
+      h('span', { class: 'g-t' }, h('b', {}, 'Passa file tra telefono e computer'), h('span', {}, 'Inquadra il QR: foto e documenti passano diretti e cifrati, senza cloud né cavi')),
+      h('span', { class: 'g-go', 'aria-hidden': 'true' }, ic('arrow', 18))) : null;
   const prof = typeof Prefs !== 'undefined' ? Prefs.profile() : null;
   const rank = ids => prof ? -ids.reduce((n, id) => n + prof[3].filter(x => x === id || FAM_OF[x]?.head === id || TOOLS[x]?.alias === id).length, 0) : 0;
   void rank;   // le categorie restano sempre nello stesso ordine: chi sceglie una professione deve ritrovare tutto dove l'ha lasciato
-  const cats = GROUPS.filter(([, ids]) => !ids.every(id => id === 'assistente')).map(([label, ids]) => {
+  const cats = GROUPS.filter(([, ids]) => !ids.every(id => id === 'assistente' || id === 'passa')).map(([label, ids]) => {
     const [color, name] = CAT_STYLE[label] || ['#5A2BFF', label];
     // prima le famiglie (una riga intera ciascuna), poi le schede singole, affiancate e tutte uguali
     const vis = ids.filter(id => !famHidden(id)), fam = id => FAM_OF[id] && FAM_OF[id].ids.some(x => x !== id && TOOLS[x]);
@@ -4381,7 +4414,7 @@ function homeIntents() {
   const none = h('p', { class: 'tcat-none', hidden: true });
   const box = h('section', { class: 'intents', 'aria-labelledby': 'intents-h' },
     h('div', { class: 'intents-h' }, h('h2', { id: 'intents-h' }, 'Cosa devi fare?'), homeSearch()),
-    guide, h('div', { class: 'tcats' }, cats), none);
+    h('div', { class: 'intents-top' }, guide, passa), h('div', { class: 'tcats' }, cats), none);
   /* trascinando un file sulla pagina, le schede vicine al puntatore si gonfiano un poco (più vicine, più grandi);
      quella sotto il puntatore cresce e trema, pronta a riceverlo */
   {
@@ -4809,6 +4842,7 @@ const Recents = (() => {
 /* sinonimi e parole che un utente italiano digita davvero */
 const CMD_SYNONYMS = {
   rilevaai: ['rilevatore ai', 'rilevatore di intelligenza artificiale', 'testo scritto con l\u2019ai', 'scritto con chatgpt', 'scritto con claude', 'testo generato dall\u2019intelligenza artificiale', 'ai detector', 'gpt detector', 'compilatio', 'antiplagio', 'plagio', 'copiato', 'compito copiato', 'tesina copiata', 'verificare se un testo è stato scritto dall\u2019ai', 'chatgpt', 'claude', 'gemini', 'intelligenza artificiale'],
+  passa: ['passare file dal telefono al computer', 'trasferire foto dal telefono al pc', 'mandare file al telefono', 'airdrop', 'condividere file senza cavo', 'telefono computer', 'qr code collegare', 'foto dal cellulare al computer', 'inviare file iphone windows', 'senza whatsapp', 'trasferimento file wifi', 'scansionare con il telefono'],
   leggicontratto: ['clausole vessatorie', 'controllare contratto', 'analisi contratto', 'contratto di affitto da firmare', 'clausole nulle', 'deposito cauzionale massimo', 'foro competente', 'rinnovo tacito', 'penale contratto', 'recesso inquilino', 'contratto da firmare', 'revisione contratto', 'clausole illegittime', 'doppia firma 1341'],
   autentica: ['pdf modificato', 'pdf falso', 'documento falso', 'fattura falsa', 'certificato falso', 'pdf contraffatto', 'pdf alterato', 'verificare autenticità', 'autenticità documento', 'controllare se un pdf è originale', 'versioni precedenti pdf', 'modificato dopo la firma', 'metadati pdf', 'data creazione pdf', 'chi ha modificato il pdf', 'manomissione', 'falsificazione'],
   incassi: ['riconciliazione bancaria', 'riconciliazione banca fatture', 'fatture incassate', 'fatture non pagate', 'fatture scadute', 'clienti che non pagano', 'sollecito di pagamento', 'solleciti', 'scadenzario incassi', 'crediti scaduti', 'chi non mi ha pagato', 'estratto conto e fatture', 'abbinare bonifici alle fatture', 'insoluti'],

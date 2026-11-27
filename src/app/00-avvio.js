@@ -40,7 +40,7 @@ const Later = {
   all() { while (this.next()); },
   // i blocchi fino a quello che definisce «name» (l'ordine conta: i blocchi dopo possono usare quelli prima); il resto a breve
   // moduli di un solo strumento in un blocco a parte (data-lib): si eseguono quando lo strumento si apre, dopo gli altri blocchi
-  LIBS: { startVendite: 'vendite', Vendite: 'vendite', Mappa: 'vendite', startContratto: 'contratti', Contratti: 'contratti', startRilevaAI: 'rilevaai', RilevaAI: 'rilevaai', startIncassi: 'incassi', Incassi: 'incassi', startAutentica: 'autentica', Autentica: 'autentica', startLeggiContratto: 'leggicontratto', Clausole: 'leggicontratto' },
+  LIBS: { startVendite: 'vendite', Vendite: 'vendite', Mappa: 'vendite', startContratto: 'contratti', Contratti: 'contratti', startRilevaAI: 'rilevaai', RilevaAI: 'rilevaai', startIncassi: 'incassi', Incassi: 'incassi', startAutentica: 'autentica', Autentica: 'autentica', startLeggiContratto: 'leggicontratto', Clausole: 'leggicontratto', startPassa: 'passa', Passa: 'passa', PassaSessione: 'passa' },
   // esegue il blocco dello strumento se non è ancora stato eseguito (si può chiamare quante volte si vuole)
   serve(name) { if (this.LIBS[name]) this.lib(this.LIBS[name]); },   // il blocco si esegue una volta sola (poi non c'è più)
   lib(nome) { const el = document.querySelector(`script[type="text/x-officina-later"][data-lib="${nome}"]`); if (!el) return; this.all(); this._run(el, false); },
@@ -1203,6 +1203,14 @@ function showResult(outputs, opts = {}) {
   if (J && J.bg && !Jobs.light && !opts._fromJob && !(J.gen === GEN && typeof Flow !== 'undefined' && Flow.isCapturing && Flow.isCapturing())) { J.result = { outputs, opts }; return; }
   return showResultNow(outputs, opts);
 }
+// con un telefono (o un computer) collegato in «Passa file», il risultato si manda all'altro dispositivo con un tocco
+function passaBtn(outs, size) {
+  const can = typeof PassaSessione !== 'undefined' ? PassaSessione.canale : null; if (!can) return null;
+  const altro = can.nomeAltro || 'telefono';
+  return h('button', { class: 'btn ' + size + ' res-passa', title: 'Manda a ' + altro, 'aria-label': 'Manda a ' + altro, onclick: e => {
+    can.invia(outs.map(o => new File([o.bytes], o.name, { type: o.type || 'application/pdf' }))); toast(`Mandato a ${altro}: arriva identico`); e.currentTarget.disabled = true; } },
+    ic('phone', size === 'big' ? 18 : 16), size === 'big' ? 'Manda a ' + altro : null);
+}
 function showResultNow(outputs, { note, title, zipName, extra, primary = null, version = null, noNext = false, reloadAfter = false, _fromJob = false } = {}) {
   // documento attivo: un PDF prodotto diventa la nuova versione; durante il cambio di strumento niente finestra
   const fr = typeof Flow !== 'undefined' && !_fromJob ? Flow.onResult(outputs, { primary: version ?? primary }) : { captured: false, pushed: false };
@@ -1227,6 +1235,7 @@ function showResultNow(outputs, { note, title, zipName, extra, primary = null, v
     h('span', { class: 'muted' }, ic(/\.txt$/.test(o.name) ? 'type' : /\.docx$/.test(o.name) ? 'textedit' : 'file', 22)),
     h('div', { class: 'rn' }, (() => { const b = h('b', { title: o.name }, o.name), was = h('span', { class: 'rn-was muted small' }); nameEls.push([o, b, was]); editableName(o, b, refreshNames); return h('div', { class: 'rn-name' }, b, was); })(), h('span', { class: 'muted small' }, fmtSize(o.bytes.length) + (o.info ? ' · ' + o.info : ''))),
     canShareFiles() ? h('button', { class: 'btn sm', title: 'Condividi', 'aria-label': 'Condividi', onclick: () => shareFile(o.bytes, o.name, o.type || 'application/pdf') }, ic('share', 16)) : null,
+    passaBtn([o], 'sm'),
     multi ? cmpBtn(o, false) : null,
     typeof Preview !== 'undefined' && Preview.can(o) ? h('button', { class: 'btn sm res-pv', title: 'Anteprima', 'aria-label': 'Anteprima di ' + o.name, onclick: () => Preview.open(o) }, ic('eye', 16), h('span', { class: 'res-pv-l' }, 'Anteprima')) : null,
     h('button', { class: 'btn sm res-dl', onclick: () => download(o.bytes, o.name, o.type || 'application/pdf') }, ic('download', 16), 'Scarica'))));
@@ -1238,7 +1247,7 @@ function showResultNow(outputs, { note, title, zipName, extra, primary = null, v
     ? h('button', { class: 'btn primary big', 'data-autofocus': '', onclick: async () => download(await zipOutputs(outputs), zipName || 'file.zip', 'application/zip') }, ic('zip', 18), `Scarica tutto (ZIP, ${outputs.length} file)`)
     : h('button', { class: 'btn primary big res-main', 'data-autofocus': '', onclick: () => download(o0.bytes, o0.name, o0.type || 'application/pdf') }, ic('download', 18), primary != null ? (/\.docx$/i.test(o0.name) ? 'Scarica il documento Word' : /\.pdf$/i.test(o0.name) ? 'Scarica il PDF' : 'Scarica il file') : 'Scarica il file');
   const wordOut = primary != null && !/\.docx$/i.test(o0.name) ? outputs.find(o => /\.docx$/i.test(o.name)) : null;
-  const share = !multi && canShareFiles() ? h('button', { class: 'btn big res-share', onclick: () => shareFile(o0.bytes, o0.name, o0.type || 'application/pdf') }, ic('share', 18), 'Condividi') : null;
+  const share = !multi && canShareFiles() ? h('button', { class: 'btn big res-share', onclick: () => shareFile(o0.bytes, o0.name, o0.type || 'application/pdf') }, ic('share', 18), 'Condividi') : passaBtn(outputs, 'big');
   // azioni secondarie, tutte sulla stessa riga: guardare, confrontare, altri formati, cloud
   const more = [
     !multi && typeof Preview !== 'undefined' && Preview.can(o0) ? h('button', { class: 'btn res-preview', onclick: () => Preview.open(o0) }, ic('eye', 16), 'Anteprima') : null,
