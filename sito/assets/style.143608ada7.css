@@ -4398,4 +4398,8 @@ html[data-anim=off] .pa-spin{animation:none;border-top-color:var(--pa)}
 .pa-cam .btn{position:relative}
 .pa-pill{position:fixed;right:var(--s-4);bottom:var(--s-4);z-index:200;display:flex;align-items:center;gap:var(--s-2);padding:10px 16px;border:0;border-radius:var(--r-full);background:var(--pa-ink);color:#fff;font:600 14px/18px var(--font);box-shadow:var(--shadow-lg);cursor:pointer}
 .pa-intro{margin:0;color:var(--ink-2)}
+.pa-diag{flex-direction:row}
+.pa-codebox{display:flex;flex-direction:column;gap:var(--s-2);margin-top:var(--s-2)}
+.pa-netcode{display:block;padding:var(--s-3);border-radius:var(--r-lg);background:var(--surface);border:1px solid var(--line);font:700 22px/28px var(--mono);letter-spacing:.06em;text-align:center;user-select:all}
+.pa-codebox details ul{margin:6px 0;padding-left:var(--s-5)}
 

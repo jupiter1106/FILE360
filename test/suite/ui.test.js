@@ -1509,7 +1509,7 @@ test('Passa file: il telefono inquadra il QR, si abbina con il link, i file pass
   await tel.goto(APPURL + '#' + url1.split('#')[1]); await tel.waitForSelector('.pa-abb', { timeout: 20000 });
   ok(/Primo collegamento/.test(await tel.locator('.pa-msg').innerText()), 'il telefono nuovo non chiede l’abbinamento');
   const link = await tel.evaluate(() => Passa.linkAbbinamento());
-  await pc.fill('.pa-abb-in .input', link); await pc.locator('.pa-abb-in button', { hasText: 'Abbina' }).click();
+  await pc.fill('.pa-in-abb', link); await pc.locator('.pa-abb-in button', { hasText: 'Abbina' }).click();
   await pc.waitForSelector('.pa-stato', { timeout: 20000 }); await tel.waitForSelector('.pa-stato', { timeout: 20000 }); await pc.waitForTimeout(400);
   const sas = t => (/Controllo (\d\d-\d\d)/.exec(t) || [])[1];
   const sPc = sas(await pc.locator('.pa-stato').innerText()), sTel = sas(await tel.locator('.pa-stato').innerText());
@@ -1559,6 +1559,25 @@ f.close()`]);
     await tel.waitForSelector('.pa-stato', { timeout: 30000 }); await pc.waitForSelector('.pa-stato', { timeout: 30000 });
     ok(pc.errs.length === 0 && tel.errs.length === 0, [...pc.errs, ...tel.errs].join(' | '));
   } finally { await b2?.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+test('Passa file: se il telefono non raggiunge il computer (firewall, nome .local non risolto) dice perché e mostra un codice di rete; scritto sul computer, è il computer a chiamare il telefono', async b => {
+  const b2 = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
+  try {
+    const { page: pc } = await open(b, 'desk1440'); const { page: tel, ctx } = await open(b2, 'iphoneSE'); await ctx.grantPermissions(['camera']);
+    const APP = pc.url().split('#')[0];
+    await pc.evaluate(() => { location.hash = 'passa'; }); await pc.waitForSelector('.pa-qr-img svg', { timeout: 20000 });
+    await tel.goto(APP + '#' + (await pc.getAttribute('.pa-qr-img', 'data-url')).split('#')[1]); await tel.waitForSelector('.pa-abb', { timeout: 20000 });
+    await pc.fill('.pa-in-abb', await tel.evaluate(() => Passa.linkAbbinamento())); await pc.locator('.pa-abb-in button', { hasText: 'Abbina' }).click();
+    await pc.waitForSelector('.pa-stato', { timeout: 20000 }); await tel.waitForSelector('.pa-stato', { timeout: 20000 });
+    await pc.locator('.pa-stato button', { hasText: 'Scollega' }).click(); await pc.waitForSelector('.pa-qr-img svg', { timeout: 20000 }); await tel.waitForSelector('.pa-big', { timeout: 20000 });
+    await tel.evaluate(() => { const o = Passa.leggiQR; Passa.leggiQR = t => { const q = o(t); if (q) q.addr = q.addr.map(() => '10.255.255.1'); return q; }; });
+    await tel.goto(APP + '#' + (await pc.getAttribute('.pa-qr-img', 'data-url')).split('#')[1]);
+    await tel.waitForSelector('.pa-netcode', { timeout: 40000 });
+    ok(/non risponde|non trova/.test(await tel.locator('.pa-diag').innerText()), 'la causa non è spiegata');
+    await pc.fill('.pa-in-rete', await tel.locator('.pa-netcode').innerText()); await pc.locator('.pa-abb-in button', { hasText: 'Collega' }).click();
+    await pc.waitForSelector('.pa-stato', { timeout: 20000 }); await tel.waitForSelector('.pa-stato', { timeout: 20000 });
+    ok(pc.errs.length === 0 && tel.errs.length === 0, [...pc.errs, ...tel.errs].join(' | '));
+  } finally { await b2.close(); }
 });
 (async () => {
   const only = process.argv[2]; const browser = await chromium.launch(); let fail = 0;

@@ -11,6 +11,19 @@ Passaggio di file tra telefono e computer, diretto e cifrato, senza server. Codi
 
 L'impronta non è segreta: chi la legge non può né leggere i file né fingersi il telefono. Il codice di controllo a 4 cifre (derivato dalle due impronte) rivela una sostituzione. Il certificato del telefono vale 360 giorni. Negli ultimi 30 se ne prepara uno nuovo, comunicato al computer sul canale già cifrato.
 
+## Quando il telefono non raggiunge il computer
+
+Nello schema base è solo il telefono a bussare. Ci sono due casi in cui non basta:
+- il firewall del computer, per esempio Windows con la rete «pubblica», scarta i pacchetti in arrivo non richiesti;
+- il telefono non risolve il nome «.local» del computer.
+
+Dopo 12 secondi il telefono legge le statistiche del collegamento e dice la causa:
+- **nessun indirizzo raggiunto:** «Il telefono non trova il computer sulla rete»;
+- **richieste senza risposta:** «Il computer non risponde» (firewall o rete che isola i dispositivi);
+- **risposte ma cifratura fallita:** abbinamento da rifare.
+
+Nei primi due casi il telefono mostra un **codice di rete di 12 caratteri** (IPv4, porta e voce del QR, con un controllo). Per renderlo visibile, l'indirizzo vero si legge con il permesso della fotocamera attivo. Scritto sul computer in «Il telefono non si collega?», il codice fa bussare il computer per primo verso il telefono. L'uscita del computer apre la strada anche nel suo firewall, e il telefono impara l'indirizzo del computer da chi bussa, senza bisogno del nome «.local». Lo stesso codice compare, su richiesta, anche al primo collegamento.
+
 ## Trasferimento
 
 Canale dati negoziato (id 0). Ogni file viaggia così:
@@ -35,4 +48,5 @@ Da verificare sui dispositivi:
 - `test/suite/ui.test.js`, due prove:
   - abbinamento con il link, file identici nei due sensi, risultato mandato al telefono, apertura in un altro strumento con il collegamento attivo, secondo collegamento con il solo QR, controllo a 4 cifre uguale;
   - fotocamera simulata in un secondo browser e immagine di abbinamento sul computer.
+- Una terza prova d'interfaccia: computer irraggiungibile dal telefono, causa spiegata, codice di rete, collegamento chiamato dal computer.
 - `test/bench/passa_bench.js`: QR ≤ 200 caratteri; 1 GB identico a ≥ 20 MB/s; secondo collegamento in meno di 2 s; nessuna richiesta di rete.
