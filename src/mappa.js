@@ -372,8 +372,9 @@ const Mappa = (() => {
     map.addImage('sede', rombo(C.sede, C.pb), { pixelRatio: 2 });
     // le zone: province senza nessuno velate ingrandendo, province con clienti o fornitori con un contorno luminoso;
     // al passaggio del puntatore la provincia s'illumina e dice quanto vale
-    map.addSource('zone-spente', { type: 'geojson', data: zoneFC(senza) });
-    map.addSource('zone-vendita', { type: 'geojson', data: zoneFC(conClienti), promoteId: 's' });
+    // confini semplificati per il disegno (tolerance): a schermo identici, con molti meno vertici da riempire a ogni fotogramma
+    map.addSource('zone-spente', { type: 'geojson', data: zoneFC(senza), tolerance: 1.6 });
+    map.addSource('zone-vendita', { type: 'geojson', data: zoneFC(conClienti), promoteId: 's', tolerance: 1.6 });
     if (regione && anelliReg.length) {
       map.addSource('fuori', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[-179, -85], [179, -85], [179, 85], [-179, 85], [-179, -85]], ...anelliReg.map(r => [...r].reverse())] } } });
       map.addSource('regione', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'MultiPolygon', coordinates: anelliReg.map(r => [r]) } } });
@@ -451,6 +452,12 @@ const Mappa = (() => {
     let zonaT = 0; const zonaPresto = () => { clearTimeout(zonaT); zonaT = setTimeout(zona, 140); };
     const zona = () => { const b = map.getBounds(); onZona?.(visibili().filter(p => b.contains([p.lon, p.lat])), map.getZoom(), [[b.getWest(), b.getSouth()], [b.getEast(), b.getNorth()]]); };
     map.on('moveend', zonaPresto); zona();
+    // durante zoom e trascinamenti l'alone sfocato delle province e gli archi (i livelli più cari da disegnare) si tolgono;
+    // tornano appena la mappa si ferma: il movimento resta fluido anche sui computer senza scheda grafica
+    const LEGGERI = ['zone-alone', 'raggi-c', 'raggi-f']; let leggero = false;
+    const vis = v => { for (const l of LEGGERI) try { map.setLayoutProperty(l, 'visibility', v); } catch { } };
+    map.on('movestart', e => { if (!e.originalEvent && !map.isZooming() && !map.dragPan.isActive()) return; if (!leggero) { leggero = true; vis('none'); } });
+    map.on('moveend', () => { if (leggero) { leggero = false; vis('visible'); } });
     // allontanandosi, la vista torna dritta
     map.on('zoomend', () => { if (map.getZoom() < 13.5 && (map.getPitch() > 1 || Math.abs(map.getBearing()) > 1)) map.easeTo({ pitch: 0, bearing: 0, duration: 700 }); });
     // il punto scelto pulsa tre volte, poi l'anello resta fermo (la mappa non si ridisegna di continuo)

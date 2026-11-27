@@ -324,6 +324,7 @@ const ICONS = {
   building:'<rect x="4.5" y="3.5" width="10" height="17" rx="1"/><path d="M14.5 9.5h5v11h-5M8 7.5h3M8 11h3M8 14.5h3M10 20.5v-2.5"/>',
   stamp:'<path d="M9.5 3.5h5l-.8 6.5h3.3a2 2 0 0 1 2 2v2.5H5V12a2 2 0 0 1 2-2h3.3z"/><path d="M5 18h14M7 20.5h10"/>',
   blank:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9 14h6"/>',
+  // un documento che entra nel PDF (Word, Excel, PowerPoint in PDF)
 };
 function ic(name, size = 20, sw = 1.9) {
   const s = document.createElement('span');
@@ -604,33 +605,45 @@ const Privacy = (() => {
     });
   }
   async function open() {
-    const body = h('div', { class: 'pv-body' });
-    const m = modal([h('h3', {}, 'Privacy e dati sul dispositivo'), body], { width: 620, cls: 'pv-modal' });
+    // tre parti: in alto titolo e chiusura, al centro l'elenco che scorre, in basso le due azioni sempre visibili
+    const body = h('div', { class: 'pd-scroll' }), foot = h('div', { class: 'pd-foot' });
+    let m = null;
+    const head = h('div', { class: 'pd-head' },
+      h('span', { class: 'pd-mark', 'aria-hidden': 'true' }, ic('shield', 20)),
+      h('div', { class: 'pd-ht' }, h('h3', {}, 'Privacy e dati sul dispositivo'),
+        h('p', {}, 'I documenti non vengono mai caricati su internet. Qui sotto trovi quello che resta in questo browser: puoi cancellarlo quando vuoi.')),
+      h('button', { type: 'button', class: 'icon-btn pd-x', title: 'Chiudi', 'aria-label': 'Chiudi', onclick: () => m?.close() }, ic('x', 18)));
+    m = modal([head, body, foot], { width: 600, cls: 'pd-modal' });
     const kb = b => b > 1048576 ? (b / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
     async function draw() {
       const z = await sizes(), c = cfg(), locked = vaultOn() && !key;
-      const row = (title, desc, info, act) => h('div', { class: 'pv-row' }, h('div', { class: 'grow' }, h('div', { class: 'pv-t' }, title), h('div', { class: 'muted small' }, desc)), h('span', { class: 'pv-n small' }, info), act);
-      const del = (label, fn, ok) => h('button', { class: 'btn sm', onclick: async () => { await fn(); toast(ok); draw(); } }, ic('trash', 14), label);
+      const item = (icon, title, desc, info, label, fn, ok) => h('div', { class: 'pd-item' + (info ? '' : ' is-empty') },
+        h('span', { class: 'pd-ic', 'aria-hidden': 'true' }, ic(icon, 17)),
+        h('div', { class: 'pd-txt' }, h('b', {}, title), h('span', {}, desc)),
+        h('div', { class: 'pd-side' }, h('span', { class: 'pd-size' }, info || 'Vuoto'),
+          info ? h('button', { type: 'button', class: 'btn sm ghost pd-del', 'aria-label': `${label}: ${title}`, onclick: async () => { await fn(); toast(ok); draw(); } }, label) : null));
+      const sec = (title, ...kids) => h('section', { class: 'pd-sec' }, h('h4', {}, title), ...kids);
       body.replaceChildren(
-        h('p', { class: 'muted', style: { margin: '0 0 12px' } }, 'I documenti si elaborano solo in questo browser: non vengono mai caricati su internet. Sul dispositivo restano soltanto le cose elencate qui sotto, e puoi cancellarle quando vuoi.'),
-        row('Progetti e versioni', 'I file aperti, le versioni e i risultati, per riprendere il lavoro.', z.projects ? `${z.projects} · ${kb(z.blobBytes)}` : 'vuoto', del('Cancella', clearProjects, 'Progetti cancellati')),
-        row('Registro delle attività', 'Le operazioni fatte, con l’impronta dei file (non il loro contenuto).', z.log ? `${z.log} voci` : 'vuoto', del('Cancella', clearLog, 'Registro cancellato')),
-        row('Dati personali per i moduli', 'Profilo (nome, codice fiscale, IBAN…), valori ricordati, firme e timbri salvati, correzioni imparate, bozza del contratto di affitto.' + (vaultOn() ? (locked ? ' Protetti e bloccati.' : ' Protetti e sbloccati.') : ''), z.personal ? kb(z.personal) : 'vuoto', del('Cancella', async () => clearPersonal(), 'Dati personali cancellati')),
-        row('Preferenze', 'Preferiti, ricette, scelte degli strumenti, ultimo file aperto nel cloud.', z.prefs ? kb(z.prefs) : 'vuoto', del('Cancella', async () => clearPrefs(), 'Preferenze cancellate')),
-        row('Letture in memoria', 'Il testo letto dalle scansioni in questa scheda, per non rileggerlo in ogni strumento. Sparisce chiudendo la scheda.', z.mem ? `${z.mem} pagine` : 'vuoto', del('Svuota', async () => memClear(), 'Memoria svuotata')),
-        h('div', { class: 'pv-sec' }, h('b', {}, 'Cancellazione automatica'),
-          h('div', { class: 'muted small', style: { margin: '2px 0 8px' } }, 'Progetti, lavori da riprendere e registro più vecchi di così si cancellano da soli all’apertura.'),
-          seg([[7, '7 giorni'], [30, '30 giorni'], [90, '90 giorni'], [0, 'Mai']], c.days ?? 90, v => { setCfg({ ...cfg(), days: +v }); toast(+v ? `Cancellazione dopo ${v} giorni` : 'Cancellazione automatica spenta'); })),
-        h('div', { class: 'pv-sec' }, checkbox('Nessuna traccia', !!c.temp, v => { setCfg({ ...cfg(), temp: !!v }); toast(v ? 'Nessuna traccia: tutto si cancella alla chiusura della scheda' : 'I progetti si conservano di nuovo'); }, 'Per i computer condivisi: tutto ciò che salvi (progetti, registro, dati personali, preferenze) si cancella quando chiudi la scheda.')),
-        typeof crypto !== 'undefined' && crypto.subtle ? h('div', { class: 'pv-sec' }, h('b', {}, 'Frase segreta per i dati personali'),
-          h('div', { class: 'muted small', style: { margin: '2px 0 8px' } }, vaultOn() ? 'I dati personali salvati sono cifrati (AES-GCM 256). Senza la frase non si leggono: se la dimentichi, quei dati vanno persi (il resto no).' : 'Cifra i dati personali salvati (AES-GCM 256): senza la frase restano illeggibili, anche per chi usa questo computer.'),
-          h('div', { class: 'row', style: { gap: '8px', flexWrap: 'wrap' } }, ...(vaultOn() ? [
-            locked ? h('button', { class: 'btn sm primary', onclick: async () => { const p = await askPass('Sblocca i dati personali'); if (p == null) return; if (await unlock(p)) { toast('Dati personali sbloccati'); draw(); } else toast('Frase non corretta', 'error'); } }, ic('key', 14), 'Sblocca') : h('button', { class: 'btn sm', onclick: () => { lock(); toast('Dati personali bloccati'); draw(); } }, ic('key', 14), 'Blocca'),
+        sec('Cosa resta su questo dispositivo',
+          h('div', { class: 'pd-list' },
+            item('project', 'Progetti e versioni', 'File aperti, versioni e risultati, per riprendere il lavoro.', z.projects ? `${z.projects} · ${kb(z.blobBytes)}` : '', 'Cancella', clearProjects, 'Progetti cancellati'),
+            item('activity', 'Registro delle attività', 'Le operazioni fatte, con l’impronta dei file (mai il contenuto).', z.log ? `${z.log} voci` : '', 'Cancella', clearLog, 'Registro cancellato'),
+            item('form', 'Dati personali per i moduli', 'Profilo, valori ricordati, firme e timbri, bozza del contratto.' + (vaultOn() ? (locked ? ' Protetti e bloccati.' : ' Protetti.') : ''), z.personal ? kb(z.personal) : '', 'Cancella', async () => clearPersonal(), 'Dati personali cancellati'),
+            item('star', 'Preferenze', 'Preferiti, ricette e scelte degli strumenti.', z.prefs ? kb(z.prefs) : '', 'Cancella', async () => clearPrefs(), 'Preferenze cancellate'),
+            item('ocr', 'Letture in memoria', 'Testo letto dalle scansioni in questa scheda: sparisce chiudendola.', z.mem ? `${z.mem} pagine` : '', 'Svuota', async () => memClear(), 'Memoria svuotata'))),
+        sec('Cancellazione automatica',
+          h('p', { class: 'pd-note' }, 'Progetti e registro più vecchi di così si cancellano da soli all’apertura.'),
+          seg([[7, '7 giorni'], [30, '30 giorni'], [90, '90 giorni'], [0, 'Mai']], c.days ?? 90, v => { setCfg({ ...cfg(), days: +v }); toast(+v ? `Cancellazione dopo ${v} giorni` : 'Cancellazione automatica spenta'); }),
+          h('div', { class: 'pd-check' }, checkbox('Nessuna traccia', !!c.temp, v => { setCfg({ ...cfg(), temp: !!v }); toast(v ? 'Nessuna traccia: tutto si cancella alla chiusura della scheda' : 'I progetti si conservano di nuovo'); }, 'Per i computer condivisi: tutto si cancella quando chiudi la scheda.'))),
+        typeof crypto !== 'undefined' && crypto.subtle ? sec('Frase segreta per i dati personali',
+          h('p', { class: 'pd-note' }, vaultOn() ? 'I dati personali sono cifrati (AES-GCM 256). Se dimentichi la frase, quei dati vanno persi; il resto no.' : 'Cifra i dati personali salvati (AES-GCM 256): senza la frase restano illeggibili.'),
+          h('div', { class: 'pd-acts' }, ...(vaultOn() ? [
+            locked ? h('button', { class: 'btn sm primary', onclick: async () => { const p = await askPass('Sblocca i dati personali'); if (p == null) return; if (await unlock(p)) { toast('Dati personali sbloccati'); draw(); } else toast('Frase non corretta', 'error'); } }, ic('key', 15), 'Sblocca') : h('button', { class: 'btn sm', onclick: () => { lock(); toast('Dati personali bloccati'); draw(); } }, ic('key', 15), 'Blocca'),
             h('button', { class: 'btn sm ghost', onclick: async () => { const p = locked ? await askPass('Frase segreta attuale') : ''; if (p == null) return; if (await unprotect(p)) { toast('Protezione tolta'); draw(); } else toast('Frase non corretta', 'error'); } }, 'Togli la protezione')] : [
-            h('button', { class: 'btn sm primary', onclick: async () => { const p = await askPass('Scegli una frase segreta', { confirm: true }); if (p == null) return; await protect(p); toast('Dati personali protetti'); draw(); } }, ic('key', 14), 'Proteggi con una frase segreta')]))) : null,
-        h('div', { class: 'row', style: { justifyContent: 'space-between', marginTop: '16px', gap: '8px', flexWrap: 'wrap' } },
-          h('button', { class: 'btn danger', onclick: async () => { if (!confirm('Cancellare tutto ciò che file360 tiene in questo browser? Progetti, registro, dati personali e preferenze non si potranno recuperare.')) return; await clearAll(); toast('Tutto cancellato'); draw(); } }, ic('trash', 16), 'Cancella tutto'),
-          h('button', { class: 'btn', onclick: () => m.close() }, 'Chiudi')));
+            h('button', { class: 'btn sm', onclick: async () => { const p = await askPass('Scegli una frase segreta', { confirm: true }); if (p == null) return; await protect(p); toast('Dati personali protetti'); draw(); } }, ic('key', 15), 'Proteggi con una frase segreta')]))) : null);
+      foot.replaceChildren(
+        h('button', { class: 'btn ghost pd-all', onclick: async () => { if (!confirm('Cancellare tutto ciò che file360 tiene in questo browser? Progetti, registro, dati personali e preferenze non si potranno recuperare.')) return; await clearAll(); toast('Tutto cancellato'); draw(); } }, ic('trash', 16), 'Cancella tutto'),
+        h('button', { class: 'btn primary', onclick: () => m.close() }, 'Fatto'));
     }
     draw();
   }
@@ -991,7 +1004,7 @@ const Busy = {
       onCancel ? h('button', { class: 'btn ghost sm', onclick: onCancel }, 'Annulla') : null].filter(Boolean);
     // l'animazione dello strumento al lavoro (o, se non c'è, il logo che gira)
     const ldId = (this.job && this.job.tool) || (typeof CURRENT_TOOL !== 'undefined' && CURRENT_TOOL) || (typeof routeId === 'function' ? routeId() : '');
-    let anim = null; try { anim = typeof Loader !== 'undefined' && ldId ? Loader.el(ldId) : null; } catch (e) { console.warn('animazione', e); }
+    let anim = null; try { anim = typeof Loader !== 'undefined' && ldId && document.documentElement.dataset.anim !== 'off' ? Loader.el(ldId) : null; } catch (e) { console.warn('animazione', e); }
     this.pctEl = h('span', { class: 'busy-pct' });
     this.barBox = h('div', { class: 'bar', role: 'progressbar', 'aria-label': title, 'aria-valuemin': '0', 'aria-valuemax': '100' }, this.barEl);
     const card = h('div', { class: 'modal busy-card' + (anim ? ' with-ld' : ''), role: 'dialog', 'aria-modal': 'true', 'aria-label': title }, anim || (typeof Brand !== 'undefined' ? h('div', { class: 'spinner-brand', html: Brand.spinnerSvg(58) }) : h('div', { class: 'spinner' })), this.titleEl, this.msgEl,
@@ -1260,9 +1273,11 @@ function showResultNow(outputs, { note, title, zipName, extra, primary = null, v
   if (stat && stat.celebrate) resConfetti(m.box);
   resFly(m.box);
 }
+// niente movimenti decorativi: «riduci movimento» del dispositivo o «Animazioni: No» nel menu
+const senzaMoto = () => matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.dataset.anim === 'off';
 /* la miniatura del risultato parte da dove si vedeva il documento (l'anteprima dello strumento) e si posa nella finestra */
 function resFly(box) {
-  const art = box.querySelector('.res-art'); if (!art || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const art = box.querySelector('.res-art'); if (!art || senzaMoto()) return;
   const src = [...document.querySelectorAll('.tool .v-page, .tool .thumb canvas, .tool .ws canvas, .tool .ws img')].find(e => { const r = e.getBoundingClientRect(); return r.width > 60 && r.height > 60 && r.bottom > 0 && r.top < innerHeight; });
   if (!src) return;
   requestAnimationFrame(() => {
@@ -1305,7 +1320,7 @@ function resStat(outputs, { multi, primary }) {
   if (samePdf && inB > 0 && outB < inB * 0.95) {
     const pct = Math.round((1 - outB / inB) * 100), big = h('b', { class: 'tnum' }, `−${pct}%`);
     // il numero sale da zero (in un attimo): si vede il risparmio «accadere»
-    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) { const t0 = performance.now(), step = t => { const k = Math.min(1, (t - t0) / 700), e = 1 - (1 - k) ** 3; big.textContent = `−${Math.round(pct * e)}%`; if (k < 1 && big.isConnected) requestAnimationFrame(step); }; big.textContent = '−0%'; requestAnimationFrame(step); }
+    if (!senzaMoto()) { const t0 = performance.now(), step = t => { const k = Math.min(1, (t - t0) / 700), e = 1 - (1 - k) ** 3; big.textContent = `−${Math.round(pct * e)}%`; if (k < 1 && big.isConnected) requestAnimationFrame(step); }; big.textContent = '−0%'; requestAnimationFrame(step); }
     const el = h('div', {}, h('div', { class: 'res-stat', role: 'img', 'aria-label': `Peso ridotto del ${pct} per cento: da ${fmtSize(inB)} a ${fmtSize(outB)}` }, big, h('span', {}, `da ${fmtSize(inB)} a ${fmtSize(outB)}`)),
       h('div', { class: 'res-meter', 'aria-hidden': 'true' }, h('i', { style: { '--to': String(Math.max(0.03, outB / inB)) } })));
     return { el, celebrate: pct >= 60, saving: true };
@@ -1321,7 +1336,7 @@ function resStat(outputs, { multi, primary }) {
 }
 /* coriandoli di carta: pochi, una volta, solo quando il risultato lo merita (peso più che dimezzato) */
 function resConfetti(box) {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (senzaMoto()) return;
   const art = box.querySelector('.res-art'); if (!art) return;
   const cols = ['var(--accent)', 'var(--gold)', 'var(--ok)', 'var(--sel)', 'var(--line-3)'], wrap = h('div', { class: 'confetti', 'aria-hidden': 'true' });
   // a ventaglio verso l'alto e a sinistra del timbro: il testo, a destra, resta pulito
@@ -1779,6 +1794,39 @@ class Viewer {
 }
 function iconBtn(icon, title, onclick, cls = 'icon-btn') {
   return h('button', { class: cls, title, 'aria-label': title, onclick }, ic(icon, 18));
+}
+/* annulla, ripeti e «ripristina tutto» per gli strumenti che modificano. get() dà lo stato (copiabile in JSON), set(s) lo
+   rimette e ridisegna. Si chiama prima() PRIMA di ogni modifica. Ctrl+Z, Ctrl+Y e Ctrl+Maiusc+Z finché lo strumento è aperto
+   (non dentro un campo di testo). «Ripristina tutto» torna allo stato dell'apertura e si annulla a sua volta. */
+function storiaModifiche({ get, set, cosa = 'documento' }) {
+  const hist = [], fut = [], cur = () => JSON.stringify(get()), orig = cur(); const btns = {};
+  const agg = () => { if (btns.u) btns.u.disabled = !hist.some(x => x !== cur()); if (btns.r) btns.r.disabled = !fut.length; if (btns.t) btns.t.disabled = cur() === orig; };
+  const H = {
+    prima() { const c = cur(); if (hist[hist.length - 1] === c) return; hist.push(c); if (hist.length > 100) hist.shift(); fut.length = 0; setTimeout(agg, 0); },
+    // un'istantanea uguale allo stato attuale (presa entrando in un campo senza poi cambiare nulla) non è un passo: si salta
+    undo() { const c = cur(); while (hist.length && hist[hist.length - 1] === c) hist.pop(); if (!hist.length) { agg(); return false; } fut.push(c); set(JSON.parse(hist.pop())); agg(); return true; },
+    redo() { const c = cur(); while (fut.length && fut[fut.length - 1] === c) fut.pop(); if (!fut.length) { agg(); return false; } hist.push(c); set(JSON.parse(fut.pop())); agg(); return true; },
+    async tutto() {
+      const c = cur(); if (c === orig) return toast(`Il ${cosa} è già com’era all’apertura`);
+      if (typeof confirmDlg === 'undefined') Later.all();
+      if (!(await confirmDlg(`Tolgo tutte le modifiche e torno al ${cosa} com’era all’apertura? Puoi rimetterle con Annulla (Ctrl+Z).`, { ok: 'Ripristina tutto' }))) return;
+      hist.push(c); fut.length = 0; set(JSON.parse(orig)); agg(); toast(`Ripristinato com’era all’apertura`);
+    },
+    agg,
+    bottoni() {
+      btns.u = toolBtn('undo', 'Annulla', 'Annulla l’ultima modifica (Ctrl+Z)', () => H.undo()); btns.r = toolBtn('redo', 'Ripeti', 'Ripeti (Ctrl+Y)', () => H.redo());
+      btns.t = toolBtn('reset', 'Ripristina', `Ripristina tutto: il ${cosa} com’era all’apertura`, () => H.tutto()); agg(); return [btns.u, btns.r, btns.t];
+    },
+  };
+  const key = e => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || document.querySelector('.scrim')) return;
+    const a = document.activeElement; if (a && (a.isContentEditable || a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && /^(text|search|email|url|tel|password|number)$/.test(a.type || 'text')))) return;
+    const k = e.key.toLowerCase();
+    if (k === 'z' && !e.shiftKey ? H.undo() : (k === 'y' || (k === 'z' && e.shiftKey)) && H.redo()) e.preventDefault();
+  };
+  document.addEventListener('keydown', key);
+  if (typeof onLeave === 'function') onLeave(() => document.removeEventListener('keydown', key));
+  return H;
 }
 function toolBtn(icon, label, title, onclick) {
   // al telefono si legge la prima parola sotto l'icona («Anteprima», «Svuota»): mai icone mute

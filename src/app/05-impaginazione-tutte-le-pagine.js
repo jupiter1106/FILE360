@@ -1766,13 +1766,20 @@ async function startRedact(stage, files, _tool, auto = null) {
     const t = piiBox.querySelector('.pii-title'); t?.focus({ preventScroll: true });
   } });
   const clearPageBtn = toolBtn('trash', 'Svuota pagina', 'Rimuovi le aree di questa pagina', () => { if (!boxes[viewer.page - 1].length) return; save(); boxes[viewer.page - 1] = []; changed(); });
+  // tutte le aree di tutte le pagine via: il documento com'era all'apertura (si annulla con Ctrl+Z)
+  const resetAllBtn = toolBtn('reset', 'Ripristina', 'Ripristina tutto: togli le aree da oscurare di tutte le pagine', async () => {
+    if (!boxes.some(b => b.length)) return toast('Non ci sono aree da togliere');
+    if (typeof confirmDlg === 'undefined') Later.all();
+    if (!(await confirmDlg('Tolgo tutte le aree da oscurare, in tutte le pagine? Puoi rimetterle con Annulla (Ctrl+Z).', { ok: 'Ripristina tutto' }))) return;
+    save(); boxes.forEach((_, i) => { boxes[i] = []; }); changed(); toast('Tutte le aree tolte: il documento è com’era all’apertura');
+  });
   const panBtn = toolBtn('hand', 'Scorri', 'Tocca per scorrere la pagina invece di disegnare', () => { st.pan = !st.pan; panBtn.classList.toggle('on', st.pan); viewer.overlay.dataset.pan = st.pan ? '1' : ''; });
   // scelta veloce: clic su una parola (o trascinando da una parola all'altra, doppio clic per la riga intera);
   // nello spazio vuoto si disegna un'area libera
   const pickSeg = seg([['words', 'Parole'], ['area', 'Area libera']], st.pick, v => { st.pick = v; viewer.refresh(); });
   pickSeg.classList.add('rpick'); pickSeg.title = 'Parole: clic sulle parole da oscurare · Area libera: trascina un rettangolo';
   const viewer = auto ? { refresh() { }, go() { }, render() { }, destroy() { }, page: 1, cur: 1, overlay: h('div'), el: h('div'), thumbBtns: [], toPt: () => ({ x: 0, y: 0 }) } : new Viewer(doc, {
-    tools: [pickSeg, IS_TOUCH ? panBtn : null, previewBtn, undoBtn, clearPageBtn].filter(Boolean),
+    tools: [pickSeg, IS_TOUCH ? panBtn : null, previewBtn, undoBtn, clearPageBtn, resetAllBtn].filter(Boolean),
     onOverlay: draw, fit: IS_TOUCH ? 'page' : 'width',
   });
   const wordsBy = new Map(); // pagina -> { idx, words }
@@ -1862,7 +1869,8 @@ async function startRedact(stage, files, _tool, auto = null) {
     const p = viewer.toPt(e), w0 = W.words.find(w => w.boxes.some(q => p.x >= q.x && p.x <= q.x + q.w && p.y >= q.y && p.y <= q.y + q.h)); if (!w0) return;
     save(); await addBoxes(viewer.page, joinBoxes(W.words.filter(w => w.line === w0.line).flatMap(w => w.boxes.map((q, j) => ({ ...q, t: j ? '' : w.t }))))); changed();
   });
-  function undo() { if (!hist.length) return; const prev = JSON.parse(hist.pop()); prev.forEach((b, i) => boxes[i] = b); changed(); }
+  // i passi che non avevano cambiato nulla si saltano: Ctrl+Z annulla sempre qualcosa di visibile
+  function undo() { const c = JSON.stringify(boxes); while (hist.length && hist[hist.length - 1] === c) hist.pop(); if (!hist.length) return; const prev = JSON.parse(hist.pop()); prev.forEach((b, i) => boxes[i] = b); changed(); }
   const keyh = e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName)) { e.preventDefault(); undo(); } };
   if (!auto) { document.addEventListener('keydown', keyh); onLeave(() => { document.removeEventListener('keydown', keyh); viewer.destroy(); }); }
 

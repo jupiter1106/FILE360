@@ -2017,13 +2017,6 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
 .rword.pick{background:color-mix(in srgb,var(--accent) 30%,transparent);outline:1.5px solid var(--accent)}
 .rpick{margin-right:6px}
 /* centro privacy */
-.pv-modal .pv-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line, rgba(0,0,0,.08))}
-.pv-modal .pv-row .grow{min-width:0}
-.pv-modal .pv-n{white-space:nowrap;color:var(--muted);font-variant-numeric:tabular-nums}
-.pv-modal .pv-sec{margin-top:14px}
-.pv-modal .btn.danger{color:#fff;background:var(--danger,var(--danger));border-color:transparent}
-@media (max-width:560px){.pv-modal .pv-row{flex-wrap:wrap}.pv-modal .pv-n{order:3}}
-.pv-modal .pv-t{font-size:16px;font-weight:700;line-height:1.3;margin-bottom:2px}
 /* OCR · revisione: parole eliminate dal testo estratto */
 .rv-card.removed{opacity:.55;border-style:dashed}
 .rd-out{margin:0 0 6px;padding-left:18px;font-size:13px;line-height:1.45}

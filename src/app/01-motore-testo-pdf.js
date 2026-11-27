@@ -2026,8 +2026,8 @@ const Drawer = (() => {
         h('p', {}, ic('disk', 16), space),
         h('p', {}, ic('keyboard', 16), h('span', {}, 'Premi ', h('kbd', {}, '?'), ' per tutte le scorciatoie da tastiera'))),
       h('section', { class: 'dr-sec dr-set', 'aria-label': 'Impostazioni' }, h('h3', {}, 'Impostazioni'),
-        row(Prefs.profile()?.[2] || 'user', 'Il tuo lavoro', Prefs.profile() ? Prefs.profile()[1] + ' · cambia' : 'Scegli: metto in cima i tuoi strumenti', () => { close(); Onboard.show({ only: 'prof' }); }),
-        h('div', { class: 'dr-theme dr-anim', role: 'radiogroup', 'aria-label': 'Animazioni' }, h('span', { class: 'dr-lab' }, 'Animazioni'), [['full', 'Complete'], ['light', 'Leggere'], ['off', 'Nessuna']].map(([v, l]) =>
+        row(Prefs.profile()?.[2] || 'user', 'Il tuo lavoro', Prefs.profile() ? Prefs.profile()[1] + ' · cambia' : 'Facoltativo: metto in cima i tuoi strumenti', () => { close(); Onboard.show(); }),
+        h('div', { class: 'dr-theme dr-anim', role: 'radiogroup', 'aria-label': 'Animazioni' }, h('span', { class: 'dr-lab' }, 'Animazioni'), [['full', 'Sì'], ['off', 'No']].map(([v, l]) =>
           h('button', { type: 'button', role: 'radio', 'aria-checked': String(Prefs.anim === v), class: 'dr-chip' + (Prefs.anim === v ? ' on' : ''), onclick: () => { Prefs.set({ anim: v, asked: true }); build(); } }, l)))),
       h('div', { class: 'dr-foot' },
         themeBtn && !themeBtn.hidden && window.Theme ? h('div', { class: 'dr-theme', role: 'radiogroup', 'aria-label': 'Tema' }, [['auto', 'Automatico'], ['light', 'Chiaro'], ['dark', 'Scuro']].map(([v, l]) =>
@@ -2277,44 +2277,35 @@ const Prefs = (() => {
   const K = 'file360-prefs'; let p = {};
   try { p = JSON.parse(localStorage.getItem(K) || '{}'); } catch { }
   const apply = () => {
-    const a = p.anim || 'full';   // «riduci movimento» del dispositivo vale comunque (logo e sfondo fermi)
+    // due scelte: «Sì» (tutto com'è) o «No»: gli effetti decorativi spariscono dalla pagina (sfondo di documenti, bagliore
+    // attorno agli strumenti, caselle che tremano, orbite, apertura animata), non restano fermi. La vecchia «Leggere» vale «No».
+    const a = p.anim === 'off' || p.anim === 'light' ? 'off' : 'full';
     document.documentElement.dataset.anim = a;
     try { if (typeof BgFlow !== 'undefined') BgFlow.apply(); } catch (e) { console.warn(e); }
-    document.querySelectorAll('svg.logo-live').forEach(s => { try { a === 'off' ? s.pauseAnimations() : s.unpauseAnimations(); } catch { } });
+    document.querySelectorAll('svg.logo-live').forEach(s => { try { if (a === 'off') s.outerHTML = Brand.logoSvg(+s.getAttribute('width') || 32, { title: s.getAttribute('aria-label') || 'file360' }); } catch { } });
   };
   return {
-    get prof() { return p.prof || null; }, get anim() { return p.anim || 'full'; }, get asked() { return !!p.asked; },
+    get prof() { return p.prof || null; }, get anim() { return p.anim === 'off' || p.anim === 'light' ? 'off' : 'full'; }, get asked() { return !!p.asked; },
     profile() { return PROFILES.find(x => x[0] === p.prof) || null; },
     set(o) { Object.assign(p, o); try { localStorage.setItem(K, JSON.stringify(p)); } catch { } apply(); },
     apply,
   };
 })();
 const Onboard = (() => {
-  // passo 1: che lavoro fai; passo 2: quanto movimento. Si può saltare; dal menu si torna qui
-  function show({ only = null } = {}) {
-    let prof = Prefs.prof, anim = Prefs.anim, m = null;
-    const done = () => { Prefs.set({ prof, anim, asked: true }); m?.close(); if (!routeId()) showHome(); if (typeof Drawer !== 'undefined') Drawer.refresh?.(); };
-    const stepProf = () => [h('div', { class: 'ob-head' }, h('span', { class: 'ob-step' }, only ? 'Il tuo lavoro' : 'Passo 1 di 2'), h('h2', {}, 'Che lavoro fai?'),
-        h('p', { class: 'muted' }, 'Metto in cima gli strumenti che ti servono di più e riordino il resto. Tutti gli strumenti restano a portata di mano; puoi cambiare idea dal menu ☰.')),
-      h('div', { class: 'ob-grid', role: 'radiogroup', 'aria-label': 'Professione' }, PROFILES.map(([id, label, icn]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(prof === id), class: 'ob-p' + (prof === id ? ' on' : ''), onclick: () => { prof = id; if (only) done(); else draw(stepAnim); } }, ic(icn, 22), h('span', {}, label)))),
-      h('div', { class: 'ob-foot' }, h('button', { class: 'btn ghost', onclick: () => { if (only) { m.close(); return; } prof = null; draw(stepAnim); } }, only ? 'Annulla' : 'Salta'))];
-    const stepAnim = () => [h('div', { class: 'ob-head' }, h('span', { class: 'ob-step' }, only ? 'Animazioni' : 'Passo 2 di 2'), h('h2', {}, 'Quanto movimento ti piace?'),
-        h('p', { class: 'muted' }, 'Puoi cambiarlo quando vuoi dal menu ☰.')),
-      h('div', { class: 'ob-anim', role: 'radiogroup', 'aria-label': 'Animazioni' }, [['full', 'Completo', 'Apertura animata, documenti che scorrono piano sullo sfondo, piccoli effetti.'], ['light', 'Leggero', 'Solo i piccoli effetti: niente apertura animata né sfondo in movimento.'], ['off', 'Nessuno', 'Tutto fermo: per chi il movimento disturba, o per risparmiare batteria.']]
-        .map(([v, l, d]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(anim === v), class: 'ob-a' + (anim === v ? ' on' : ''), onclick: e => { anim = v; e.currentTarget.parentNode.querySelectorAll('.ob-a').forEach(b => { const on = b === e.currentTarget; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }); document.documentElement.dataset.anim = v; } }, h('b', {}, l), h('span', {}, d)))),
-      h('div', { class: 'ob-foot' }, only ? null : h('button', { class: 'btn ghost', onclick: () => draw(stepProf) }, ic('left', 16), 'Indietro'), h('button', { class: 'btn primary', onclick: done }, only ? 'Fatto' : 'Inizia'))];
-    const box = h('div', { class: 'ob' });
-    const draw = f => { box.replaceChildren(...f()); box.querySelector('.ob-p.on, .ob-a.on, .ob-p, .btn.primary')?.focus(); };
-    draw(only === 'anim' ? stepAnim : stepProf);
-    m = modal([box], { width: 760, cls: 'ob-modal', label: 'Benvenuto in file360', onClose: () => { if (!Prefs.asked) Prefs.set({ asked: true }); Prefs.apply(); } });
+  // la scelta del lavoro: facoltativa, solo dal menu ☰ (nessuna domanda all'avvio). Le animazioni si scelgono nel menu.
+  function show() {
+    let m = null;
+    const pick = id => { Prefs.set({ prof: id, asked: true }); m?.close(); if (!routeId()) showHome(); if (typeof Drawer !== 'undefined') Drawer.refresh?.(); };
+    const cur = Prefs.prof;
+    const box = h('div', { class: 'ob' },
+      h('div', { class: 'ob-head' }, h('h2', {}, 'Il tuo lavoro'),
+        h('p', { class: 'muted' }, 'Facoltativo: metto in cima gli strumenti che ti servono di più. Tutti gli altri restano a portata di mano.')),
+      h('div', { class: 'ob-grid', role: 'radiogroup', 'aria-label': 'Lavoro' }, PROFILES.map(([id, label, icn]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(cur === id), class: 'ob-p' + (cur === id ? ' on' : ''), onclick: () => pick(id) }, ic(icn, 22), h('span', {}, label)))),
+      h('div', { class: 'ob-foot' }, cur ? h('button', { class: 'btn ghost', onclick: () => pick(null) }, 'Nessuna preferenza') : null, h('button', { class: 'btn', onclick: () => m.close() }, 'Annulla')));
+    m = modal([box], { width: 760, cls: 'ob-modal', label: 'Il tuo lavoro' });
+    box.querySelector('.ob-p.on, .ob-p')?.focus();
   }
-  // al primo avvio, finita l'apertura animata, solo in home e non durante i test automatici
-  function maybe() {
-    if (Prefs.asked || (navigator.webdriver && !window.__forceOnboarding) || window.__oauthPopup) return;
-    const go = () => { if (!routeId() && !document.querySelector('.scrim:not(.busy)')) show(); };
-    setTimeout(go, document.getElementById('intro') ? 3100 : 700);
-  }
-  return { show, maybe };
+  return { show };
 })();
 // in home, sotto il riquadro del file: gli strumenti utili a tutti, e quelli del tuo lavoro
 function homeQuick() {
@@ -2322,10 +2313,9 @@ function homeQuick() {
     onclick: e => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button) return; e.preventDefault(); Flow.go(id); } }, h('span', { class: 'qk-ic', 'aria-hidden': 'true' }, ic(t.icon, 16)), h('span', { class: 'qk-n' }, t.short)); dropOpens(a, id); return a; };
   const P = Prefs.profile();
   return h('div', { class: 'home-quick2' },
-    P && P[3].length ? h('section', { class: 'pf-block pf-you', 'aria-label': 'Per il tuo lavoro' }, h('h3', {}, h('span', {}, 'Per il tuo lavoro'), h('b', {}, P[1]), h('button', { class: 'linkish pf-ch', onclick: () => Onboard.show({ only: 'prof' }) }, 'Cambia')), h('div', { class: 'qk-l' }, P[3].map(tile)),
+    P && P[3].length ? h('section', { class: 'pf-block pf-you', 'aria-label': 'Per il tuo lavoro' }, h('h3', {}, h('span', {}, 'Per il tuo lavoro'), h('b', {}, P[1])), h('div', { class: 'qk-l' }, P[3].map(tile)),
       h('button', { class: 'linkish pf-allt', onclick: () => document.querySelector('.intents')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, 'Tutti gli strumenti, per categoria →')) : null,
-    h('section', { class: 'pf-block pf-all', 'aria-label': 'Per tutti, ogni giorno' }, h('h3', {}, h('span', {}, 'Per tutti, ogni giorno')), h('div', { class: 'qk-l' }, UNIVERSAL.map(tile))),
-    !P ? h('button', { class: 'linkish pf-ask', onclick: () => Onboard.show({ only: 'prof' }) }, ic('user', 15), 'Dimmi che lavoro fai: metto in cima i tuoi strumenti') : null);
+    h('section', { class: 'pf-block pf-all', 'aria-label': 'Per tutti, ogni giorno' }, h('h3', {}, h('span', {}, 'Per tutti, ogni giorno')), h('div', { class: 'qk-l' }, UNIVERSAL.map(tile))));
 }
 
 function showHome() {

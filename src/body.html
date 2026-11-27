@@ -23,7 +23,7 @@
   <div class="in-word"><span>f</span><span>i</span><span>l</span><span>e</span><b><span>3</span><span>6</span><span>0</span></b></div>
   <p class="in-motto">Ogni lavoro sui tuoi file, in un giro solo.</p>
 </div>
-<script>(function(){var d=document.getElementById('intro');try{var pa=(JSON.parse(localStorage.getItem('file360-prefs')||'{}').anim)||'';if(pa)document.documentElement.dataset.anim=pa;if(pa==='off'||pa==='light'||matchMedia('(prefers-reduced-motion: reduce)').matches||sessionStorage.getItem('f360-intro')||(navigator.webdriver&&!window.__forceIntro)){d.remove();return}sessionStorage.setItem('f360-intro','1')}catch(e){}document.documentElement.classList.add('intro-on')})();</script>
+<script>(function(){var d=document.getElementById('intro');try{var pa=(JSON.parse(localStorage.getItem('file360-prefs')||'{}').anim)||'';if(pa)document.documentElement.dataset.anim=(pa==='light'?'off':pa);if(pa==='off'||pa==='light'||matchMedia('(prefers-reduced-motion: reduce)').matches||sessionStorage.getItem('f360-intro')||(navigator.webdriver&&!window.__forceIntro)){d.remove();return}sessionStorage.setItem('f360-intro','1')}catch(e){}document.documentElement.classList.add('intro-on')})();</script>
 <a class="skip" href="#main">Vai al contenuto</a>
 <div class="app">
   <header class="topbar">

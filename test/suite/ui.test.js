@@ -252,6 +252,54 @@ test('Fatture a 320 px: la tabella che scorre lo mostra con un’ombra visibile 
   const r = await page.evaluate(() => { const w = document.querySelector('.ft-tw'), i = w.querySelector('.ft-sh i.r'); return { scrolls: w.scrollWidth > w.clientWidth, visible: +getComputedStyle(i).opacity, h: i.getBoundingClientRect().height, z: getComputedStyle(w.querySelector('.ft-sh')).zIndex }; });
   ok(!r.scrolls || (r.visible > 0.9 && r.h > 40), JSON.stringify(r));
 });
+test('Annulla e Ripristina: in Modifica Ctrl+Z funziona anche dalla barra e da una casella non cambiata; «Ripristina tutto» si annulla; Annota e Organizza annullano e ripristinano', async b => {
+  const { page } = await open(b, 'desk1440'); await openTool(page, 'modifica', ['contratto.pdf']); await page.waitForSelector('.v-overlay'); await page.waitForTimeout(1200);
+  const n = () => page.evaluate(() => [...document.querySelectorAll('.v-overlay .it')].filter(x => /Casella di prova/.test(x.textContent)).length);
+  const size = () => page.evaluate(() => { const e = [...document.querySelectorAll('.v-overlay .it')].find(x => /Casella di prova/.test(x.textContent)); return e ? parseFloat(getComputedStyle(e.querySelector('[data-p]') || e).fontSize) : 0; });
+  await page.locator('.rbtab', { hasText: 'Inserisci' }).click(); await page.keyboard.press('t');
+  const ov = await page.locator('.v-overlay').boundingBox(); await page.mouse.click(ov.x + 120, ov.y + ov.height * 0.12); await page.waitForTimeout(200); await page.keyboard.type('Casella di prova');
+  await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+  const s0 = await size(); await page.locator('.v-overlay .it', { hasText: 'Casella di prova' }).click(); await page.waitForTimeout(150); await page.keyboard.press('Escape'); await page.waitForTimeout(100);
+  await page.locator('.v-overlay .it', { hasText: 'Casella di prova' }).click({ position: { x: 3, y: 3 } }).catch(() => {}); await page.waitForTimeout(150);
+  const inp = page.locator('.ribbon input[type=number]').first(); if (await inp.count()) { await inp.fill('30'); await inp.press('Enter'); await page.waitForTimeout(200); }
+  const s1 = await size();
+  await page.keyboard.press('Control+z'); await page.waitForTimeout(300);
+  const s2 = await size();
+  ok(s1 !== s0 ? Math.abs(s2 - s0) < 0.5 : true, `Ctrl+Z dopo la dimensione dalla barra: ${s0} → ${s1} → ${s2}`);
+  await page.locator('.ribbon button.rb[title^="Ripristina tutto"]').click(); await page.locator('.modal .btn', { hasText: 'Ripristina tutto' }).click(); await page.waitForTimeout(300);
+  ok(await n() === 0, 'Ripristina tutto non toglie la casella');
+  await page.keyboard.press('Control+z'); await page.waitForTimeout(300);
+  ok(await n() === 1, 'Ctrl+Z non rimette le modifiche tolte da Ripristina tutto');
+  ok(page.errs.length === 0, page.errs.join(' | '));
+  // Annota: un commento aggiunto si annulla e si rimette
+  const p2 = (await open(b, 'desk1280')).page; await openTool(p2, 'annota', ['contratto.pdf']); await p2.waitForSelector('.tool .v-canvas'); await p2.waitForTimeout(1200);
+  const box = await p2.locator('.tool .v-overlay').boundingBox(); const k = await p2.evaluate(() => Viewer.current.cur);
+  await p2.locator('.an-modes button', { hasText: 'Nota' }).click(); await p2.mouse.click(box.x + 400 * k, box.y + 130 * k); await p2.waitForTimeout(300);
+  const c = () => p2.locator('.an-list textarea').count();
+  ok(await c() === 1, 'nessun commento aggiunto'); await p2.evaluate(() => document.activeElement?.blur()); await p2.keyboard.press('Control+z'); await p2.waitForTimeout(200);
+  ok(await c() === 0, 'Ctrl+Z non toglie il commento'); await p2.keyboard.press('Control+y'); await p2.waitForTimeout(200); ok(await c() === 1, 'Ctrl+Y non rimette il commento');
+  ok(p2.errs.length === 0, p2.errs.join(' | '));
+  // Organizza: elimina una pagina, Ctrl+Z la rimette; «Ripristina ordine originale» si annulla
+  const p3 = (await open(b, 'desk1440')).page; await openTool(p3, 'ordina', ['contratto.pdf']); await p3.waitForSelector('.cards .card'); await p3.waitForTimeout(400);
+  const cards = () => p3.locator('.cards .card').count(), n0 = await cards();
+  await p3.locator('.cards .card').first().locator('button[aria-label="Elimina"], button[title="Elimina"]').first().click(); await p3.waitForTimeout(200);
+  ok(await cards() === n0 - 1, 'la pagina non si elimina'); await p3.keyboard.press('Control+z'); await p3.waitForTimeout(300);
+  ok(await cards() === n0, 'Ctrl+Z non rimette la pagina eliminata');
+  ok(p3.errs.length === 0, p3.errs.join(' | '));
+});
+test('Rileva AI: un PDF scansionato si legge con l’OCR prima dell’analisi (testo e avviso)', async b => {
+  const { page } = await open(b, 'desk1440'); await openTool(page, 'rilevaai', ['scansione.pdf']);
+  await page.waitForFunction(() => /letto con il riconoscimento ottico/.test(document.querySelector('.ws-main')?.innerText || ''), null, { timeout: 120000 });
+  ok(/Verbale di assemblea/.test(await page.locator('.ws-main').innerText()), 'il testo della scansione non c’è');
+  ok(page.errs.length === 0, page.errs.join(' | '));
+});
+test('Fatture: una fattura scansionata si migliora e si legge con l’OCR (numero, parti, importi, pagamento), segnata «OCR» e da verificare', async b => {
+  const { page } = await open(b, 'desk1440'); await openTool(page, 'fatture', ['fattura-scansionata.pdf']); await page.waitForSelector('.ft-tw:not([hidden]), .ft-err:not([hidden])', { timeout: 180000 });
+  const f = await page.evaluate(() => FT.fatture.map(i => ({ n: i.numero, d: i.data, tot: i.totale, imp: i.imponibile, ced: i.cedente?.nome, mp: (i.metodo?.codici || []).join(), scan: i.daScansione, av: (i.avvisi || []).length })));
+  ok(f.length === 1 && f[0].n === '145/2026' && f[0].d === '2026-03-12' && f[0].tot === 1525 && f[0].imp === 1250 && /ALFA SERVIZI/.test(f[0].ced) && f[0].mp === 'MP05' && f[0].scan && f[0].av >= 1, JSON.stringify(f));
+  ok(await page.locator('.ft-table .ft-orig', { hasText: 'OCR' }).count() === 1, 'manca il segno «OCR» nel registro');
+  ok(page.errs.length === 0, page.errs.join(' | '));
+});
 test('Fatture: il metodo di pagamento di ogni fattura è in evidenza, filtrabile, cercabile; i contanti da 5.000 € in su sono segnalati', async b => {
   const { page } = await open(b, 'desk1440'); await openTool(page, 'fatture', ['vendite.zip']); await page.waitForSelector('.ft-tw:not([hidden])', { timeout: 60000 });
   const bar = await page.locator('.pag-bar').innerText();
@@ -1036,10 +1084,13 @@ test('Oscura: clic sulle parole (trascinando più parole, di nuovo per toglierle
 test('Privacy: il bollino apre il centro privacy; frase segreta (cifrati a riposo, bloccati alla riapertura), scadenza automatica, nessuna traccia, cancella tutto', async b => {
   const { page } = await open(b, 'desk1440');
   await page.evaluate(() => { localStorage.setItem('officina-profilo', JSON.stringify({ nome: 'Prova', cf: 'PRVPRV80A01H501X' })); localStorage.setItem('officina-favs', '["unisci"]'); });
-  await page.locator('.privacy').click(); await page.waitForSelector('.pv-modal');
-  const nRows = await page.waitForFunction(() => document.querySelectorAll('.pv-modal .pv-row').length >= 5, null, { timeout: 10000 }).then(() => page.locator('.pv-modal .pv-row').count()).catch(() => page.locator('.pv-modal .pv-row').count());
+  await page.locator('.privacy').click(); await page.waitForSelector('.pd-modal');
+  const nRows = await page.waitForFunction(() => document.querySelectorAll('.pd-modal .pd-item').length >= 5, null, { timeout: 10000 }).then(() => page.locator('.pd-modal .pd-item').count()).catch(() => page.locator('.pd-modal .pd-item').count());
   ok(nRows === 5, 'righe del centro privacy: ' + nRows);
-  await page.locator('.pv-modal .btn', { hasText: 'Proteggi con una frase segreta' }).click();
+  // proporzioni: la finestra sta nello schermo e le righe non prendono stili di altre parti dell'app
+  const geo = await page.evaluate(() => { const m = document.querySelector('.pd-modal').getBoundingClientRect(), s = getComputedStyle(document.querySelector('.pd-size')); return { top: m.top, bottom: m.bottom, vh: innerHeight, border: s.borderRightStyle }; });
+  ok(geo.top >= 0 && geo.bottom <= geo.vh && geo.border === 'none', 'centro privacy sproporzionato: ' + JSON.stringify(geo));
+  await page.locator('.pd-modal .btn', { hasText: 'Proteggi con una frase segreta' }).click();
   const pw = page.locator('.modal input[type=password]'); await pw.nth(0).fill('corta'); await pw.nth(1).fill('corta'); await page.locator('.modal .btn', { hasText: 'Conferma' }).click();
   ok(/8 caratteri/.test(await page.locator('.modal').last().innerText()), 'frase troppo corta accettata');
   await pw.nth(0).fill('frase-di-prova-1'); await pw.nth(1).fill('frase-di-prova-1'); await page.locator('.modal .btn', { hasText: 'Conferma' }).click(); await page.waitForTimeout(1500);
@@ -1062,8 +1113,8 @@ test('Privacy: il bollino apre il centro privacy; frase segreta (cifrati a ripos
   ok(left.favs === null && left.prog === 0, 'nessuna traccia: ' + JSON.stringify(left));
   // cancella tutto
   await page.evaluate(() => { Privacy.setCfg({}); localStorage.setItem('officina-favs', '["x"]'); });
-  await page.locator('.privacy').click(); await page.waitForSelector('.pv-modal'); page.once('dialog', d => d.accept());
-  await page.locator('.pv-modal .btn', { hasText: 'Cancella tutto' }).click(); await page.waitForTimeout(600);
+  await page.locator('.privacy').click(); await page.waitForSelector('.pd-modal'); page.once('dialog', d => d.accept());
+  await page.locator('.pd-modal .btn', { hasText: 'Cancella tutto' }).click(); await page.waitForTimeout(600);
   ok(await page.evaluate(() => localStorage.getItem('officina-favs')) === null, 'cancella tutto non cancella le preferenze');
   ok(page.errs.length === 0, page.errs.join(' | '));
 });

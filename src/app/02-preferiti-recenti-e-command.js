@@ -478,7 +478,6 @@ function initApp() {
   buildRail();
   route(); lastUrl = location.href;
   warmLibs();
-  Onboard.maybe();
 }
 
 /* =====================================================================
@@ -1673,6 +1672,8 @@ async function startOrder(stage, files) {
   let seq = 0;
   const initial = () => Array.from({ length: N }, (_, i) => ({ key: 'p' + (++seq), src: i }));
   let entries = initial();
+  // annulla, ripeti, ripristina tutto: ogni spostamento, copia, pagina bianca o eliminazione
+  const storia = storiaModifiche({ get: () => entries, set: v => { entries = v; elFor.clear(); render(); }, cosa: 'documento' });
   const elFor = new Map(), sel = new Set();   // sel: chiavi delle pagine selezionate
   const xs = { remove: false };                // estrai: tieni le pagine nel documento, oppure toglile
   const grid = h('div', { class: 'cards' });
@@ -1698,17 +1699,17 @@ async function startOrder(stage, files) {
     chk.addEventListener('pointerdown', ev => startPaint(ev, e.key));
     c.el.append(h('div', { class: 'card-acts' },
       iconBtn('left', 'Sposta indietro', () => move(e, -1)),
-      iconBtn('copy', 'Duplica', () => { const i = entries.indexOf(e); entries.splice(i + 1, 0, { key: 'p' + (++seq), src: e.src, size: e.size }); render(); }),
+      iconBtn('copy', 'Duplica', () => { storia.prima(); const i = entries.indexOf(e); entries.splice(i + 1, 0, { key: 'p' + (++seq), src: e.src, size: e.size }); render(); }),
       iconBtn('extract', 'Estrai questa pagina in un PDF a sé', () => extract([e])),
       // una pagina bianca subito dopo questa, dello stesso formato
-      iconBtn('blank', 'Aggiungi una pagina bianca dopo questa', () => { const i = entries.indexOf(e), nb = { key: 'p' + (++seq), src: 'blank', size: e.src === 'blank' ? e.size : sizes[e.src] }; entries.splice(i + 1, 0, nb); render(); const el = elFor.get(nb.key); el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); el?.classList.add('just-added'); setTimeout(() => el?.classList.remove('just-added'), 1200); }),
-      iconBtn('trash', 'Elimina', () => { entries.splice(entries.indexOf(e), 1); sel.delete(e.key); render(); }),
+      iconBtn('blank', 'Aggiungi una pagina bianca dopo questa', () => { storia.prima(); const i = entries.indexOf(e), nb = { key: 'p' + (++seq), src: 'blank', size: e.src === 'blank' ? e.size : sizes[e.src] }; entries.splice(i + 1, 0, nb); render(); const el = elFor.get(nb.key); el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); el?.classList.add('just-added'); setTimeout(() => el?.classList.remove('just-added'), 1200); }),
+      iconBtn('trash', 'Elimina', () => { storia.prima(); entries.splice(entries.indexOf(e), 1); sel.delete(e.key); render(); }),
       iconBtn('right', 'Sposta avanti', () => move(e, 1))));
     elFor.set(e.key, c.el); c.el._badge = c.badge;
     return c.el;
   }
   function move(e, d) {
-    const i = entries.indexOf(e), j = clamp(i + d, 0, entries.length - 1); if (i === j) return; entries.splice(i, 1); entries.splice(j, 0, e); render();
+    const i = entries.indexOf(e), j = clamp(i + d, 0, entries.length - 1); if (i === j) return; storia.prima(); entries.splice(i, 1); entries.splice(j, 0, e); render();
     keepMoveFocus(elFor.get(e.key), d < 0 ? 'Sposta indietro' : 'Sposta avanti', d < 0 ? 'Sposta avanti' : 'Sposta indietro', `${e.src === 'blank' ? 'Pagina bianca' : 'Originale ' + (e.src + 1)}: posizione ${j + 1} di ${entries.length}`);
   }
   let anchor = null, paintEnd = 0;
@@ -1758,11 +1759,11 @@ async function startOrder(stage, files) {
   const noneBtn = h('button', { class: 'btn sm ghost', onclick: () => { sel.clear(); updSel(); } }, 'Nessuna');
   const invBtn = h('button', { class: 'btn sm ghost l-d', onclick: () => { entries.forEach(e => sel.has(e.key) ? sel.delete(e.key) : sel.add(e.key)); updSel(); } }, 'Inverti');
   const exSel = h('button', { class: 'btn sm', onclick: () => extract(entries.filter(e => sel.has(e.key))) }, ic('extract', 15), 'Estrai');
-  const dupSel = h('button', { class: 'btn sm', onclick: () => { const out = []; for (const e of entries) { out.push(e); if (sel.has(e.key)) out.push({ key: 'p' + (++seq), src: e.src, size: e.size }); } entries = out; render(); } }, ic('copy', 15), 'Duplica');
+  const dupSel = h('button', { class: 'btn sm', onclick: () => { storia.prima(); const out = []; for (const e of entries) { out.push(e); if (sel.has(e.key)) out.push({ key: 'p' + (++seq), src: e.src, size: e.size }); } entries = out; render(); } }, ic('copy', 15), 'Duplica');
   const delSel = h('button', { class: 'btn sm danger', onclick: () => {
     const n = entries.filter(e => sel.has(e.key)).length; if (n >= entries.length) return toast('Il documento non può restare senza pagine', 'error');
-    const prev = entries.slice(); entries = entries.filter(e => !sel.has(e.key)); sel.clear(); render();
-    toastActions(`${plural(n, 'pagina eliminata', 'pagine eliminate')}`, [['Annulla', () => { entries = prev; render(); }]]);
+    storia.prima(); entries = entries.filter(e => !sel.has(e.key)); sel.clear(); render();
+    toastActions(`${plural(n, 'pagina eliminata', 'pagine eliminate')}`, [['Annulla', () => storia.undo()]]);
   } }, ic('trash', 15), 'Elimina');
   const selBar = h('div', { class: 'ord-selbar' }, selCount, allBtn, noneBtn, invBtn, h('span', { class: 'grow' }), exSel, dupSel, delSel);
   // tastiera: Ctrl+A tutte, Esc nessuna, Canc elimina le selezionate
@@ -1799,7 +1800,7 @@ async function startOrder(stage, files) {
     await withBusy(list.length === 1 ? 'Estrazione della pagina…' : 'Estrazione delle pagine…', async () => {
       const extracted = await build(ordered);
       let rest = null;
-      if (xs.remove) { const keep = entries.filter(e => !list.includes(e)); rest = await build(keep); entries = keep; for (const e of list) sel.delete(e.key); render(); }
+      if (xs.remove) { storia.prima(); const keep = entries.filter(e => !list.includes(e)); rest = await build(keep); entries = keep; for (const e of list) sel.delete(e.key); render(); }
       else { sel.clear(); render(); }
       res = { base: doc.base, positions, extracted, rest };
     });
@@ -1807,6 +1808,7 @@ async function startOrder(stage, files) {
   }
   let dragKey = null; grid.addEventListener('dragstart', ev => { dragKey = ev.target.closest?.('[data-sort]')?.dataset.sort || null; }, true);
   makeSortable(grid, keys => {
+    storia.prima();
     if (dragKey && sel.has(dragKey) && sel.size > 1) {
       const group = entries.filter(e => sel.has(e.key)).map(e => e.key), rest = keys.filter(k => !sel.has(k) || k === dragKey);
       const at = rest.indexOf(dragKey); rest.splice(at, 1, ...group); keys = rest;
@@ -1817,8 +1819,8 @@ async function startOrder(stage, files) {
     sec('Documento', info),
     sec('Azioni rapide',
       h('button', { class: 'btn', onclick: () => { entries.reverse(); render(); } }, ic('swap', 18), 'Inverti l’ordine'),
-      h('button', { class: 'btn', onclick: () => { const last = entries[entries.length - 1]; entries.push({ key: 'p' + (++seq), src: 'blank', size: last && last.src !== 'blank' ? sizes[last.src] : (last?.size || [595.28, 841.89]) }); render(); grid.lastChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }, ic('blank', 18), 'Aggiungi pagina bianca'),
-      h('button', { class: 'btn', onclick: () => { entries = initial(); elFor.clear(); render(); } }, ic('reset', 18), 'Ripristina ordine originale')),
+      h('button', { class: 'btn', onclick: () => { storia.prima(); const last = entries[entries.length - 1]; entries.push({ key: 'p' + (++seq), src: 'blank', size: last && last.src !== 'blank' ? sizes[last.src] : (last?.size || [595.28, 841.89]) }); render(); grid.lastChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }, ic('blank', 18), 'Aggiungi pagina bianca'),
+      h('button', { class: 'btn', onclick: () => storia.tutto() }, ic('reset', 18), 'Ripristina ordine originale'), ...storia.bottoni().slice(0, 2)),
     sec('Estrai pagine', selInfo,
       h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: () => { entries.forEach(e => sel.add(e.key)); render(); } }, 'Tutte'),
         h('button', { class: 'btn sm', onclick: () => { sel.clear(); render(); } }, 'Nessuna'),

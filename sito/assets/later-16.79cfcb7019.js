@@ -161,7 +161,7 @@ async function startFatture(stage, files) {
   }
   function marca(inv) {
     const o = orig(inv); let s = '';
-    if (o === 'pdf') s += ' <span class="ft-orig" title="Dati letti dal layout del PDF">PDF</span>';
+    if (o === 'pdf') s += inv.daScansione ? ' <span class="ft-orig" title="Fattura scansionata: pagina migliorata e letta con il riconoscimento del testo (OCR)">OCR</span>' : ' <span class="ft-orig" title="Dati letti dal layout del PDF">PDF</span>';
     if (o === 'pdfxml') s += ' <span class="ft-orig" title="PDF con l’XML della fattura incorporato: dati esatti">PDF·XML</span>';
     if (o === 'pdf' && inv.avvisi && inv.avvisi.length) s += ` <span class="ft-warn" title="${esc('Da verificare: ' + inv.avvisi.join('; '))}">!</span>`;
     return s;

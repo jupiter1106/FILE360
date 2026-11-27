@@ -1887,17 +1887,19 @@ async function startAnnota(stage, files) {
     const { quads, text } = Annota.quadsFor(await itemsOf(viewer.page), r);
     add({ kind: st.mode, quads, quote: text, text: '' });
   });
-  async function add(a) { a.id = ++seq; a.page = viewer.page; a.vp = await vpOf(viewer.page); st.anns.push(a); st.sel = a.id; viewer.refresh(); drawList(true); }
+  // annulla, ripeti, ripristina tutto (commenti aggiunti, tolti, testo dei commenti)
+  const storia = storiaModifiche({ get: () => ({ anns: st.anns.map(({ vp, ...x }) => x), seq }), set: v => { st.anns = v.anns.map(x => ({ ...x, vp: vps.get(x.page) })); seq = v.seq; st.sel = null; viewer.refresh(); drawList(); }, cosa: 'documento' });
+  async function add(a) { const vp = await vpOf(viewer.page); storia.prima(); a.id = ++seq; a.page = viewer.page; a.vp = vp; st.anns.push(a); st.sel = a.id; viewer.refresh(); drawList(true); }
   const list = h('div', { class: 'an-list', role: 'list' });
   const K = { note: 'Nota', highlight: 'Evidenziato', underline: 'Sottolineato', strike: 'Barrato', box: 'Testo sulla pagina' };
   function drawList(focus = false) {
     const rows = [...st.anns].sort((a, b) => a.page - b.page || a.id - b.id).map(a => {
-      const ta = h('textarea', { class: 'input', rows: 2, placeholder: a.kind === 'box' ? 'Testo da scrivere sulla pagina' : 'Commento (facoltativo)', 'aria-label': `Commento: ${K[a.kind]}, pagina ${a.page}`, oninput: () => { a.text = ta.value; if (a.kind === 'box' || a.kind === 'note') viewer.refresh(); } });
+      const ta = h('textarea', { class: 'input', rows: 2, placeholder: a.kind === 'box' ? 'Testo da scrivere sulla pagina' : 'Commento (facoltativo)', 'aria-label': `Commento: ${K[a.kind]}, pagina ${a.page}`, onfocus: () => storia.prima(), oninput: () => { a.text = ta.value; if (a.kind === 'box' || a.kind === 'note') viewer.refresh(); } });
       ta.value = a.text || '';
       if (focus && st.sel === a.id) setTimeout(() => ta.focus(), 30);
       return h('div', { class: 'an-row' + (st.sel === a.id ? ' sel' : ''), role: 'listitem' },
         h('div', { class: 'an-head' }, h('i', { class: 'an-dot', style: { background: Annota.COL[a.kind] } }), h('button', { class: 'linkbtn', onclick: () => { viewer.go(a.page); st.sel = a.id; viewer.refresh(); drawList(); } }, `${K[a.kind]} · p. ${a.page}`),
-          h('button', { class: 'icon-btn', title: 'Elimina', 'aria-label': `Elimina: ${K[a.kind]}, pagina ${a.page}`, onclick: () => { st.anns = st.anns.filter(x => x !== a); viewer.refresh(); drawList(); } }, ic('trash', 15))),
+          h('button', { class: 'icon-btn', title: 'Elimina', 'aria-label': `Elimina: ${K[a.kind]}, pagina ${a.page}`, onclick: () => { storia.prima(); st.anns = st.anns.filter(x => x !== a); viewer.refresh(); drawList(); } }, ic('trash', 15))),
         a.quote ? h('div', { class: 'an-quote small' }, '«' + a.quote.slice(0, 160) + (a.quote.length > 160 ? '…' : '') + '»') : null, ta);
     });
     list.replaceChildren(...(rows.length ? rows : [h('div', { class: 'muted small' }, 'Nessun commento ancora: scegli il tipo qui sopra il documento, poi trascina sul testo o tocca la pagina.')]),
@@ -1908,7 +1910,7 @@ async function startAnnota(stage, files) {
   const runBtn = h('button', { class: 'btn primary big btn-run', onclick: run }, ic('comment', 18), 'Salva il PDF con i commenti');
   workspace(stage, h('div', { class: 'ws-main vw' }, viewer.el), [
     sec('Autore dei commenti', who, h('div', { class: 'muted small' }, 'Compare accanto a ogni commento in Acrobat, Anteprima e nei browser; si ricorda su questo dispositivo.')),
-    sec('Commenti', list),
+    sec('Commenti', h('div', { class: 'row', style: { gap: '4px', flexWrap: 'wrap', marginBottom: '8px' } }, ...storia.bottoni()), list),
     h('div', { class: 'hint' }, 'Evidenzia, Sottolinea e Barra seguono le righe del testo che trascini; Nota mette un commento dove tocchi.'),
   ], [runBtn]);
   drawList(); viewer.render();
