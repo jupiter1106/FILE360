@@ -1579,6 +1579,28 @@ test('Passa file: se il telefono non raggiunge il computer (firewall, nome .loca
     ok(pc.errs.length === 0 && tel.errs.length === 0, [...pc.errs, ...tel.errs].join(' | '));
   } finally { await b2.close(); }
 });
+test('Passa file: con l’indirizzo IP del computer scritto una volta, il telefono si collega solo inquadrando anche se non risolve il nome .local', async b => {
+  const b2 = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
+  try {
+    const { page: pc } = await open(b, 'desk1440'); const { page: tel, ctx } = await open(b2, 'iphoneSE'); await ctx.grantPermissions(['camera']);
+    const APP = pc.url().split('#')[0];
+    await pc.evaluate(() => { location.hash = 'passa'; }); await pc.waitForSelector('.pa-qr-img svg', { timeout: 20000 });
+    await tel.goto(APP + '#' + (await pc.getAttribute('.pa-qr-img', 'data-url')).split('#')[1]); await tel.waitForSelector('.pa-abb', { timeout: 20000 });
+    await pc.fill('.pa-in-abb', await tel.evaluate(() => Passa.linkAbbinamento())); await pc.locator('.pa-abb-in button', { hasText: 'Abbina' }).click();
+    await pc.waitForSelector('.pa-stato', { timeout: 20000 }); await tel.waitForSelector('.pa-stato', { timeout: 20000 });
+    const ip = await tel.evaluate(async () => { const st = await navigator.mediaDevices.getUserMedia({ video: true }).catch(() => null); const p = new RTCPeerConnection(); p.createDataChannel('x'); await p.setLocalDescription(await p.createOffer()); await new Promise(r => setTimeout(r, 1500)); st?.getTracks().forEach(t => t.stop()); return (/ (\d+\.\d+\.\d+\.\d+) \d+ typ host/.exec(p.localDescription.sdp) || [])[1]; });
+    ok(ip, 'indirizzo della macchina non trovato');
+    await pc.locator('.pa-stato button', { hasText: 'Scollega' }).click(); await pc.waitForSelector('.pa-qr-img svg', { timeout: 20000 }); await tel.waitForSelector('.pa-big', { timeout: 20000 });
+    const prima = await pc.getAttribute('.pa-qr-img', 'data-url');
+    await pc.locator('.pa-ip summary').click(); await pc.fill('.pa-in-ip', ip); await pc.locator('.pa-in-ip').press('Tab');
+    await pc.waitForFunction(u => document.querySelector('.pa-qr-img')?.dataset.url && document.querySelector('.pa-qr-img').dataset.url !== u, prima, { timeout: 20000 });
+    await tel.evaluate(() => { const o = Passa.leggiQR; Passa.leggiQR = t => { const q = o(t); if (q) q.addr = q.addr.map(a => /\.local$/.test(a) ? '10.255.255.1' : a); return q; }; });
+    await tel.goto(APP + '#' + (await pc.getAttribute('.pa-qr-img', 'data-url')).split('#')[1]);
+    await tel.waitForSelector('.pa-stato, .pa-netcode', { timeout: 30000 });
+    ok(await tel.locator('.pa-stato').count() === 1, 'con l’indirizzo del computer nel QR ha chiesto comunque il codice');
+    ok(pc.errs.length === 0 && tel.errs.length === 0, [...pc.errs, ...tel.errs].join(' | '));
+  } finally { await b2.close(); }
+});
 (async () => {
   const only = process.argv[2]; const browser = await chromium.launch(); let fail = 0;
   for (const [name, fn] of T) { if (only && !name.includes(only)) continue; const t0 = Date.now(); try { await fn(browser); await require('../lib').closeAll(); console.log('  ✓', name, `(${Date.now() - t0} ms)`); } catch (e) { await require('../lib').closeAll(); fail++; console.log('  ✗', name, '\n      ', String(e.message).split('\n')[0]); } for (const c of browser.contexts()) await c.close(); }

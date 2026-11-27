@@ -10319,11 +10319,17 @@ const Passa = (() => {
     const tel = (await dispositivi()).slice().sort((a, b) => (b.ultimo || b.quando) - (a.ultimo || a.quando)).slice(0, max);
     const voci = [...tel.map(t => ({ t, id: fpBytes(t.fp).subarray(0, 3) })), { t: null, id: new Uint8Array(3) }];
     const indirizzi = [], chiuso = { v: false };
+    // l'indirizzo IP del computer scritto una volta dall'utente: il browser lo nasconde dietro un nome «.local» che alcune
+    // reti (o alcuni telefoni) non risolvono; con l'indirizzo nel QR il telefono non deve risolvere niente
+    const ipFisso = await ipComputer();
     for (const [k, v] of voci.entries()) {
       const c = await credenziali(seme, k), pc = v.pc = nuovoPc(cert), dc = canaleDati(pc);
       const o = await pc.createOffer(); o.sdp = conCred(o.sdp, c.pcU, c.pcP);
       await pc.setLocalDescription(o); await raccogli(pc);
-      v.porte = {}; for (const x of candidati(pc.localDescription.sdp)) { const b = indirizzoBytes(x.addr); if (!b) continue; const key = b.join(','); if (!indirizzi.some(i => i.key === key)) indirizzi.push({ key, b }); v.porte[key] = x.port; }
+      v.porte = {}; const cs = candidati(pc.localDescription.sdp);
+      for (const x of cs) { const b = indirizzoBytes(x.addr); if (!b) continue; const key = b.join(','); if (!indirizzi.some(i => i.key === key)) indirizzi.push({ key, b }); v.porte[key] = x.port; }
+      // lo stesso indirizzo con la porta di ciascun candidato (quello IPv4 è uno di loro: il telefono li prova tutti)
+      if (ipFisso && !cs.some(x => x.addr === ipFisso)) cs.filter((x, i, A) => A.findIndex(y => y.port === x.port) === i).slice(0, 2).forEach((x, j) => { const key = 'fisso' + j; if (!indirizzi.some(i => i.key === key)) indirizzi.push({ key, b: [1, ...ipFisso.split('.').map(Number)] }); v.porte[key] = x.port; });
       v.c = c;
       const attiva = async t => { v.t = t; await pc.setRemoteDescription({ type: 'answer', sdp: sdp({ ufrag: c.telU, pwd: c.telP, fp: t.fp, setup: 'active' }) }); };
       v.attiva = attiva;
@@ -10406,6 +10412,10 @@ const Passa = (() => {
     return await new Promise(r => c.toBlob(b => r(new File([b], `Abbina ${i.nome}.png`, { type: 'image/png' })), 'image/png'));
   }
 
+  const ipValido = t => /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/.test(String(t || '').trim());
+  async function ipComputer() { try { return (await IDB.get('ipComputer')) || ''; } catch { return ''; } }
+  async function salvaIpComputer(t) { t = String(t || '').trim(); if (t && !ipValido(t)) return false; try { await IDB.set('ipComputer', t); } catch { } return true; }
+
   /* ---------- quando il telefono non arriva al computer ---------- */
   // che cosa è successo, dalle statistiche del collegamento del telefono
   async function diagnosi(pc) {
@@ -10438,7 +10448,7 @@ const Passa = (() => {
     return { addr: b.slice(0, 4).join('.'), port: (b[4] << 8) | b[5], k: b[6] };
   }
 
-  return { identita, rinomina, dispositivi, abbina, togli, aggiornaDispositivo, certNuovo, usaCertNuovo, linkAbbinamento, leggiAbbinamento, codice, daCodice, controllo, ospita, leggiQR, collegati, scansiona, qrDaImmagine, immagineAbbinamento, base, Sha256, diagnosi, indirizzoTelefono, codiceRete, leggiCodiceRete, _test: { b64u, unb64u, fpText, fpBytes } };
+  return { identita, rinomina, dispositivi, abbina, togli, aggiornaDispositivo, certNuovo, usaCertNuovo, linkAbbinamento, leggiAbbinamento, codice, daCodice, controllo, ospita, leggiQR, collegati, scansiona, qrDaImmagine, immagineAbbinamento, base, Sha256, diagnosi, indirizzoTelefono, codiceRete, leggiCodiceRete, ipComputer, salvaIpComputer, ipValido, _test: { b64u, unb64u, fpText, fpBytes } };
 })();
 
 /* ---------- la sessione resta viva anche fuori dalla pagina (per aprire un file ricevuto in un altro strumento) ---------- */
@@ -10541,6 +10551,8 @@ async function startPassa(stage) {
       const c = Passa.leggiCodiceRete(v); if (!c) return toast('Codice di rete non valido: controlla i 12 caratteri', 'error');
       if (!sessione || !(await sessione.bussa(c).catch(() => false))) return toast('Il codice non corrisponde a questo QR: sul telefono premi «Inquadra di nuovo»', 'error');
       toast('Chiamo il telefono…');
+      // dopo un collegamento con il codice: si propone di scrivere l'indirizzo del computer, così la prossima volta basta il QR
+      try { if (!(await Passa.ipComputer())) setTimeout(() => toast('Per non usare più il codice: in «Il telefono chiede sempre il codice?» scrivi una volta l’indirizzo IP di questo computer', 'info'), 1500); } catch { }
     }
     const abbinaBox = h('div', { class: 'pa-abb' }, h('b', {}, 'Prima volta con un telefono?'),
       h('ol', { class: 'small' }, h('li', {}, 'Inquadra il QR con il telefono: ti proporrà di mandarti un link.'), h('li', {}, 'Apri qui quel link (o trascina l’immagine, o incolla il codice): il telefono resta abbinato e il collegamento parte.')),
@@ -10557,7 +10569,11 @@ async function startPassa(stage) {
     async function disegnaTel() {
       const L = await Passa.dispositivi();
       const nomePc = h('input', { class: 'input', value: io.nome, 'aria-label': 'Nome di questo computer', onchange: async () => { nomePc.value = await Passa.rinomina(nomePc.value); io.nome = nomePc.value; nuovaSessione(); } });
-      listaTel.replaceChildren(h('label', { class: 'pa-nome small' }, h('span', {}, 'Nome di questo computer (lo vede il telefono)'), nomePc), h('b', {}, L.length ? 'Telefoni abbinati' : 'Nessun telefono abbinato'),
+      const ipNow = await Passa.ipComputer();
+      const ipPc = h('input', { class: 'input pa-in-ip', value: ipNow, placeholder: 'es. 192.168.1.117', inputmode: 'decimal', 'aria-label': 'Indirizzo IP di questo computer', onchange: async () => { if (!(await Passa.salvaIpComputer(ipPc.value))) { toast('Indirizzo non valido: quattro numeri separati da punti, es. 192.168.1.117', 'error'); return; } toast(ipPc.value.trim() ? 'Indirizzo salvato: il QR lo contiene' : 'Indirizzo tolto'); nuovaSessione(); } });
+      const ipBox = h('details', { class: 'pa-ip small', open: !!ipNow || null }, h('summary', {}, ipNow ? `Indirizzo di questo computer: ${ipNow}` : 'Il telefono chiede sempre il codice?'),
+        h('p', { class: 'muted' }, 'Scrivi una volta l’indirizzo IP di questo computer: il QR lo conterrà e al telefono basterà inquadrare. Su Windows lo trovi in Impostazioni › Rete e Internet › Proprietà › «Indirizzo IPv4» (va bene se è fisso o se il router lo assegna sempre uguale).'), ipPc);
+      listaTel.replaceChildren(h('label', { class: 'pa-nome small' }, h('span', {}, 'Nome di questo computer (lo vede il telefono)'), nomePc), ipBox, h('b', {}, L.length ? 'Telefoni abbinati' : 'Nessun telefono abbinato'),
         L.length ? h('ul', { class: 'pa-tl' }, L.map(d => h('li', {}, ic('phone', 15), h('span', {}, d.nome), h('span', { class: 'small muted' }, d.ultimo ? 'ultimo uso ' + new Date(d.ultimo).toLocaleDateString('it-IT') : 'mai collegato'), iconBtn('x', 'Togli ' + d.nome, async () => { await Passa.togli(d.fp); nuovaSessione(); })))) : h('p', { class: 'small muted' }, 'Dopo il primo abbinamento basta inquadrare il QR, senza scrivere niente.'));
     }
     async function nuovoTelefono(t, { fonte = '' } = {}) {
@@ -10654,10 +10670,12 @@ async function startPassa(stage) {
       const cb = box.querySelector('.pa-codebox');
       if (!ind) { cb.replaceChildren(h('p', { class: 'small' }, 'Non riesco a leggere l’indirizzo di questo telefono: concedi la fotocamera a file360 e premi «Inquadra di nuovo».'), h('button', { type: 'button', class: 'btn sm', onclick: () => apriCamera() }, 'Inquadra di nuovo')); return; }
       cb.replaceChildren(h('b', {}, 'Scrivi questo codice sul computer'), h('code', { class: 'pa-netcode' }, Passa.codiceRete(ind, r2.k)), h('span', { class: 'small muted' }, 'Sotto il QR: «Il telefono non si collega?». Con il codice è il computer a chiamare il telefono.'),
-        h('details', { class: 'small' }, h('summary', {}, 'Altre cose da controllare'), h('ul', {}, h('li', {}, 'Telefono e computer sulla stessa Wi-Fi (il computer può essere col cavo allo stesso router). Le reti «ospiti» isolano i dispositivi.'), h('li', {}, 'Se usi Chrome su iPhone: Impostazioni › Chrome › Rete locale attiva.'), h('li', {}, 'Computer Windows: imposta la rete come «privata» (Impostazioni › Rete › Proprietà).'), h('li', {}, 'In 4G/5G il collegamento diretto non è possibile; senza Wi-Fi usa l’hotspot del telefono.'))),
+        h('details', { class: 'small' }, h('summary', {}, 'Altre cose da controllare'), h('ul', {}, h('li', {}, 'Telefono e computer sulla stessa Wi-Fi (il computer può essere col cavo allo stesso router). Le reti «ospiti» isolano i dispositivi.'), h('li', {}, 'Se usi Chrome su iPhone: Impostazioni › Chrome › Rete locale attiva.'), h('li', {}, 'Per non usare più il codice: sul computer, in «Il telefono chiede sempre il codice?», scrivi una volta il suo indirizzo IP.'), h('li', {}, 'Computer Windows: imposta la rete come «privata» (Impostazioni › Rete › Proprietà).'), h('li', {}, 'In 4G/5G il collegamento diretto non è possibile; senza Wi-Fi usa l’hotspot del telefono.'))),
         h('button', { type: 'button', class: 'btn sm', onclick: () => apriCamera() }, 'Inquadra di nuovo'));
     }
     if (qrTesto) collega(qrTesto);
+    // permesso della fotocamera già dato: la fotocamera parte da sola (resta solo da inquadrare)
+    else { try { navigator.permissions?.query({ name: 'camera' }).then(p => { if (p.state === 'granted' && vivo && !PassaSessione.canale && main.isConnected && !document.querySelector('.pa-cam')) apriCamera(); }).catch(() => { }); } catch { } }
   }
 
   /* --- link di abbinamento aperto sul computer --- */
